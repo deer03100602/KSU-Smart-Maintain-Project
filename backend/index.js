@@ -15,13 +15,27 @@ const {
     notifyDiscordActivity 
 } = require('./discordService');
 
-const usersFilePath = path.join(__dirname, 'data', 'users.json');
-const dbFilePath = path.join(__dirname, 'data', 'db.json');
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const baseDataDir = isServerless ? '/tmp' : path.join(__dirname, 'data');
+
+if (!fs.existsSync(baseDataDir)) {
+    try { fs.mkdirSync(baseDataDir, { recursive: true }); } catch (e) {}
+}
+
+const usersFilePath = path.join(baseDataDir, 'users.json');
+const dbFilePath = path.join(baseDataDir, 'db.json');
+const bundledDbPath = path.join(__dirname, 'data', 'db.json');
+const bundledUsersPath = path.join(__dirname, 'data', 'users.json');
 
 function getLocalDb() {
     try {
         if (fs.existsSync(dbFilePath)) {
             return JSON.parse(fs.readFileSync(dbFilePath, 'utf8'));
+        }
+        if (fs.existsSync(bundledDbPath)) {
+            const bundled = JSON.parse(fs.readFileSync(bundledDbPath, 'utf8'));
+            try { fs.writeFileSync(dbFilePath, JSON.stringify(bundled, null, 2), 'utf8'); } catch (e) {}
+            return bundled;
         }
     } catch (e) {
         console.error('Error reading db.json:', e);
@@ -41,6 +55,11 @@ function getLocalUsers() {
     try {
         if (fs.existsSync(usersFilePath)) {
             return JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
+        }
+        if (fs.existsSync(bundledUsersPath)) {
+            const bundled = JSON.parse(fs.readFileSync(bundledUsersPath, 'utf8'));
+            try { fs.writeFileSync(usersFilePath, JSON.stringify(bundled, null, 2), 'utf8'); } catch (e) {}
+            return bundled;
         }
     } catch (e) {
         console.error('Error reading users.json:', e);
