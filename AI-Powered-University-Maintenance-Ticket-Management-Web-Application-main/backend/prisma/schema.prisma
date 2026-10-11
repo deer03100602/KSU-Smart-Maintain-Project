@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model IssueType {
+  id          String @id
+  name        String
+  description String
+  icon        String
+}
+
+model Ticket {
+  id              String    @id
+  ticket_no       String    @unique
+  title           String
+  description     String
+  issue_type      String
+  location        String
+  priority        String
+  status          String
+  requester_name  String
+  requester_email String
+  assigned_to     String?
+  resolution_note String?
+  created_at      DateTime
+  updated_at      DateTime
+  closed_at       DateTime?
+}
+
+model User {
+  id         String   @id
+  email      String   @unique
+  password   String
+  name       String
+  group      String   @default("นักศึกษา")
+  role       String   @default("user")
+  created_at DateTime @default(now())
+}

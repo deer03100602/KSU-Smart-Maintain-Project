@@ -1,0 +1,201 @@
+{
+  "main": {
+    "id": "10d1bac94e8d2db9",
+    "type": "split",
+    "children": [
+      {
+        "id": "1046cd55e32b4335",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "de4d45c2d2ffeafc",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "f19c6a47f6eca5f6",
+    "type": "split",
+    "children": [
+      {
+        "id": "ba5fa698708c4794",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "b27cd43331ef91ab",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "eb67dc6b21591713",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "fb00997223e6a767",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "8974a05d963cce6a",
+    "type": "split",
+    "children": [
+      {
+        "id": "c876d7c656d629db",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "74aff1a391091c73",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "file": "โครงร่างรายงานโครงการ/บทที่ 1 บทนำ/1.2 วัตถุประสงค์ของโครงการ.md",
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "159fe1d61459d33b",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "โครงร่างรายงานโครงการ/บทที่ 1 บทนำ/1.2 วัตถุประสงค์ของโครงการ.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "c493e5bd814f78f4",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "f368a019765de321",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "484dbaa3aca190ea",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "โครงร่างรายงานโครงการ/บทที่ 1 บทนำ/1.2 วัตถุประสงค์ของโครงการ.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "b27cd43331ef91ab",
+  "lastOpenFiles": [
+    "Untitled.canvas",
+    "Untitled",
+    "โครงร่างรายงานโครงการ/บทที่ 1 บทนำ/1.5 เครื่องมือและอุปกรณ์ที่ใช้ในการดำเนินงาน.md",
+    "โครงร่างรายงานโครงการ/บทที่ 1 บทนำ/1.4 ประโยชน์ที่คาดว่าจะได้รับ.md",
+    "โครงร่างรายงานโครงการ/บทที่ 1 บทนำ/1.3 ขอบเขตของโครงการ.md",
+    "โครงร่างรายงานโครงการ/บทที่ 1 บทนำ/1.2 วัตถุประสงค์ของโครงการ.md",
+    "โครงร่างรายงานโครงการ/บทที่ 1 บทนำ/1.1 ที่มาและความสำคัญของโครงงาน.md",
+    "index.html",
+    "maintenance-app.html",
+    "chapter1-website.html",
+    "upload.ps1"
+  ]
+}

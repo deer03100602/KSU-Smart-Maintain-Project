@@ -13,10 +13,13 @@ yarn-error.log*
 backend/.env
 frontend/.env
 
-# Build outputs
+# Build outputs & caches
 dist/
 build/
 frontend/dist/
+.next/
+*/.next/
+**/.next/
 
 # Prisma & Generated files
 /generated/prisma
