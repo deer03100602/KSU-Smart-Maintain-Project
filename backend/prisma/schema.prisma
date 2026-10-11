@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model IssueType {
+  id          String @id
+  name        String
+  description String
+  icon        String
+}
+
+model Ticket {
+  id              String    @id
+  ticket_no       String    @unique
+  title           String
+  description     String
+  issue_type      String
+  location        String
+  priority        String
+  status          String
+  requester_name  String
+  requester_email String
+  assigned_to     String?
+  resolution_note String?
+  created_at      DateTime
+  updated_at      DateTime
+  closed_at       DateTime?
+}
+
+model User {
+  id         String   @id
+  email      String   @unique
+  password   String
+  name       String
+  group      String   @default("นักศึกษา")
+  role       String   @default("user")
+  created_at DateTime @default(now())
+}
+
+model Expense {
+  id              String   @id
+  ticket_id       String
+  ticket_no       String
+  category        String   // อุปกรณ์, วัสดุ, ค่าแรง, ค่าเดินทาง, อื่นๆ
+  description     String
+  quantity        Float    @default(1)
+  unit            String   @default("ชิ้น")
+  unit_price      Float    @default(0)
+  total_price     Float    @default(0)
+  tax_percent     Float    @default(0)
+  tax_amount      Float    @default(0)
+  discount        Float    @default(0)
+  net_amount      Float    @default(0)
+  receipt_no      String?
+  vendor_name     String?
+  receipt_date    DateTime?
+  receipt_url     String?
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED, REVISE_REQUESTED
+  reject_reason   String?
+  created_by      String
+  created_by_name String
+  reviewed_by     String?
+  reviewed_at     DateTime?
+  approved_by     String?
+  approved_at     DateTime?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}
+
+model TicketTimeline {
+  id          String   @id
+  ticket_id   String
+  ticket_no   String
+  action      String   // ASSIGNED, ACCEPTED, STARTED, WAITING_PARTS, SUBMITTED_INSPECTION, COMPLETED, RETURNED_FOR_REVISE, CANCELLED, EXPENSE_PROPOSED, EXPENSE_APPROVED, EXPENSE_REJECTED
+  title       String
+  description String?
+  actor_name  String
+  actor_email String?
+  actor_role  String?
+  data        String?  // JSON string for additional context
+  created_at  DateTime @default(now())
+}
+
+model AuditLog {
+  id          String   @id
+  action      String
+  entity_type String
+  entity_id   String
+  actor_name  String
+  actor_email String?
+  actor_role  String?
+  details     String?
+  created_at  DateTime @default(now())
+}
+

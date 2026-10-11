@@ -1,0 +1,291 @@
+import React, { useState } from 'react';
+import { 
+    Camera, Image as ImageIcon, Plus, Upload, X, Maximize2, 
+    FileText, Calendar, User, Check 
+} from 'lucide-react';
+
+export default function TicketEvidenceManager({
+    ticket,
+    evidences = [],
+    currentUser = {},
+    onEvidenceAdded
+}) {
+    const [selectedTab, setSelectedTab] = useState('ALL'); // 'ALL' | 'BEFORE' | 'DURING' | 'AFTER' | 'RECEIPT'
+    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [uploading, setUploading] = useState(false);
+    const [stage, setStage] = useState('BEFORE');
+    const [description, setDescription] = useState('');
+    const [selectedPreview, setSelectedPreview] = useState(null);
+
+    const filteredEvidences = selectedTab === 'ALL' 
+        ? evidences 
+        : evidences.filter(e => e.stage === selectedTab);
+
+    const handleFileUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploading(true);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const uploadRes = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!uploadRes.ok) throw new Error('อัปโหลดไฟล์ล้มเหลว');
+            const fileData = await uploadRes.json();
+
+            // Create Evidence Record
+            const token = localStorage.getItem('helpdesk_token');
+            const eviRes = await fetch(`/api/tickets/${ticket.id}/evidence`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({
+                    stage,
+                    url: fileData.url,
+                    name: fileData.name,
+                    description: description.trim()
+                })
+            });
+
+            if (eviRes.ok) {
+                setShowUploadModal(false);
+                setDescription('');
+                if (onEvidenceAdded) onEvidenceAdded();
+            } else {
+                alert('ไม่สามารถบันทึกข้อมูลหลักฐานได้');
+            }
+        } catch (err) {
+            alert('เกิดข้อผิดพลาดในการอัปโหลด');
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    const getStageBadge = (st) => {
+        switch (st) {
+            case 'BEFORE': return <span style={{ background: '#3b82f620', color: '#60a5fa', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>📷 ก่อนซ่อม</span>;
+            case 'DURING': return <span style={{ background: '#f59e0b20', color: '#fbbf24', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>⚙️ ระหว่างซ่อม</span>;
+            case 'AFTER': return <span style={{ background: '#22c55e20', color: '#4ade80', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>🎉 หลังซ่อม</span>;
+            case 'RECEIPT': return <span style={{ background: '#a855f720', color: '#c084fc', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>🧾 ใบเสร็จ/เอกสาร</span>;
+            default: return null;
+        }
+    };
+
+    return (
+        <div className="glass-card" style={{ marginTop: '1.5rem', padding: '1.25rem', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Camera style={{ width: 20, height: 20, color: '#3b82f6' }} />
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>รูปภาพและหลักฐานงานซ่อม (Before / During / After)</h3>
+                </div>
+                <button 
+                    className="btn btn-primary btn-sm"
+                    onClick={() => setShowUploadModal(true)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                    <Plus style={{ width: 15, height: 15 }} /> อัปโหลดรูปภาพหลักฐาน
+                </button>
+            </div>
+
+            {/* Filter Tabs */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+                {[
+                    { key: 'ALL', label: 'ทั้งหมด' },
+                    { key: 'BEFORE', label: '📷 ก่อนซ่อม' },
+                    { key: 'DURING', label: '⚙️ ระหว่างซ่อม' },
+                    { key: 'AFTER', label: '🎉 หลังซ่อม' },
+                    { key: 'RECEIPT', label: '🧾 ใบเสร็จและเอกสาร' }
+                ].map(tab => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setSelectedTab(tab.key)}
+                        className={`btn btn-sm ${selectedTab === tab.key ? 'btn-primary' : 'btn-ghost'}`}
+                        style={{ fontSize: '0.8rem' }}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Gallery Grid */}
+            {filteredEvidences.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                    ยังไม่มีรูปภาพหลักฐานในหมวดหมู่นี้
+                </div>
+            ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+                    {filteredEvidences.map((evi) => {
+                        const isImg = evi.url && (evi.url.endsWith('.png') || evi.url.endsWith('.jpg') || evi.url.endsWith('.jpeg') || evi.url.endsWith('.webp'));
+                        return (
+                            <div 
+                                key={evi.id}
+                                style={{
+                                    border: '1px solid var(--border-color)',
+                                    borderRadius: '10px',
+                                    overflow: 'hidden',
+                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    display: 'flex',
+                                    flexDirection: 'column'
+                                }}
+                            >
+                                <div 
+                                    style={{
+                                        height: '140px',
+                                        background: 'rgba(0,0,0,0.4)',
+                                        position: 'relative',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        cursor: isImg ? 'pointer' : 'default'
+                                    }}
+                                    onClick={() => isImg && setSelectedPreview(evi.url)}
+                                >
+                                    {isImg ? (
+                                        <img 
+                                            src={evi.url} 
+                                            alt={evi.description || 'evidence'} 
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        />
+                                    ) : (
+                                        <FileText style={{ width: 42, height: 42, color: '#60a5fa' }} />
+                                    )}
+                                    <div style={{ position: 'absolute', top: 6, left: 6 }}>
+                                        {getStageBadge(evi.stage)}
+                                    </div>
+                                    {isImg && (
+                                        <div style={{
+                                            position: 'absolute', bottom: 6, right: 6,
+                                            background: 'rgba(0,0,0,0.65)', padding: '3px 6px',
+                                            borderRadius: 4, color: '#fff', fontSize: '0.65rem',
+                                            display: 'flex', alignItems: 'center', gap: 4
+                                        }}>
+                                            <Maximize2 style={{ width: 10, height: 10 }} /> ดูรูป
+                                        </div>
+                                    )}
+                                </div>
+                                <div style={{ padding: '10px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                    <div style={{ fontSize: '0.825rem', fontWeight: 500, marginBottom: '6px' }}>
+                                        {evi.description || evi.name || 'หลักฐานงานซ่อม'}
+                                    </div>
+                                    <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>
+                                        <div>บันทึกโดย: {evi.created_by}</div>
+                                        <div>{new Date(evi.created_at).toLocaleDateString('th-TH')}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Upload Modal */}
+            {showUploadModal && (
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    backdropFilter: 'blur(6px)',
+                    zIndex: 9999,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    padding: '1.5rem'
+                }}>
+                    <div style={{
+                        background: 'var(--card-bg, #1e293b)',
+                        border: '1px solid var(--border-color, #334155)',
+                        borderRadius: '12px',
+                        width: '100%', maxWidth: '460px',
+                        padding: '1.5rem', color: 'var(--text-primary, #f8fafc)'
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>อัปโหลดรูปภาพ / หลักฐานงานซ่อม</h3>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setShowUploadModal(false)}>
+                                <X style={{ width: 18, height: 18 }} />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                            <div>
+                                <label className="form-label" style={{ fontSize: '0.85rem' }}>ระยะของหลักฐาน (Stage) *</label>
+                                <select 
+                                    className="form-input" 
+                                    value={stage} 
+                                    onChange={(e) => setStage(e.target.value)}
+                                    style={{ width: '100%', fontSize: '0.85rem' }}
+                                >
+                                    <option value="BEFORE">📷 ภาพก่อนดำเนินการซ่อม (Before)</option>
+                                    <option value="DURING">⚙️ ภาพระหว่างดำเนินงาน (During)</option>
+                                    <option value="AFTER">🎉 ภาพหลังซ่อมเสร็จสิ้น (After)</option>
+                                    <option value="RECEIPT">🧾 ใบเสร็จ / เอกสารประกอบ (Receipt/Doc)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="form-label" style={{ fontSize: '0.85rem' }}>คำอธิบายรูปภาพ / รายละเอียด</label>
+                                <input 
+                                    type="text" 
+                                    className="form-input" 
+                                    placeholder="เช่น ภาพถ่ายหน้าจอดับ, ภาพหลังเปลี่ยนอะไหล่ใหม่"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    style={{ width: '100%', fontSize: '0.85rem' }}
+                                />
+                            </div>
+
+                            <div>
+                                <label className="form-label" style={{ fontSize: '0.85rem' }}>เลือกไฟล์รูปภาพ / เอกสาร *</label>
+                                <input 
+                                    type="file" 
+                                    accept="image/*, application/pdf"
+                                    className="form-input" 
+                                    onChange={handleFileUpload}
+                                    disabled={uploading}
+                                    style={{ width: '100%', fontSize: '0.85rem' }}
+                                />
+                            </div>
+
+                            {uploading && (
+                                <div style={{ fontSize: '0.8rem', color: '#60a5fa', textAlign: 'center' }}>
+                                    กำลังอัปโหลดและบันทึกหลักฐาน...
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '0.75rem' }}>
+                                <button className="btn btn-ghost" onClick={() => setShowUploadModal(false)}>
+                                    ยกเลิก
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Image Preview Modal */}
+            {selectedPreview && (
+                <div 
+                    onClick={() => setSelectedPreview(null)}
+                    style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                        backdropFilter: 'blur(8px)',
+                        zIndex: 99999,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: '2rem'
+                    }}
+                >
+                    <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+                        <img 
+                            src={selectedPreview} 
+                            alt="preview" 
+                            style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 8, objectFit: 'contain' }}
+                        />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
