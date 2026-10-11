@@ -10,6 +10,16 @@
     "created_at": "2026-09-01T00:00:00.000Z"
   },
   {
+    "id": "usr-admin-deer",
+    "email": "nightggpp@gmail.com",
+    "password": "$2b$10$52NR.7JTFXd5lWxLgK/Rfet/EB8zWV1pmGh88H5yODavy0E8ZZUPa",
+    "plainPasswordFallback": "254903",
+    "name": "deer (ผู้ดูแลระบบ)",
+    "group": "ผู้ดูแลระบบ",
+    "role": "admin",
+    "created_at": "2026-10-02T07:22:45.337Z"
+  },
+  {
     "id": "usr-student-initial",
     "email": "student@example.com",
     "password": "$2a$10$wE9l1lU6h8N6R0mYp69.o.sPZzI9XjZp6Z7p8y7d.q5s/4nS6l7.K",
@@ -18,33 +28,5 @@
     "group": "นักศึกษา",
     "role": "user",
     "created_at": "2026-09-01T00:00:00.000Z"
-  },
-  {
-    "id": "usr-muil23ld-fnuk",
-    "email": "somchai@ksu.ac.th",
-    "password": "$2b$10$QZHInIZMqh1X8uGHqO.dGeI6wx7qWEQoIqE3vPgV1Q284/qzz8ykG",
-    "plainPasswordFallback": "password1234",
-    "name": "????? ?????",
-    "group": "????????",
-    "role": "user",
-    "created_at": "2026-09-26T16:07:21.265Z"
-  },
-  {
-    "id": "usr-muqmykm1-ym32",
-    "email": "nightggpp@gmail.com",
-    "password": "$2b$10$52NR.7JTFXd5lWxLgK/Rfet/EB8zWV1pmGh88H5yODavy0E8ZZUPa",
-    "name": "deer",
-    "group": "ผู้ดูแลระบบ",
-    "role": "admin"
-  },
-  {
-    "id": "usr-muqmykm1-ym32",
-    "email": "nightggpp@gmail.com",
-    "password": "$2b$10$52NR.7JTFXd5lWxLgK/Rfet/EB8zWV1pmGh88H5yODavy0E8ZZUPa",
-    "plainPasswordFallback": "254903",
-    "name": "deer",
-    "group": "ผู้ดูแลระบบ",
-    "role": "admin",
-    "created_at": "2026-10-02T07:22:45.337Z"
   }
 ]

@@ -463,31 +463,7 @@ async function initDatabase() {
                         }
                     });
                 }
-
-                for (const t of seedData.tickets || []) {
-                    await prisma.ticket.upsert({
-                        where: { id: t.id },
-                        update: {},
-                        create: {
-                            id: t.id,
-                            ticket_no: t.ticket_no,
-                            title: t.title,
-                            description: t.description || '',
-                            issue_type: t.issue_type,
-                            location: t.location || '',
-                            priority: t.priority || 'Medium',
-                            status: t.status || 'Open',
-                            requester_name: t.requester_name || '',
-                            requester_email: t.requester_email || '',
-                            assigned_to: t.assigned_to || null,
-                            resolution_note: t.resolution_note || null,
-                            created_at: new Date(t.created_at || Date.now()),
-                            updated_at: new Date(t.updated_at || Date.now()),
-                            closed_at: t.closed_at ? new Date(t.closed_at) : null
-                        }
-                    });
-                }
-                console.log('✅ Initial database successfully seeded!');
+                console.log('✅ Initial issue types successfully configured!');
             }
         } else {
             console.log(`✅ Database ready with ${issueTypeCount} issue types.`);
