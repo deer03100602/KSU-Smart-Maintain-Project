@@ -27,15 +27,41 @@ export default function TicketEvidenceManager({
 
         setUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            const uploadRes = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData
-            });
+            let fileUrl = null;
+            let fileName = file.name;
 
-            if (!uploadRes.ok) throw new Error('อัปโหลดไฟล์ล้มเหลว');
-            const fileData = await uploadRes.json();
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                const uploadRes = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (uploadRes.ok) {
+                    const fileData = await uploadRes.json();
+                    fileUrl = fileData.url;
+                    fileName = fileData.name || fileName;
+                }
+            } catch (err) {
+                console.warn('FormData upload error, falling back:', err.message);
+            }
+
+            if (!fileUrl) {
+                // Client-side fallback: Read file as data URL
+                fileUrl = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => resolve(null);
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            if (!fileUrl) {
+                alert('ไม่สามารถอัปโหลดไฟล์รูปภาพได้');
+                setUploading(false);
+                return;
+            }
 
             // Create Evidence Record
             const token = localStorage.getItem('helpdesk_token');
@@ -47,8 +73,8 @@ export default function TicketEvidenceManager({
                 },
                 body: JSON.stringify({
                     stage,
-                    url: fileData.url,
-                    name: fileData.name,
+                    url: fileUrl,
+                    name: fileName,
                     description: description.trim()
                 })
             });
@@ -61,7 +87,8 @@ export default function TicketEvidenceManager({
                 alert('ไม่สามารถบันทึกข้อมูลหลักฐานได้');
             }
         } catch (err) {
-            alert('เกิดข้อผิดพลาดในการอัปโหลด');
+            console.error('Evidence upload error:', err);
+            alert('เกิดข้อผิดพลาดในการอัปโหลด: ' + err.message);
         } finally {
             setUploading(false);
         }

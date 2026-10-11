@@ -370,20 +370,11 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(uploadsDir));
 
-// Multer Storage Configuration
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadsDir);
-    },
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname) || '.png';
-        const uniqueName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${ext}`;
-        cb(null, uniqueName);
-    }
-});
+// Multer Storage Configuration: Use memory storage for serverless compatibility, write to disk if possible
+const storage = multer.memoryStorage();
 const upload = multer({
     storage,
-    limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+    limits: { fileSize: 15 * 1024 * 1024 } // 15MB limit
 });
 
 // Middleware: Authenticate JWT Token
@@ -1927,13 +1918,32 @@ app.post('/api/upload', (req, res, next) => {
     try {
         // Case 1: Standard Multer file upload
         if (req.file) {
-            const publicUrl = `/uploads/${req.file.filename}`;
-            return res.json({
-                url: publicUrl,
-                name: req.file.originalname,
-                size: req.file.size,
-                type: req.file.mimetype
-            });
+            const ext = path.extname(req.file.originalname) || '.png';
+            const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${ext}`;
+            const targetPath = path.join(uploadsDir, uniqueFilename);
+            
+            try {
+                if (req.file.buffer) {
+                    fs.writeFileSync(targetPath, req.file.buffer);
+                }
+                const publicUrl = `/uploads/${uniqueFilename}`;
+                return res.json({
+                    url: publicUrl,
+                    name: req.file.originalname,
+                    size: req.file.size,
+                    type: req.file.mimetype
+                });
+            } catch (diskErr) {
+                // Serverless read-only disk fallback: return base64 Data URL directly!
+                const b64 = req.file.buffer.toString('base64');
+                const dataUrl = `data:${req.file.mimetype || 'image/png'};base64,${b64}`;
+                return res.json({
+                    url: dataUrl,
+                    name: req.file.originalname,
+                    size: req.file.size,
+                    type: req.file.mimetype
+                });
+            }
         }
 
         // Case 2: Base64 JSON Payload (Useful for serverless/Vercel where tmp storage is ephemeral)
