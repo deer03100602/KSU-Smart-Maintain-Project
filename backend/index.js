@@ -2229,9 +2229,13 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในระบบเซิร์ฟเวอร์' });
 });
 
-// Start Server and Initialize Database
-app.listen(PORT, () => {
-    console.log(`🚀 University Maintenance Backend running on port ${PORT}`);
-    initDatabase().catch(err => console.warn('Database initialization note:', err.message));
-});
+// Start Server and Initialize Database if run directly
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`🚀 University Maintenance Backend running on port ${PORT}`);
+        initDatabase().catch(err => console.warn('Database initialization note:', err.message));
+    });
+}
+
+module.exports = app;
 
