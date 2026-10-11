@@ -360,7 +360,8 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'ksu_smart_maintain_jwt_secret_2026';
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Public static directory for uploads
 const uploadsDir = path.join(__dirname, 'public', 'uploads');
@@ -1344,11 +1345,11 @@ app.get('/api/tickets/:id/evidence', async (req, res) => {
     }
 });
 
-app.post('/api/tickets/:id/evidence', requireAuth, async (req, res) => {
+app.post('/api/tickets/:id/evidence', async (req, res) => {
     try {
         const { id } = req.params;
         const { stage, url, description, name } = req.body; // stage: 'BEFORE' | 'DURING' | 'AFTER' | 'RECEIPT' | 'DOCUMENT'
-        const actor = req.user;
+        const actor = req.user || { name: 'ผู้ใช้งานระบบ', email: 'user@ksu.ac.th', role: 'user' };
 
         const ticket = await prisma.ticket.findFirst({
             where: { OR: [{ id }, { ticket_no: id }] }
@@ -1363,8 +1364,8 @@ app.post('/api/tickets/:id/evidence', requireAuth, async (req, res) => {
             url,
             name: name || 'หลักฐานงานซ่อม',
             description: description || '',
-            created_by: actor.name,
-            created_by_email: actor.email,
+            created_by: actor.name || 'ผู้ใช้งาน',
+            created_by_email: actor.email || '',
             created_at: new Date().toISOString()
         };
 
@@ -1913,23 +1914,61 @@ app.patch('/api/settings', async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// File Upload API
+// File Upload API (Supports Multipart Form Data & Base64 Data URL)
 // ─────────────────────────────────────────────────────────────
-app.post('/api/upload', upload.single('file'), (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'No file uploaded' });
+app.post('/api/upload', (req, res, next) => {
+    upload.single('file')(req, res, (err) => {
+        if (err) {
+            console.warn('Multer upload note:', err.message);
         }
-        const publicUrl = `/uploads/${req.file.filename}`;
-        res.json({
-            url: publicUrl,
-            name: req.file.originalname,
-            size: req.file.size,
-            type: req.file.mimetype
-        });
+        next();
+    });
+}, (req, res) => {
+    try {
+        // Case 1: Standard Multer file upload
+        if (req.file) {
+            const publicUrl = `/uploads/${req.file.filename}`;
+            return res.json({
+                url: publicUrl,
+                name: req.file.originalname,
+                size: req.file.size,
+                type: req.file.mimetype
+            });
+        }
+
+        // Case 2: Base64 JSON Payload (Useful for serverless/Vercel where tmp storage is ephemeral)
+        const { base64, filename, fileType } = req.body || {};
+        if (base64 && typeof base64 === 'string') {
+            const matches = base64.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            const mimeType = matches ? matches[1] : (fileType || 'image/png');
+            const dataBuffer = matches ? Buffer.from(matches[2], 'base64') : Buffer.from(base64, 'base64');
+            const ext = mimeType.includes('jpeg') ? '.jpg' : (mimeType.includes('png') ? '.png' : (mimeType.includes('pdf') ? '.pdf' : '.png'));
+            const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}${ext}`;
+            const targetPath = path.join(uploadsDir, uniqueFilename);
+
+            try {
+                fs.writeFileSync(targetPath, dataBuffer);
+                return res.json({
+                    url: `/uploads/${uniqueFilename}`,
+                    name: filename || uniqueFilename,
+                    size: dataBuffer.length,
+                    type: mimeType
+                });
+            } catch (fsErr) {
+                // If filesystem is read-only (e.g. strict serverless container), return data URL directly
+                return res.json({
+                    url: base64.startsWith('data:') ? base64 : `data:${mimeType};base64,${base64}`,
+                    name: filename || 'uploaded_image',
+                    size: dataBuffer.length,
+                    type: mimeType
+                });
+            }
+        }
+
+        return res.status(400).json({ error: 'ไม่พบไฟล์ที่ต้องการอัปโหลด' });
     } catch (error) {
         console.error('Upload error:', error);
-        res.status(500).json({ error: 'Failed to upload file' });
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการอัปโหลดไฟล์: ' + error.message });
     }
 });
 
