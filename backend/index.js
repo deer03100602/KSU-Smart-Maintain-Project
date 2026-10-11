@@ -709,22 +709,50 @@ app.post('/api/tickets', async (req, res) => {
             }
         });
 
+        // Add Initial Timeline Event
+        await addTimelineEvent({
+            ticket_id: newTicket.id,
+            ticket_no: newTicket.ticket_no,
+            action: 'CREATED',
+            title: 'สร้างรายการแจ้งซ่อมใหม่ในระบบ',
+            description: `ผู้แจ้ง: ${reqName} | สถานที่: ${newTicket.location} | ความเร่งด่วน: ${newTicket.priority}`,
+            actor_name: body.requester_name || 'ผู้แจ้งซ่อม',
+            actor_email: body.requester_email || null,
+            actor_role: body.requester_group || 'user'
+        }).catch(() => {});
+
         // Send email & webhook notification asynchronously
         notifyTicketEvent(newTicket, 'CREATED').catch(err => {
             console.error('Ticket creation notification error:', err.message);
         });
 
-        // 1. ส่งแจ้งเตือนห้อง "ออเดอร์ใหม่"
+        // 1. ส่งแจ้งเตือนห้อง "ออเดอร์ใหม่" (New Order / Ticket)
         notifyDiscordNewOrder(newTicket).catch(err => {
             console.error('Discord new order notify error:', err.message);
         });
 
-        // 2. หากเป็นงานเร่งด่วน ส่งเข้าห้อง "แจ้งเตือนเร่งด่วน"
+        // 2. หากเป็นงานเร่งด่วน ส่งเข้าห้อง "แจ้งเตือนเร่งด่วน" (Urgent Alert)
         if (newTicket.priority === 'Urgent' || newTicket.priority === 'High') {
             notifyDiscordUrgent(newTicket, `ระดับความเร่งด่วน: ${newTicket.priority}`).catch(err => {
                 console.error('Discord urgent notify error:', err.message);
             });
         }
+
+        // 3. ส่งบันทึกเข้าห้อง "activity-logs"
+        notifyDiscordActivity({
+            title: `เปิดใบงานแจ้งซ่อมใหม่ (#${newTicket.ticket_no})`,
+            description: `${newTicket.title} (${newTicket.issue_type})`,
+            actor: { name: reqName, role: 'requester' },
+            ticket: newTicket,
+            action: 'CREATED',
+            details: {
+                'เลขที่ Ticket': newTicket.ticket_no,
+                'สถานที่': newTicket.location || '-',
+                'ระดับความสำคัญ': newTicket.priority
+            }
+        }).catch(err => {
+            console.error('Discord activity notify error:', err.message);
+        });
 
         res.status(201).json(newTicket);
     } catch (error) {
