@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     Camera, Image as ImageIcon, Plus, Upload, X, Maximize2, 
     FileText, Calendar, User, Check 
@@ -255,20 +256,54 @@ export default function TicketEvidenceManager({
             )}
 
             {/* Upload Modal Window */}
-            {showUploadModal && (
+            {showUploadModal && typeof document !== 'undefined' && createPortal(
                 <div 
                     className="modal-overlay modal-active"
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 999999,
+                        padding: '1.25rem',
+                        boxSizing: 'border-box'
+                    }}
                     onClick={(e) => {
                         if (e.target.classList.contains('modal-overlay')) {
                             closeModal();
                         }
                     }}
                 >
-                    <div className="modal-container" style={{ maxWidth: '520px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-                        <div className="modal-header">
+                    <div 
+                        className="modal-container" 
+                        style={{ 
+                            maxWidth: '540px', 
+                            width: '100%', 
+                            maxHeight: '90vh', 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            borderRadius: '16px',
+                            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.65)',
+                            border: '1px solid var(--border-card)',
+                            backgroundColor: 'var(--bg-secondary, #1e293b)',
+                            color: 'var(--text-primary)',
+                            overflow: 'hidden'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-card)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <Camera style={{ width: 20, height: 20, color: 'var(--primary-color, #4f46e5)' }} />
-                                <h3 className="modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
+                                <Camera style={{ width: 22, height: 22, color: 'var(--primary-color, #4f46e5)' }} />
+                                <h3 className="modal-title" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                                     อัปโหลดรูปภาพ / หลักฐานงานซ่อม
                                 </h3>
                             </div>
@@ -277,13 +312,14 @@ export default function TicketEvidenceManager({
                                 className="modal-close-btn" 
                                 onClick={closeModal}
                                 title="ปิดหน้าต่าง"
+                                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                                <X style={{ width: 18, height: 18 }} />
+                                <X style={{ width: 20, height: 20 }} />
                             </button>
                         </div>
 
                         <form id="evidence-upload-form" onSubmit={handleUploadSubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-                            <div className="modal-body" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
+                            <div className="modal-body" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
                                 <div>
                                     <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>ระยะของหลักฐาน (Stage) *</label>
                                     <select 
@@ -353,7 +389,15 @@ export default function TicketEvidenceManager({
                                 )}
                             </div>
 
-                            <div className="modal-footer" style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-card)' }}>
+                            <div className="modal-footer" style={{ 
+                                padding: '1.25rem 1.5rem', 
+                                display: 'flex', 
+                                justifyContent: 'flex-end', 
+                                gap: '0.75rem', 
+                                borderTop: '1px solid var(--border-card)',
+                                backgroundColor: 'var(--bg-secondary, #1e293b)',
+                                flexShrink: 0 
+                            }}>
                                 <button 
                                     type="button" 
                                     className="btn btn-secondary" 
@@ -366,24 +410,26 @@ export default function TicketEvidenceManager({
                                     type="submit" 
                                     className="btn btn-primary" 
                                     disabled={uploading || !selectedFile}
+                                    style={{ minWidth: '140px', fontWeight: 600 }}
                                 >
                                     {uploading ? 'กำลังอัปโหลด...' : 'อัปโหลดและบันทึก'}
                                 </button>
                             </div>
                         </form>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Image Preview Modal */}
-            {selectedPreview && (
+            {selectedPreview && typeof document !== 'undefined' && createPortal(
                 <div 
                     onClick={() => setSelectedPreview(null)}
                     style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0, 0, 0, 0.85)',
                         backdropFilter: 'blur(8px)',
-                        zIndex: 99999,
+                        zIndex: 999999,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         padding: '2rem'
                     }}
@@ -395,7 +441,8 @@ export default function TicketEvidenceManager({
                             style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 8, objectFit: 'contain' }}
                         />
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

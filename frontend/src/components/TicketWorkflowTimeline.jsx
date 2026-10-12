@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     Clock, CheckCircle, Play, Pause, RotateCcw, AlertTriangle, 
     CheckCircle2, User, FileText, ArrowRight, CornerDownRight, X 
@@ -183,7 +184,10 @@ export default function TicketWorkflowTimeline({
                     <button 
                         className="btn btn-primary btn-sm"
                         disabled={actionLoading}
-                        onClick={() => setActiveActionModal('COMPLETE')}
+                        onClick={() => {
+                            setActiveActionModal('COMPLETE');
+                            setInspectionConfirmed(true);
+                        }}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: '#16a34a', borderColor: '#16a34a' }}
                     >
                         <CheckCircle2 style={{ width: 14, height: 14 }} /> ยืนยันตรวจรับเสร็จสิ้นสมบูรณ์
@@ -240,10 +244,28 @@ export default function TicketWorkflowTimeline({
                 )}
             </div>
 
-            {/* Workflow Action Modal Window */}
-            {activeActionModal && (
+            {/* Workflow Action Modal Window (Rendered via Portal directly to body) */}
+            {activeActionModal && typeof document !== 'undefined' && createPortal(
                 <div 
                     className="modal-overlay modal-active"
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 999999,
+                        padding: '1.25rem',
+                        boxSizing: 'border-box'
+                    }}
                     onClick={(e) => {
                         if (e.target.classList.contains('modal-overlay')) {
                             setActiveActionModal(null);
@@ -252,9 +274,25 @@ export default function TicketWorkflowTimeline({
                         }
                     }}
                 >
-                    <div className="modal-container" style={{ maxWidth: activeActionModal === 'SUBMIT_INSPECTION' ? '640px' : '500px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-                        <div className="modal-header">
-                            <h3 className="modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
+                    <div 
+                        className="modal-container" 
+                        style={{ 
+                            maxWidth: activeActionModal === 'SUBMIT_INSPECTION' ? '680px' : '520px', 
+                            width: '100%', 
+                            maxHeight: '90vh', 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            borderRadius: '16px',
+                            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.65)',
+                            border: '1px solid var(--border-card)',
+                            backgroundColor: 'var(--bg-secondary, #1e293b)',
+                            color: 'var(--text-primary)',
+                            overflow: 'hidden'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-card)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+                            <h3 className="modal-title" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                                 {activeActionModal === 'START' && '⚙️ เริ่มดำเนินงานซ่อมบำรุง'}
                                 {activeActionModal === 'WAITING_PARTS' && '⏳ บันทึกสถานะรออุปกรณ์ / อะไหล่ / งบประมาณ'}
                                 {activeActionModal === 'SUBMIT_INSPECTION' && '📋 ส่งมอบงานเพื่อตรวจรับ (Handover Report)'}
@@ -270,12 +308,13 @@ export default function TicketWorkflowTimeline({
                                     setInspectionConfirmed(false);
                                 }}
                                 title="ปิดหน้าต่าง"
+                                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                                <X style={{ width: 18, height: 18 }} />
+                                <X style={{ width: 20, height: 20 }} />
                             </button>
                         </div>
 
-                        <div className="modal-body" style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
+                        <div className="modal-body" style={{ padding: '1.5rem', overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
                             {/* Special Rich Form for SUBMIT_INSPECTION */}
                             {activeActionModal === 'SUBMIT_INSPECTION' ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -356,15 +395,15 @@ export default function TicketWorkflowTimeline({
                                     </div>
                                 </div>
                             ) : activeActionModal === 'COMPLETE' ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                                    <div style={{ background: 'var(--success-bg, rgba(34, 197, 94, 0.08))', border: '1px solid var(--success-border, rgba(34, 197, 94, 0.2))', padding: '12px', borderRadius: '8px', fontSize: '0.85rem' }}>
-                                        <div style={{ fontWeight: 600, color: 'var(--success-color, #10b981)', marginBottom: '4px' }}>
-                                            📋 การยืนยันตรวจรับงานซ่อมบำรุง
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                    <div style={{ background: 'var(--success-bg, rgba(34, 197, 94, 0.08))', border: '1px solid var(--success-border, rgba(34, 197, 94, 0.25))', padding: '14px', borderRadius: '10px', fontSize: '0.875rem' }}>
+                                        <div style={{ fontWeight: 700, color: 'var(--success-color, #10b981)', marginBottom: '6px', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <CheckCircle2 style={{ width: 18, height: 18 }} /> การยืนยันตรวจรับงานซ่อมบำรุง
                                         </div>
-                                        <div style={{ color: 'var(--text-secondary)' }}>
-                                            งาน: <strong>#{ticket.ticket_no} - {ticket.title}</strong><br/>
-                                            ผู้รับผิดชอบ: {ticket.assigned_to || 'เจ้าหน้าที่'}<br/>
-                                            ผู้ตรวจรับ: {currentUser.name || 'ผู้มีสิทธิ์'}
+                                        <div style={{ color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                                            งาน: <strong style={{ color: 'var(--text-primary)' }}>#{ticket.ticket_no} - {ticket.title}</strong><br/>
+                                            ผู้รับผิดชอบ: <span style={{ color: 'var(--text-primary)' }}>{ticket.assigned_to || 'เจ้าหน้าที่'}</span><br/>
+                                            ผู้ตรวจรับ: <span style={{ color: 'var(--text-primary)' }}>{currentUser.name || 'ผู้มีสิทธิ์'}</span>
                                         </div>
                                     </div>
 
@@ -373,21 +412,40 @@ export default function TicketWorkflowTimeline({
                                         <textarea 
                                             className="form-input" 
                                             rows={2}
-                                            placeholder="เช่น ทดสอบใช้งานระบบเสียงแล้วทำงานได้ปกติดี"
+                                            placeholder="เช่น ทดสอบใช้งานระบบเสียงแล้วทำงานได้ปกติดี เรียบร้อยสมบูรณ์"
                                             value={actionNote}
                                             onChange={(e) => setActionNote(e.target.value)}
-                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                            style={{ width: '100%', fontSize: '0.875rem' }}
                                         />
                                     </div>
 
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                                    {/* Confirmation Checkbox Box */}
+                                    <div 
+                                        onClick={() => setInspectionConfirmed(!inspectionConfirmed)}
+                                        style={{ 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            gap: '12px', 
+                                            cursor: 'pointer', 
+                                            fontSize: '0.9rem', 
+                                            color: 'var(--text-primary)', 
+                                            padding: '12px 14px',
+                                            borderRadius: '8px',
+                                            border: inspectionConfirmed ? '2px solid #22c55e' : '1px solid var(--border-card)',
+                                            background: inspectionConfirmed ? 'rgba(34, 197, 94, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                                            transition: 'all 0.2s ease',
+                                            userSelect: 'none'
+                                        }}
+                                    >
                                         <input 
                                             type="checkbox" 
                                             checked={inspectionConfirmed} 
                                             onChange={(e) => setInspectionConfirmed(e.target.checked)} 
+                                            onClick={(e) => e.stopPropagation()}
+                                            style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#22c55e' }}
                                         />
-                                        ข้าพเจ้าได้ตรวจสอบและทดสอบงานเรียบร้อยแล้ว ยืนยันเสร็จสิ้นสมบูรณ์
-                                    </label>
+                                        <span style={{ fontWeight: 600 }}>ข้าพเจ้าได้ตรวจสอบและทดสอบงานเรียบร้อยแล้ว ยืนยันเสร็จสิ้นสมบูรณ์</span>
+                                    </div>
                                 </div>
                             ) : (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -412,7 +470,15 @@ export default function TicketWorkflowTimeline({
                             )}
                         </div>
 
-                        <div className="modal-footer" style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-card)' }}>
+                        <div className="modal-footer" style={{ 
+                            padding: '1.25rem 1.5rem', 
+                            display: 'flex', 
+                            justifyContent: 'flex-end', 
+                            gap: '0.75rem', 
+                            borderTop: '1px solid var(--border-card)',
+                            backgroundColor: 'var(--bg-secondary, #1e293b)',
+                            flexShrink: 0 
+                        }}>
                             <button 
                                 type="button"
                                 className="btn btn-secondary" 
@@ -437,12 +503,20 @@ export default function TicketWorkflowTimeline({
                                         handleWorkflowAction(activeActionModal, actionNote);
                                     }
                                 }}
+                                style={{
+                                    minWidth: '140px',
+                                    fontWeight: 600,
+                                    backgroundColor: activeActionModal === 'COMPLETE' ? '#16a34a' : undefined,
+                                    borderColor: activeActionModal === 'COMPLETE' ? '#16a34a' : undefined,
+                                    cursor: (activeActionModal === 'COMPLETE' && !inspectionConfirmed) ? 'not-allowed' : 'pointer'
+                                }}
                             >
                                 {actionLoading ? 'กำลังบันทึก...' : 'ยืนยันการทำรายการ'}
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

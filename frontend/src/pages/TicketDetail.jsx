@@ -6,6 +6,7 @@
 
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
 import { 
@@ -1283,7 +1284,7 @@ export default function TicketDetailPage(props) {
                 </div>
             </div>
 
-            {selectedImageModal && (
+            {selectedImageModal && typeof document !== 'undefined' && createPortal(
                 <div 
                     onClick={() => setSelectedImageModal(null)}
                     style={{
@@ -1291,7 +1292,7 @@ export default function TicketDetailPage(props) {
                         top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0, 0, 0, 0.85)',
                         backdropFilter: 'blur(8px)',
-                        zIndex: 9999,
+                        zIndex: 999999,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1330,7 +1331,8 @@ export default function TicketDetailPage(props) {
                             }}
                         />
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

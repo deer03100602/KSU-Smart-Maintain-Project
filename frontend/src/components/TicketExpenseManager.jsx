@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
     DollarSign, Plus, Check, X, Edit3, Trash2, AlertCircle, FileText, 
     Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw 
@@ -394,22 +395,55 @@ export default function TicketExpenseManager({
                 </div>
             )}
 
-            {/* Add Expense Modal with OCR */}
-            {/* Add Expense Modal with OCR */}
-            {showAddModal && (
+            {/* Add Expense Modal with OCR (Rendered via Portal directly to body) */}
+            {showAddModal && typeof document !== 'undefined' && createPortal(
                 <div 
                     className="modal-overlay modal-active"
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 999999,
+                        padding: '1.25rem',
+                        boxSizing: 'border-box'
+                    }}
                     onClick={(e) => {
                         if (e.target.classList.contains('modal-overlay')) {
                             setShowAddModal(false);
                         }
                     }}
                 >
-                    <div className="modal-container" style={{ maxWidth: '680px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
-                        <div className="modal-header">
+                    <div 
+                        className="modal-container" 
+                        style={{ 
+                            maxWidth: '720px', 
+                            width: '100%', 
+                            maxHeight: '90vh', 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            borderRadius: '16px',
+                            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.65)',
+                            border: '1px solid var(--border-card)',
+                            backgroundColor: 'var(--bg-secondary, #1e293b)',
+                            color: 'var(--text-primary)',
+                            overflow: 'hidden'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="modal-header" style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-card)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <DollarSign style={{ width: 20, height: 20, color: 'var(--primary-color, #4f46e5)' }} />
-                                <h3 className="modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
+                                <DollarSign style={{ width: 22, height: 22, color: 'var(--primary-color, #4f46e5)' }} />
+                                <h3 className="modal-title" style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                                     บันทึกค่าใช้จ่าย / สแกนใบเสร็จ (Expense & Budget)
                                 </h3>
                             </div>
@@ -418,8 +452,9 @@ export default function TicketExpenseManager({
                                 className="modal-close-btn" 
                                 onClick={() => setShowAddModal(false)}
                                 title="ปิดหน้าต่าง"
+                                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             >
-                                <X style={{ width: 18, height: 18 }} />
+                                <X style={{ width: 20, height: 20 }} />
                             </button>
                         </div>
 
@@ -652,7 +687,15 @@ export default function TicketExpenseManager({
                             </form>
                         </div>
 
-                        <div className="modal-footer" style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-card)' }}>
+                        <div className="modal-footer" style={{ 
+                            padding: '1.25rem 1.5rem', 
+                            display: 'flex', 
+                            justifyContent: 'flex-end', 
+                            gap: '0.75rem', 
+                            borderTop: '1px solid var(--border-card)',
+                            backgroundColor: 'var(--bg-secondary, #1e293b)',
+                            flexShrink: 0
+                        }}>
                             <button 
                                 type="button" 
                                 className="btn btn-secondary" 
@@ -668,12 +711,14 @@ export default function TicketExpenseManager({
                                 form="expense-modal-form" 
                                 className="btn btn-primary" 
                                 disabled={submitting}
+                                style={{ minWidth: '150px', fontWeight: 600 }}
                             >
                                 {submitting ? 'กำลังบันทึก...' : 'บันทึกรายการงบประมาณ'}
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

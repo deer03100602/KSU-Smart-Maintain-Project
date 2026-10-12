@@ -6,6 +6,7 @@
 
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
 import { Link } from "react-router-dom";
@@ -952,10 +953,31 @@ export default function AdminManagementPage() {
                 )}
             </div>
 
-            {/* Quick Details Modal */}
-            {viewingTicket && (
-                <div className="modal-overlay modal-active" onClick={() => setViewingTicket(null)}>
-                    <div className="modal-container" style={{ maxWidth: '650px' }} onClick={(e) => e.stopPropagation()}>
+            {/* Quick Details Modal (Rendered via Portal) */}
+            {viewingTicket && typeof document !== 'undefined' && createPortal(
+                <div 
+                    className="modal-overlay modal-active" 
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 999999,
+                        padding: '1.25rem',
+                        boxSizing: 'border-box'
+                    }}
+                    onClick={() => setViewingTicket(null)}
+                >
+                    <div className="modal-container" style={{ maxWidth: '650px', maxHeight: '90vh', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <div>
                                 <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1168,9 +1190,10 @@ export default function AdminManagementPage() {
                             <button className="btn btn-ghost" onClick={() => setViewingTicket(null)}>ปิดหน้าต่าง</button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
                 )}
-                {selectedImageModal && (
+                {selectedImageModal && typeof document !== 'undefined' && createPortal(
                 <div 
                     onClick={() => setSelectedImageModal(null)}
                     style={{
@@ -1178,7 +1201,7 @@ export default function AdminManagementPage() {
                         top: 0, left: 0, right: 0, bottom: 0,
                         backgroundColor: 'rgba(0, 0, 0, 0.85)',
                         backdropFilter: 'blur(8px)',
-                        zIndex: 99999,
+                        zIndex: 999999,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1217,7 +1240,8 @@ export default function AdminManagementPage() {
                             }}
                         />
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );

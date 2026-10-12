@@ -2419,16 +2419,19 @@ a:hover {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.6);
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.65);
     -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
+    z-index: 99999;
     opacity: 0;
     transition: opacity 0.2s ease;
     padding: 1rem;
+    box-sizing: border-box;
 }
 
 .modal-overlay.modal-active {
