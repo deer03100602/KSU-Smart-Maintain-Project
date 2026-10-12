@@ -814,6 +814,10 @@ const handleUpdateTicket = async (req, res) => {
         const updates = req.body;
         const now = new Date();
 
+        const prevTicket = await prisma.ticket.findFirst({
+            where: { OR: [{ id }, { ticket_no: id }] }
+        });
+
         const updateData = {
             ...updates,
             updated_at: now
@@ -829,9 +833,35 @@ const handleUpdateTicket = async (req, res) => {
         }
 
         const updated = await prisma.ticket.update({
-            where: { id },
+            where: { id: prevTicket ? prevTicket.id : id },
             data: updateData
         });
+
+        // If assignment or schedule changed, record Timeline & Audit Log
+        if (updates.assigned_to && updates.assigned_to !== prevTicket?.assigned_to) {
+            await addTimelineEvent({
+                ticket_id: updated.id,
+                ticket_no: updated.ticket_no,
+                action: 'ASSIGNED',
+                title: `มอบหมายงานให้ ${updated.assigned_to}`,
+                description: `ผู้รับผิดชอบหลัก: ${updated.assigned_to}${updated.co_workers ? ` | ผู้ร่วมดำเนินงาน: ${updated.co_workers}` : ''}${updated.due_date ? ` | กำหนดเสร็จ: ${new Date(updated.due_date).toLocaleDateString('th-TH')}` : ''}`,
+                actor_name: req.user?.name || 'ผู้ดูแลระบบ',
+                actor_email: req.user?.email || null,
+                actor_role: req.user?.role || 'admin'
+            }).catch(() => {});
+
+            await createAuditLog({
+                action: 'ASSIGN_TICKET',
+                entity_type: 'Ticket',
+                entity_id: updated.id,
+                actor_name: req.user?.name || 'ผู้ดูแลระบบ',
+                actor_email: req.user?.email || null,
+                actor_role: req.user?.role || 'admin',
+                details: { previous: prevTicket?.assigned_to, new: updated.assigned_to, co_workers: updated.co_workers }
+            }).catch(() => {});
+
+            notifyTicketEvent(updated, 'ASSIGNED').catch(() => {});
+        }
 
         // Send email & webhook notification asynchronously on update
         notifyTicketEvent(updated, 'UPDATED').catch(err => {
@@ -1002,11 +1032,36 @@ app.post('/api/tickets/:id/action', requireAuth, async (req, res) => {
                 newStatus = 'Resolved';
                 timelineTitle = `ส่งมอบงานเพื่อรอตรวจรับ`;
                 emailEvent = 'SUBMITTED_INSPECTION';
+
+                const completionData = {
+                    problem_summary: req.body.problem_summary || '',
+                    root_cause: req.body.root_cause || '',
+                    solution_method: req.body.solution_method || '',
+                    materials_used: req.body.materials_used || '',
+                    testing_results: req.body.testing_results || '',
+                    recommendations: req.body.recommendations || '',
+                    technician_name: actor.name,
+                    submitted_at: now.toISOString()
+                };
+
+                const summaryLines = [
+                    req.body.problem_summary ? `• ปัญหาที่พบ: ${req.body.problem_summary}` : '',
+                    req.body.root_cause ? `• สาเหตุ: ${req.body.root_cause}` : '',
+                    req.body.solution_method ? `• วิธีการแก้ไข: ${req.body.solution_method}` : '',
+                    req.body.materials_used ? `• วัสดุอุปกรณ์ที่ใช้: ${req.body.materials_used}` : '',
+                    req.body.testing_results ? `• ผลการทดสอบ: ${req.body.testing_results}` : '',
+                    req.body.recommendations ? `• ข้อเสนอแนะ: ${req.body.recommendations}` : '',
+                    note || reason || ''
+                ].filter(Boolean);
+
+                timelineDesc = summaryLines.join('\n') || 'ส่งมอบงานเพื่อรอการตรวจรับจากผู้มีสิทธิ์';
+
                 await prisma.ticket.update({
                     where: { id: ticket.id },
                     data: {
                         status: newStatus,
-                        resolution_note: note ? (ticket.resolution_note ? `${ticket.resolution_note}\n[ส่งตรวจรับ]: ${note}` : `[ส่งตรวจรับ]: ${note}`) : ticket.resolution_note,
+                        completion_summary: JSON.stringify(completionData),
+                        resolution_note: timelineDesc,
                         updated_at: now
                     }
                 });
@@ -1036,11 +1091,14 @@ app.post('/api/tickets/:id/action', requireAuth, async (req, res) => {
                 }
                 newStatus = 'Closed';
                 timelineTitle = `ยืนยันตรวจรับและปิดงานเสร็จสิ้นสมบูรณ์`;
+                timelineDesc = note || reason || `ตรวจรับงานเรียบร้อยโดย ${actor.name} (${actor.role || 'ผู้ตรวจรับ'})`;
                 emailEvent = 'COMPLETED';
                 await prisma.ticket.update({
                     where: { id: ticket.id },
                     data: {
                         status: newStatus,
+                        accepted_by: actor.name,
+                        accepted_at: now,
                         closed_at: now,
                         updated_at: now
                     }
@@ -1119,18 +1177,47 @@ app.get('/api/tickets/:id/expenses', async (req, res) => {
             where: { ticket_id: ticket.id }
         });
 
-        // Summary calculations
+        // Summary calculations matching university financial rules
         let totalProposed = 0;
         let totalApproved = 0;
         let totalActual = 0;
         let totalPending = 0;
+        let totalMaterials = 0;
+        let totalSpareParts = 0;
+        let totalLabor = 0;
+        let totalTravel = 0;
+        let totalOutsource = 0;
+        let totalOther = 0;
+        let totalDiscounts = 0;
+        let totalTax = 0;
+        let totalDisbursed = 0;
 
         expenses.forEach(e => {
             const net = Number(e.net_amount || e.total_price || 0);
+            const rawSubtotal = Number(e.total_price || 0);
+            const disc = Number(e.discount || 0);
+            const tax = Number(e.tax_amount || 0);
+
             totalProposed += net;
+            totalDiscounts += disc;
+            totalTax += tax;
+
+            // Categories
+            const cat = e.category || 'อุปกรณ์';
+            if (cat.includes('วัสดุ') || cat.includes('อุปกรณ์')) totalMaterials += rawSubtotal;
+            else if (cat.includes('อะไหล่')) totalSpareParts += rawSubtotal;
+            else if (cat.includes('ค่าแรง')) totalLabor += rawSubtotal;
+            else if (cat.includes('ค่าเดินทาง')) totalTravel += rawSubtotal;
+            else if (cat.includes('ค่าจ้างภายนอก')) totalOutsource += rawSubtotal;
+            else totalOther += rawSubtotal;
+
             if (e.status === 'APPROVED') {
                 totalApproved += net;
                 totalActual += net;
+                // Disbursed only if has receipt/evidence
+                if (e.receipt_no || e.receipt_url) {
+                    totalDisbursed += net;
+                }
             } else if (e.status === 'PENDING') {
                 totalPending += net;
             }
@@ -1143,7 +1230,16 @@ app.get('/api/tickets/:id/expenses', async (req, res) => {
                 totalApproved,
                 totalActual,
                 totalPending,
-                remainingBudget: Math.max(0, totalApproved - totalActual)
+                totalMaterials,
+                totalSpareParts,
+                totalLabor,
+                totalTravel,
+                totalOutsource,
+                totalOther,
+                totalDiscounts,
+                totalTax,
+                totalDisbursed,
+                remainingBudget: Math.max(0, totalApproved - totalDisbursed)
             }
         });
     } catch (error) {
@@ -1306,6 +1402,46 @@ app.patch('/api/expenses/:id/status', requireAdmin, async (req, res) => {
         });
 
         if (ticket) {
+            // Recalculate ticket's overall budget status and approved budget
+            try {
+                const allTicketExpenses = await prisma.expense.findMany({ where: { ticket_id: ticket.id } });
+                let totalAppr = 0;
+                let totalDisb = 0;
+                let hasPending = false;
+                let hasRejected = false;
+
+                allTicketExpenses.forEach(exp => {
+                    const amt = Number(exp.net_amount || exp.total_price || 0);
+                    if (exp.status === 'APPROVED') {
+                        totalAppr += amt;
+                        if (exp.receipt_no || exp.receipt_url) {
+                            totalDisb += amt;
+                        }
+                    } else if (exp.status === 'PENDING') {
+                        hasPending = true;
+                    } else if (exp.status === 'REJECTED') {
+                        hasRejected = true;
+                    }
+                });
+
+                let bStatus = 'อนุมัติ';
+                if (hasPending) bStatus = 'รออนุมัติ';
+                else if (totalAppr === 0 && hasRejected) bStatus = 'ไม่อนุมัติ';
+                else if (hasRejected && totalAppr > 0) bStatus = 'อนุมัติบางส่วน';
+
+                await prisma.ticket.update({
+                    where: { id: ticket.id },
+                    data: {
+                        approved_budget: totalAppr,
+                        disbursed_amount: totalDisb,
+                        budget_status: bStatus,
+                        updated_at: now
+                    }
+                });
+            } catch (syncErr) {
+                console.warn('Ticket budget sync warning:', syncErr.message);
+            }
+
             notifyTicketEvent(ticket, status === 'APPROVED' ? 'EXPENSE_APPROVED' : 'EXPENSE_REJECTED').catch(err => {
                 console.error('Expense status notify error:', err.message);
             });

@@ -15,21 +15,30 @@ model IssueType {
 }
 
 model Ticket {
-  id              String    @id
-  ticket_no       String    @unique
-  title           String
-  description     String
-  issue_type      String
-  location        String
-  priority        String
-  status          String
-  requester_name  String
-  requester_email String
-  assigned_to     String?
-  resolution_note String?
-  created_at      DateTime
-  updated_at      DateTime
-  closed_at       DateTime?
+  id                 String    @id
+  ticket_no          String    @unique
+  title              String
+  description        String
+  issue_type         String
+  location           String
+  priority           String
+  status             String
+  requester_name     String
+  requester_email    String
+  assigned_to        String?
+  co_workers         String?
+  start_date         DateTime?
+  due_date           DateTime?
+  budget_status      String?   @default("ยังไม่เสนอ")
+  approved_budget    Float?    @default(0)
+  disbursed_amount   Float?    @default(0)
+  completion_summary String?
+  accepted_by        String?
+  accepted_at        DateTime?
+  resolution_note    String?
+  created_at         DateTime
+  updated_at         DateTime
+  closed_at          DateTime?
 }
 
 model User {

@@ -437,6 +437,31 @@ export default function TicketDetailPage(props) {
         }
     };
 
+    const handleSaveAssignment = async ({ assignedTo, coWorkers, startDate, dueDate, priority }) => {
+        try {
+            const res = await fetch(`/api/tickets/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    assigned_to: assignedTo,
+                    co_workers: coWorkers,
+                    start_date: startDate ? new Date(startDate).toISOString() : null,
+                    due_date: dueDate ? new Date(dueDate).toISOString() : null,
+                    priority: priority
+                })
+            });
+            if (res.ok) {
+                toast.success('บันทึกการมอบหมายงานและแผนกำหนดการเรียบร้อย');
+                fetchTicketData();
+            } else {
+                toast.error('ไม่สามารถบันทึกข้อมูลการมอบหมายได้');
+            }
+        } catch (e) {
+            console.error(e);
+            toast.error('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        }
+    };
+
     const handleSaveNote = async () => {
         setUpdatingNote(true);
         try {
@@ -809,13 +834,109 @@ export default function TicketDetailPage(props) {
                         </div>
                     )}
 
-                    {/* Admin management area */}
+                    {/* Admin management area & Assignment Schedule */}
                     {isAdmin && (
-                        <div className="detail-admin-actions">
-                            <h3 className="detail-label">
-                                <Settings style={{ width: 16, height: 16 }} />
-                                การจัดการ (Admin)
-                            </h3>
+                        <div className="detail-admin-actions" style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                <h3 className="detail-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: '1rem' }}>
+                                    <Settings style={{ width: 16, height: 16, color: '#3b82f6' }} />
+                                    การมอบหมายงาน & แผนกำหนดการ (Task Assignment & Schedule)
+                                </h3>
+                                <button 
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => {
+                                        let selAssignee = ticket.assigned_to || '';
+                                        let selCoWorkers = ticket.co_workers || '';
+                                        let selStartDate = ticket.start_date ? ticket.start_date.split('T')[0] : '';
+                                        let selDueDate = ticket.due_date ? ticket.due_date.split('T')[0] : '';
+                                        let selPriority = ticket.priority || 'Medium';
+
+                                        confirm(
+                                            'กำหนดผู้รับผิดชอบ & แผนกำหนดการ',
+                                            '',
+                                            () => {
+                                                handleSaveAssignment({
+                                                    assignedTo: selAssignee,
+                                                    coWorkers: selCoWorkers,
+                                                    startDate: selStartDate,
+                                                    dueDate: selDueDate,
+                                                    priority: selPriority
+                                                });
+                                            },
+                                            {
+                                                content: (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', textAlign: 'left' }}>
+                                                        <div>
+                                                            <label style={{ fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>ผู้รับผิดชอบหลัก *</label>
+                                                            <select 
+                                                                className="form-input"
+                                                                defaultValue={selAssignee}
+                                                                onChange={(e) => { selAssignee = e.target.value; }}
+                                                                style={{ width: '100%' }}
+                                                            >
+                                                                <option value="">-- เลือกผู้รับผิดชอบหลัก --</option>
+                                                                {[...new Set([...staffMembers, ...(ticket.assigned_to ? [ticket.assigned_to] : [])])].map(s => (
+                                                                    <option key={s} value={s}>{s}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div>
+                                                            <label style={{ fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>ผู้ร่วมดำเนินงาน (คั่นด้วยจุลภาค เช่น สมชาย, วนิดา)</label>
+                                                            <input 
+                                                                type="text" 
+                                                                className="form-input"
+                                                                defaultValue={selCoWorkers}
+                                                                onChange={(e) => { selCoWorkers = e.target.value; }}
+                                                                placeholder="รายชื่อผู้ร่วมดำเนินงาน..."
+                                                                style={{ width: '100%' }}
+                                                            />
+                                                        </div>
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                                            <div>
+                                                                <label style={{ fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>วันเริ่มงาน</label>
+                                                                <input 
+                                                                    type="date" 
+                                                                    className="form-input"
+                                                                    defaultValue={selStartDate}
+                                                                    onChange={(e) => { selStartDate = e.target.value; }}
+                                                                    style={{ width: '100%' }}
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label style={{ fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>วันกำหนดเสร็จ (Due Date)</label>
+                                                                <input 
+                                                                    type="date" 
+                                                                    className="form-input"
+                                                                    defaultValue={selDueDate}
+                                                                    onChange={(e) => { selDueDate = e.target.value; }}
+                                                                    style={{ width: '100%' }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <label style={{ fontSize: '0.85rem', fontWeight: 600, display: 'block', marginBottom: 4 }}>ระดับความเร่งด่วน</label>
+                                                            <select 
+                                                                className="form-input"
+                                                                defaultValue={selPriority}
+                                                                onChange={(e) => { selPriority = e.target.value; }}
+                                                                style={{ width: '100%' }}
+                                                            >
+                                                                <option value="Low">Low</option>
+                                                                <option value="Medium">Medium</option>
+                                                                <option value="High">High</option>
+                                                                <option value="Urgent">Urgent</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            }
+                                        );
+                                    }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                                >
+                                    <UserCheck style={{ width: 14, height: 14 }} /> จัดการผู้รับผิดชอบ & กำหนดการ
+                                </button>
+                            </div>
                             
                             <div className="admin-action-grid">
                                 <div className="form-group">
@@ -832,7 +953,7 @@ export default function TicketDetailPage(props) {
                                 </div>
                                 
                                 <div className="form-group">
-                                    <label className="form-label">มอบหมายผู้รับผิดชอบ</label>
+                                    <label className="form-label">มอบหมายผู้รับผิดชอบหลัก</label>
                                     <select 
                                         className="form-input form-select"
                                         value={ticket.assigned_to || ''}
@@ -874,6 +995,58 @@ export default function TicketDetailPage(props) {
                                     </button>
                                 </div>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Completion Summary / Inspection Card */}
+                    {ticket.completion_summary && (
+                        <div className="glass-card" style={{ marginTop: '1.5rem', padding: '1.25rem', borderRadius: '12px', border: '1px solid rgba(34, 197, 94, 0.3)', background: 'rgba(34, 197, 94, 0.04)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '0.75rem' }}>
+                                <ClipboardCheck style={{ width: 20, height: 20, color: '#4ade80' }} />
+                                <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#4ade80' }}>
+                                    รายงานสรุปการส่งมอบงาน & ผลการตรวจรับ (Handover & Inspection)
+                                </h3>
+                            </div>
+                            {(() => {
+                                try {
+                                    const cs = JSON.parse(ticket.completion_summary);
+                                    return (
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0.75rem', fontSize: '0.85rem' }}>
+                                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px 14px', borderRadius: '8px' }}>
+                                                <strong style={{ color: '#60a5fa' }}>📌 สรุปปัญหาที่พบ:</strong>
+                                                <p style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>{cs.problem_summary || '-'}</p>
+                                            </div>
+                                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px 14px', borderRadius: '8px' }}>
+                                                <strong style={{ color: '#fbbf24' }}>🔍 สาเหตุของปัญหา:</strong>
+                                                <p style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>{cs.root_cause || '-'}</p>
+                                            </div>
+                                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px 14px', borderRadius: '8px' }}>
+                                                <strong style={{ color: '#4ade80' }}>🛠️ วิธีการแก้ไขที่ดำเนินการ:</strong>
+                                                <p style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>{cs.solution_method || '-'}</p>
+                                            </div>
+                                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px 14px', borderRadius: '8px' }}>
+                                                <strong style={{ color: '#a78bfa' }}>📦 วัสดุและอุปกรณ์ที่ใช้:</strong>
+                                                <p style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>{cs.materials_used || '-'}</p>
+                                            </div>
+                                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px 14px', borderRadius: '8px' }}>
+                                                <strong style={{ color: '#38bdf8' }}>🔬 ผลการทดสอบหลังซ่อม:</strong>
+                                                <p style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>{cs.testing_results || '-'}</p>
+                                            </div>
+                                            <div style={{ background: 'rgba(0,0,0,0.2)', padding: '10px 14px', borderRadius: '8px' }}>
+                                                <strong style={{ color: '#fb7185' }}>💡 ข้อแนะนำการใช้งาน/บำรุงรักษา:</strong>
+                                                <p style={{ margin: '4px 0 0 0', whiteSpace: 'pre-wrap' }}>{cs.recommendations || '-'}</p>
+                                            </div>
+                                            {ticket.accepted_by && (
+                                                <div style={{ gridColumn: '1 / -1', background: 'rgba(34, 197, 94, 0.1)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                                                    <span style={{ color: '#4ade80', fontWeight: 600 }}>✅ ตรวจรับและยืนยันเสร็จสิ้นโดย:</span> {ticket.accepted_by} {ticket.accepted_at ? `เมื่อ ${formatDate(ticket.accepted_at)}` : ''}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                } catch (e) {
+                                    return <p style={{ fontSize: '0.85rem' }}>{ticket.completion_summary}</p>;
+                                }
+                            })()}
                         </div>
                     )}
 
@@ -973,18 +1146,42 @@ export default function TicketDetailPage(props) {
                     </div>
 
                     <div className="detail-info-card glass-card">
-                        <h3 className="detail-info-title">ผู้รับผิดชอบ</h3>
+                        <h3 className="detail-info-title">ผู้รับผิดชอบ & ทีมงาน</h3>
                         <div className="detail-info-list">
                             <div className="detail-info-item">
-                                <span className="info-label"><UserCheck style={{ width: 14, height: 14 }} /> มอบหมายให้</span>
+                                <span className="info-label"><UserCheck style={{ width: 14, height: 14 }} /> ผู้รับผิดชอบหลัก</span>
                                 <span className="info-value">{ticket.assigned_to || 'ยังไม่ได้มอบหมาย'}</span>
                             </div>
+                            {ticket.co_workers && (
+                                <div className="detail-info-item">
+                                    <span className="info-label"><User style={{ width: 14, height: 14 }} /> ผู้ร่วมดำเนินงาน</span>
+                                    <span className="info-value">{ticket.co_workers}</span>
+                                </div>
+                            )}
+                            {ticket.accepted_by && (
+                                <div className="detail-info-item">
+                                    <span className="info-label"><ClipboardCheck style={{ width: 14, height: 14 }} /> ผู้ตรวจรับงาน</span>
+                                    <span className="info-value" style={{ color: '#4ade80' }}>{ticket.accepted_by}</span>
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     <div className="detail-info-card glass-card">
-                        <h3 className="detail-info-title">วันที่</h3>
+                        <h3 className="detail-info-title">กำหนดเวลา & แผนงาน</h3>
                         <div className="detail-info-list">
+                            {ticket.start_date && (
+                                <div className="detail-info-item">
+                                    <span className="info-label"><Calendar style={{ width: 14, height: 14 }} /> วันเริ่มงาน</span>
+                                    <span className="info-value">{formatDate(ticket.start_date)}</span>
+                                </div>
+                            )}
+                            {ticket.due_date && (
+                                <div className="detail-info-item">
+                                    <span className="info-label"><Calendar style={{ width: 14, height: 14 }} /> กำหนดเสร็จ</span>
+                                    <span className="info-value" style={{ color: '#fbbf24', fontWeight: 600 }}>{formatDate(ticket.due_date)}</span>
+                                </div>
+                            )}
                             <div className="detail-info-item">
                                 <span className="info-label"><Calendar style={{ width: 14, height: 14 }} /> วันที่สร้าง</span>
                                 <span className="info-value">{formatDate(ticket.created_at)}</span>
@@ -995,7 +1192,7 @@ export default function TicketDetailPage(props) {
                             </div>
                             {ticket.closed_at && (
                                 <div className="detail-info-item">
-                                    <span className="info-label"><Settings style={{ width: 14, height: 14 }} /> วันที่ปิด</span>
+                                    <span className="info-label"><Settings style={{ width: 14, height: 14 }} /> วันที่ปิดงาน</span>
                                     <span className="info-value">{formatDate(ticket.closed_at)}</span>
                                 </div>
                             )}

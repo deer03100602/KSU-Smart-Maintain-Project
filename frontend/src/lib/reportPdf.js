@@ -168,7 +168,7 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
         <div><strong>วันที่ออกรายงาน:</strong> ${formatDate(new Date())}</div>
     </div>
 
-    <div class="section-title">1. ข้อมูลการแจ้งซ่อมและผู้รับผิดชอบ</div>
+    <div class="section-title">1. ข้อมูลการแจ้งซ่อม ผู้รับผิดชอบ และกำหนดการดำเนินงาน</div>
     <div class="info-grid">
         <div><strong>หัวข้อปัญหา:</strong> ${ticket.title}</div>
         <div><strong>ประเภทปัญหา:</strong> ${ticket.issue_type}</div>
@@ -176,10 +176,14 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
         <div><strong>ระดับความเร่งด่วน:</strong> ${ticket.priority}</div>
         <div><strong>ผู้แจ้งเรื่อง:</strong> ${ticket.requester_name}</div>
         <div><strong>อีเมลผู้แจ้ง:</strong> ${ticket.requester_email || '-'}</div>
-        <div><strong>เจ้าหน้าที่ผู้รับผิดชอบ:</strong> ${ticket.assigned_to || 'ยังไม่ได้ระบุ'}</div>
+        <div><strong>เจ้าหน้าที่ผู้รับผิดชอบหลัก:</strong> ${ticket.assigned_to || 'ยังไม่ได้ระบุ'}</div>
+        <div><strong>ผู้ร่วมดำเนินงาน:</strong> ${ticket.co_workers || 'ไม่มี'}</div>
+        <div><strong>วันเริ่มดำเนินงาน:</strong> ${ticket.start_date ? formatDate(ticket.start_date) : '-'}</div>
+        <div><strong>วันกำหนดเสร็จ (Due Date):</strong> ${ticket.due_date ? formatDate(ticket.due_date) : '-'}</div>
         <div><strong>สถานะปัจจุบัน:</strong> ${ticket.status}</div>
         <div><strong>วันที่แจ้งเรื่อง:</strong> ${formatDate(ticket.created_at)}</div>
-        <div><strong>วันที่เสร็จสิ้น/ปิดงาน:</strong> ${ticket.closed_at ? formatDate(ticket.closed_at) : 'อยู่ระหว่างดำเนินการ'}</div>
+        <div><strong>วันที่ตรวจรับ/ปิดงาน:</strong> ${ticket.closed_at ? formatDate(ticket.closed_at) : 'อยู่ระหว่างดำเนินการ'}</div>
+        <div><strong>ผู้ตรวจรับงาน:</strong> ${ticket.accepted_by || '-'}</div>
     </div>
 
     <div style="margin-bottom: 12px; font-size: 13px;">
@@ -188,6 +192,31 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
             ${(ticket.description || '-').replace(/📎\s*\[.*?\]\(.*?\)/g, '').trim()}
         </div>
     </div>
+
+    ${(() => {
+        if (!ticket.completion_summary) return '';
+        try {
+            const cs = JSON.parse(ticket.completion_summary);
+            return `
+            <div class="section-title">2. รายงานสรุปผลการส่งมอบงานและการตรวจรับ (Handover Report)</div>
+            <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px;">
+                <div><strong>📌 สรุปปัญหาที่พบ:</strong> ${cs.problem_summary || '-'}</div>
+                <div><strong>🔍 สาเหตุของปัญหา:</strong> ${cs.root_cause || '-'}</div>
+                <div><strong>🛠️ วิธีการแก้ไขที่ดำเนินการ:</strong> ${cs.solution_method || '-'}</div>
+                <div><strong>📦 วัสดุ/อะไหล่ที่ใช้:</strong> ${cs.materials_used || '-'}</div>
+                <div><strong>🔬 ผลการทดสอบระบบ:</strong> ${cs.testing_results || '-'}</div>
+                <div><strong>💡 ข้อแนะนำการใช้งาน:</strong> ${cs.recommendations || '-'}</div>
+            </div>
+            `;
+        } catch (e) {
+            return `
+            <div class="section-title">2. รายงานสรุปผลการส่งมอบงาน</div>
+            <div style="background: #f8fafc; border: 1px solid #cbd5e1; padding: 8px; border-radius: 4px; margin-bottom: 12px; font-size: 13px;">
+                ${ticket.completion_summary}
+            </div>
+            `;
+        }
+    })()}
 
     ${ticket.resolution_note ? `
     <div style="margin-bottom: 12px; font-size: 13px;">
@@ -198,7 +227,7 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
     </div>
     ` : ''}
 
-    <div class="section-title">2. รายการงบประมาณ วัสดุอุปกรณ์ และค่าใช้จ่าย</div>
+    <div class="section-title">3. รายการงบประมาณ วัสดุอุปกรณ์ และค่าใช้จ่าย</div>
     <table class="border-table">
         <thead>
             <tr>
@@ -226,7 +255,7 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
                     </td>
                     <td style="text-align: center;">${exp.quantity} ${exp.unit}</td>
                     <td style="text-align: right;">${formatCurrency(exp.unit_price)}</td>
-                    <td style="text-align: center;">${exp.status === 'APPROVED' ? 'อนุมัติ' : (exp.status === 'REJECTED' ? 'ไม่อนุมัติ' : 'รออนุมัติ')}</td>
+                    <td style="text-align: center;">${exp.status === 'APPROVED' ? 'อนุมัติ' : (exp.status === 'REJECTED' ? 'ไม่อนุมัติ' : (exp.status === 'PARTIALLY_APPROVED' ? 'อนุมัติบางส่วน' : 'รออนุมัติ'))}</td>
                     <td style="text-align: right; font-weight: bold;">${formatCurrency(exp.net_amount || exp.total_price)}</td>
                 </tr>
             `).join('')}
@@ -237,26 +266,34 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
                 <td style="text-align: right;">฿${formatCurrency(summary.totalProposed)}</td>
             </tr>
             <tr style="background: #f0fdf4; font-weight: bold; color: #166534;">
-                <td colspan="6" style="text-align: right;">ยอดรวมงบประมาณที่อนุมัติ (เบิกจ่ายจริง):</td>
+                <td colspan="6" style="text-align: right;">ยอดรวมงบประมาณที่อนุมัติ:</td>
                 <td style="text-align: right;">฿${formatCurrency(summary.totalApproved)}</td>
+            </tr>
+            <tr style="background: #faf5ff; font-weight: bold; color: #7e22ce;">
+                <td colspan="6" style="text-align: right;">ยอดเบิกจ่ายจริง (มีใบเสร็จตามเงื่อนไข):</td>
+                <td style="text-align: right;">฿${formatCurrency(summary.totalDisbursed || summary.totalApproved)}</td>
+            </tr>
+            <tr style="background: #ecfdf5; font-weight: bold; color: #047857;">
+                <td colspan="6" style="text-align: right;">งบประมาณคงเหลือ:</td>
+                <td style="text-align: right;">฿${formatCurrency(summary.remainingBudget || 0)}</td>
             </tr>
         </tfoot>
     </table>
 
     ${evidences.length > 0 ? `
-    <div class="section-title">3. รูปภาพและหลักฐานการดำเนินงาน</div>
+    <div class="section-title">4. รูปภาพและหลักฐานการดำเนินงาน</div>
     <div class="evidence-grid">
-        ${evidences.slice(0, 6).map(evi => `
+        ${evidences.slice(0, 8).map(evi => `
             <div class="evidence-item">
                 <img src="${evi.url}" alt="${evi.description}" onerror="this.style.display='none'" />
-                <div style="font-weight: bold; margin-top: 2px;">${evi.stage === 'BEFORE' ? 'ก่อนซ่อม' : (evi.stage === 'DURING' ? 'ระหว่างซ่อม' : (evi.stage === 'AFTER' ? 'หลังซ่อม' : 'ใบเสร็จ'))}</div>
-                <div style="color: #64748b;">${evi.description || '-'}</div>
+                <div style="font-weight: bold; margin-top: 2px;">${evi.stage === 'BEFORE' ? 'ก่อนซ่อม' : (evi.stage === 'DURING' ? 'ระหว่างซ่อม' : (evi.stage === 'PARTS' ? 'วัสดุ/อะไหล่' : (evi.stage === 'AFTER' ? 'หลังซ่อม' : (evi.stage === 'TESTING' ? 'ผลทดสอบ' : (evi.stage === 'HANDOVER' ? 'ส่งมอบงาน' : 'ใบเสร็จ')))))}</div>
+                <div style="color: #64748b; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${evi.description || '-'}</div>
             </div>
         `).join('')}
     </div>
     ` : ''}
 
-    <div class="section-title">4. การลงนามตรวจรับและอนุมัติ (ห้ามสร้างลายเซ็นแทนบุคคลจริง)</div>
+    <div class="section-title">5. การลงนามตรวจรับและอนุมัติ (ห้ามสร้างลายเซ็นแทนบุคคลจริง)</div>
     <div class="signature-grid">
         <div class="sign-box">
             <div>ลงชื่อ..............................................................</div>

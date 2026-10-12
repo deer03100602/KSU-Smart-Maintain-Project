@@ -198,10 +198,14 @@ export default function TicketExpenseManager({
         switch (status) {
             case 'APPROVED':
                 return <span style={{ background: '#22c55e20', color: '#4ade80', border: '1px solid #22c55e40', padding: '3px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>✅ อนุมัติแล้ว</span>;
+            case 'PARTIALLY_APPROVED':
+                return <span style={{ background: '#3b82f620', color: '#60a5fa', border: '1px solid #3b82f640', padding: '3px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>🔹 อนุมัติบางส่วน</span>;
             case 'REJECTED':
                 return <span style={{ background: '#ef444420', color: '#f87171', border: '1px solid #ef444440', padding: '3px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>❌ ไม่อนุมัติ</span>;
             case 'REVISE_REQUESTED':
-                return <span style={{ background: '#f59e0b20', color: '#fbbf24', border: '1px solid #f59e0b40', padding: '3px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>⚠️ ขอให้แก้ไข</span>;
+                return <span style={{ background: '#f59e0b20', color: '#fbbf24', border: '1px solid #f59e0b40', padding: '3px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>⚠️ ขอแก้ไขรายละเอียด</span>;
+            case 'DOCUMENTS_NEEDED':
+                return <span style={{ background: '#a855f720', color: '#c084fc', border: '1px solid #a855f740', padding: '3px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>📄 รอเอกสารเพิ่มเติม</span>;
             case 'PENDING':
             default:
                 return <span style={{ background: '#3b82f620', color: '#60a5fa', border: '1px solid #3b82f640', padding: '3px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>⏳ รออนุมัติ</span>;
@@ -213,34 +217,38 @@ export default function TicketExpenseManager({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <DollarSign style={{ width: 20, height: 20, color: '#3b82f6' }} />
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>งบประมาณและค่าใช้จ่าย</h3>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>ระบบบริหารงบประมาณและบันทึกค่าใช้จ่าย (Budget & Expenses)</h3>
                 </div>
                 <button 
                     className="btn btn-primary btn-sm"
                     onClick={() => { resetForm(); setShowAddModal(true); }}
                     style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                 >
-                    <Plus style={{ width: 15, height: 15 }} /> เพิ่มรายการค่าใช้จ่าย / สแกนใบเสร็จ
+                    <Plus style={{ width: 15, height: 15 }} /> บันทึกค่าใช้จ่าย / สแกนใบเสร็จ
                 </button>
             </div>
 
             {/* Financial Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
                 <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>งบประมาณที่เสนอ</div>
                     <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#60a5fa' }}>฿{(summary.totalProposed || 0).toLocaleString()}</div>
                 </div>
                 <div style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>งบที่อนุมัติแล้ว</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>งบประมาณที่อนุมัติ</div>
                     <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#4ade80' }}>฿{(summary.totalApproved || 0).toLocaleString()}</div>
+                </div>
+                <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ยอดเบิกจ่ายแล้ว (มีใบเสร็จ)</div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#c084fc' }}>฿{(summary.totalDisbursed || summary.totalActual || 0).toLocaleString()}</div>
+                </div>
+                <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>งบประมาณคงเหลือ</div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#10b981' }}>฿{(summary.remainingBudget || 0).toLocaleString()}</div>
                 </div>
                 <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>รอดำเนินการอนุมัติ</div>
                     <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#fbbf24' }}>฿{(summary.totalPending || 0).toLocaleString()}</div>
-                </div>
-                <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ค่าใช้จ่ายจริง / เบิกจ่าย</div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#c084fc' }}>฿{(summary.totalActual || 0).toLocaleString()}</div>
                 </div>
             </div>
 
@@ -304,11 +312,22 @@ export default function TicketExpenseManager({
                                                 <>
                                                     <button 
                                                         className="btn btn-ghost btn-sm"
-                                                        title="อนุมัติงบ"
+                                                        title="อนุมัติงบทั้งหมด"
                                                         onClick={() => handleUpdateStatus(exp.id, 'APPROVED')}
                                                         style={{ color: '#4ade80', padding: '4px 6px' }}
                                                     >
                                                         <Check style={{ width: 14, height: 14 }} />
+                                                    </button>
+                                                    <button 
+                                                        className="btn btn-ghost btn-sm"
+                                                        title="อนุมัติบางส่วน"
+                                                        onClick={() => {
+                                                            const r = window.prompt('ระบุหมายเหตุการอนุมัติบางส่วน:');
+                                                            if (r !== null) handleUpdateStatus(exp.id, 'PARTIALLY_APPROVED', r);
+                                                        }}
+                                                        style={{ color: '#60a5fa', padding: '4px 6px' }}
+                                                    >
+                                                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>½</span>
                                                     </button>
                                                     <button 
                                                         className="btn btn-ghost btn-sm"
@@ -320,6 +339,17 @@ export default function TicketExpenseManager({
                                                         style={{ color: '#fbbf24', padding: '4px 6px' }}
                                                     >
                                                         <Edit3 style={{ width: 14, height: 14 }} />
+                                                    </button>
+                                                    <button 
+                                                        className="btn btn-ghost btn-sm"
+                                                        title="ขอเอกสารเพิ่มเติม"
+                                                        onClick={() => {
+                                                            const r = window.prompt('ระบุเอกสารที่ต้องการเพิ่มเติม:');
+                                                            if (r !== null) handleUpdateStatus(exp.id, 'DOCUMENTS_NEEDED', r);
+                                                        }}
+                                                        style={{ color: '#c084fc', padding: '4px 6px' }}
+                                                    >
+                                                        <FileText style={{ width: 14, height: 14 }} />
                                                     </button>
                                                     <button 
                                                         className="btn btn-ghost btn-sm"
@@ -433,11 +463,13 @@ export default function TicketExpenseManager({
                                         onChange={(e) => setCategory(e.target.value)}
                                         style={{ width: '100%', fontSize: '0.85rem' }}
                                     >
-                                        <option value="อุปกรณ์">อุปกรณ์</option>
-                                        <option value="วัสดุ">วัสดุ</option>
+                                        <option value="ค่าวัสดุและอุปกรณ์">ค่าวัสดุและอุปกรณ์</option>
+                                        <option value="ค่าอะไหล่">ค่าอะไหล่</option>
                                         <option value="ค่าแรง">ค่าแรง</option>
                                         <option value="ค่าเดินทาง">ค่าเดินทาง</option>
+                                        <option value="ค่าจ้างภายนอก">ค่าจ้างภายนอก</option>
                                         <option value="ค่าใช้จ่ายอื่นๆ">ค่าใช้จ่ายอื่นๆ</option>
+                                        <option value="ส่วนลดหรือเงินคืน">ส่วนลดหรือเงินคืน</option>
                                     </select>
                                 </div>
                                 <div>

@@ -98,8 +98,11 @@ export default function TicketEvidenceManager({
         switch (st) {
             case 'BEFORE': return <span style={{ background: '#3b82f620', color: '#60a5fa', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>📷 ก่อนซ่อม</span>;
             case 'DURING': return <span style={{ background: '#f59e0b20', color: '#fbbf24', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>⚙️ ระหว่างซ่อม</span>;
-            case 'AFTER': return <span style={{ background: '#22c55e20', color: '#4ade80', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>🎉 หลังซ่อม</span>;
-            case 'RECEIPT': return <span style={{ background: '#a855f720', color: '#c084fc', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>🧾 ใบเสร็จ/เอกสาร</span>;
+            case 'PARTS': return <span style={{ background: '#06b6d420', color: '#22d3ee', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>📦 อุปกรณ์/วัสดุที่ใช้</span>;
+            case 'RECEIPT': return <span style={{ background: '#a855f720', color: '#c084fc', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>🧾 ใบเสร็จ/ค่าใช้จ่าย</span>;
+            case 'AFTER': return <span style={{ background: '#22c55e20', color: '#4ade80', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>🎉 หลังซ่อมเสร็จ</span>;
+            case 'TESTING': return <span style={{ background: '#ec489920', color: '#f472b6', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>🔬 ผลทดสอบการใช้งาน</span>;
+            case 'HANDOVER': return <span style={{ background: '#10b98120', color: '#34d399', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>📋 เอกสารส่งมอบ/ตรวจรับ</span>;
             default: return null;
         }
     };
@@ -109,7 +112,7 @@ export default function TicketEvidenceManager({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Camera style={{ width: 20, height: 20, color: '#3b82f6' }} />
-                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>รูปภาพและหลักฐานงานซ่อม (Before / During / After)</h3>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>รูปภาพและหลักฐานงานซ่อม (Before / During / After / Evidence Gallery)</h3>
                 </div>
                 <button 
                     className="btn btn-primary btn-sm"
@@ -126,8 +129,11 @@ export default function TicketEvidenceManager({
                     { key: 'ALL', label: 'ทั้งหมด' },
                     { key: 'BEFORE', label: '📷 ก่อนซ่อม' },
                     { key: 'DURING', label: '⚙️ ระหว่างซ่อม' },
+                    { key: 'PARTS', label: '📦 วัสดุ/อะไหล่' },
+                    { key: 'RECEIPT', label: '🧾 ใบเสร็จ' },
                     { key: 'AFTER', label: '🎉 หลังซ่อม' },
-                    { key: 'RECEIPT', label: '🧾 ใบเสร็จและเอกสาร' }
+                    { key: 'TESTING', label: '🔬 ผลทดสอบ' },
+                    { key: 'HANDOVER', label: '📋 ส่งมอบงาน' }
                 ].map(tab => (
                     <button
                         key={tab.key}
@@ -246,8 +252,11 @@ export default function TicketEvidenceManager({
                                 >
                                     <option value="BEFORE">📷 ภาพก่อนดำเนินการซ่อม (Before)</option>
                                     <option value="DURING">⚙️ ภาพระหว่างดำเนินงาน (During)</option>
+                                    <option value="PARTS">📦 อุปกรณ์และวัสดุที่ใช้ (Parts & Materials)</option>
+                                    <option value="RECEIPT">🧾 ใบเสร็จ / เอกสารค่าใช้จ่าย (Receipt & Financials)</option>
                                     <option value="AFTER">🎉 ภาพหลังซ่อมเสร็จสิ้น (After)</option>
-                                    <option value="RECEIPT">🧾 ใบเสร็จ / เอกสารประกอบ (Receipt/Doc)</option>
+                                    <option value="TESTING">🔬 ผลการทดสอบระบบ/การใช้งาน (Testing Results)</option>
+                                    <option value="HANDOVER">📋 เอกสารส่งมอบงาน / ตรวจรับ (Handover & Inspection)</option>
                                 </select>
                             </div>
 
