@@ -106,12 +106,12 @@ function extractAttachments(description) {
     const files = [];
     const emailAttachments = [];
     const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'];
-
-    // Regex to match markdown links: ![name](url) or [name](url) or 📎 [name](url)
-    const linkRegex = /!?\[(.*?)\]\((\/uploads\/(.*?))\)/g;
-    let match;
     const foundUrls = new Set();
     let imgIndex = 0;
+
+    // 1. Regex to match markdown links to local uploads: ![name](/uploads/...) or [name](/uploads/...)
+    const linkRegex = /!?\[(.*?)\]\((\/uploads\/(.*?))\)/g;
+    let match;
 
     while ((match = linkRegex.exec(description)) !== null) {
         const rawName = match[1].replace(/^[📎📷\s]+/, '').trim();
@@ -174,11 +174,40 @@ function extractAttachments(description) {
         }
     }
 
-    // Clean description text for readability
+    // 2. Regex to match embedded base64 images: [name](data:image/...) or ![name](data:image/...)
+    const base64Regex = /!?\[([^\]]*)\]\((data:image\/([a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=\s\r\n]+))\)/g;
+    let bMatch;
+    while ((bMatch = base64Regex.exec(description)) !== null) {
+        try {
+            const rawName = (bMatch[1] || `image_${imgIndex}.png`).replace(/^[📎📷\s]+/, '').trim() || `image_${imgIndex}.png`;
+            const mimeType = `image/${bMatch[3]}`;
+            const cleanBase64 = bMatch[4].replace(/\s+/g, '');
+            const buffer = Buffer.from(cleanBase64, 'base64');
+            const cid = `ticket-img-${imgIndex++}@ksu-maintain`;
+
+            images.push({
+                name: rawName,
+                url: bMatch[2],
+                filename: rawName,
+                cid: cid,
+                isBase64: true
+            });
+
+            emailAttachments.push({
+                filename: rawName,
+                content: buffer,
+                cid: cid
+            });
+        } catch (e) {}
+    }
+
+    // Clean description text for readability: strip attachment links and base64 payloads
     let cleanDesc = description
         .replace(/\*\*ไฟล์แนบ:\*\*[\s\S]*$/i, '')
         .replace(/📎\s*\[.*?\]\(.*?\)/g, '')
         .replace(/!?\[.*?\]\(\/uploads\/.*?\)/g, '')
+        .replace(/!?\[.*?\]\(data:image\/.*?\)/gi, '')
+        .replace(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=\s\r\n]+/gi, '')
         .trim();
 
     return { cleanDesc: cleanDesc || description, images, files, emailAttachments };
@@ -485,17 +514,93 @@ async function sendViaEmailJs(settings, toEmail, toName, subject, messageText) {
     return { success: true, provider: 'EmailJS' };
 }
 
-// Send rich embed notification to Discord Webhook
+// Send rich embed notification to Discord Webhook with file attachments & image rendering
 async function sendViaDiscord(webhookUrl, ticket, eventType = 'CREATED') {
     if (!webhookUrl || !webhookUrl.startsWith('http')) return;
 
+    // Deduplication check: avoid double posting if discordService already sent
+    global.__sentDiscordEvents = global.__sentDiscordEvents || new Map();
+    const dedupeKey = `DSC_${ticket.ticket_no}_${eventType}`;
+    const now = Date.now();
+    const lastSent = global.__sentDiscordEvents.get(dedupeKey);
+    if (lastSent && (now - lastSent) < 60000) {
+        console.log(`⏩ [Discord Dedupe] Notification already sent for ${dedupeKey}`);
+        return;
+    }
+
+    const cleanWebhookUrl = webhookUrl.replace('discordapp.com', 'discord.com');
     const isResolved = ticket.status === 'Resolved' || ticket.status === 'Closed';
     const isNew = eventType === 'CREATED';
     const color = isResolved ? 0x10b981 : (ticket.priority === 'Urgent' ? 0xef4444 : (ticket.priority === 'High' ? 0xf59e0b : 0x3b82f6));
 
+    // Extract images from description and resolution_note
+    const rawText = String(ticket.description || '') + ' ' + String(ticket.resolution_note || '');
+    const images = [];
+
+    // 1. Embedded base64 images
+    const base64Regex = /(?:\[([^\]]+)\]\()?(data:image\/([a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=\s\r\n]+))\)?/g;
+    let b64Match;
+    let idx = 0;
+    while ((b64Match = base64Regex.exec(rawText)) !== null) {
+        try {
+            const rawName = b64Match[1] || `image_${idx}.png`;
+            const filename = rawName.replace(/[^a-zA-Z0-9._-]/g, '_') || `image_${idx}.png`;
+            const mimeType = `image/${b64Match[3]}`;
+            const cleanBase64 = b64Match[4].replace(/\s+/g, '');
+            const buffer = Buffer.from(cleanBase64, 'base64');
+            if (buffer.length > 0 && buffer.length < 8 * 1024 * 1024) {
+                images.push({ filename, mimeType, buffer });
+                idx++;
+            }
+        } catch (e) {}
+    }
+
+    // 2. Uploaded files on disk (/uploads/...)
+    const uploadRegex = /\[?([^\]\n]*)\]?\(?(\/uploads\/([^)\s]+))\)?/gi;
+    let upMatch;
+    while ((upMatch = uploadRegex.exec(rawText)) !== null) {
+        const fname = upMatch[3];
+        const searchPaths = [
+            path.join(__dirname, 'public', 'uploads', fname),
+            path.join(__dirname, 'uploads', fname),
+            path.join(__dirname, '..', 'backend', 'public', 'uploads', fname),
+            path.join(__dirname, '..', 'backend', 'uploads', fname),
+            path.join(__dirname, '..', 'frontend', 'public', 'uploads', fname)
+        ];
+        for (const p of searchPaths) {
+            if (fs.existsSync(p)) {
+                try {
+                    const ext = path.extname(fname).toLowerCase();
+                    const mimeType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : (ext === '.gif' ? 'image/gif' : (ext === '.webp' ? 'image/webp' : 'image/png'));
+                    images.push({ filename: fname, mimeType, buffer: fs.readFileSync(p) });
+                    break;
+                } catch (e) {}
+            }
+        }
+    }
+
+    // 3. Remote web URLs (http...)
+    const urlRegex = /\[?([^\]\n]*)\]?\(?(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|webp|gif))\)?/gi;
+    let urlMatch;
+    while ((urlMatch = urlRegex.exec(rawText)) !== null) {
+        images.push({ url: urlMatch[2], filename: urlMatch[1] || 'image.png' });
+    }
+
+    // Clean description: remove raw base64 and attachment tags so Discord is clean
+    let cleanDesc = String(ticket.description || '');
+    cleanDesc = cleanDesc.replace(/\*\*ไฟล์แนบ:\*\*[\s\S]*$/i, '');
+    cleanDesc = cleanDesc.replace(/\[([^\]]+)\]\(data:image\/[^)]+\)/gi, '');
+    cleanDesc = cleanDesc.replace(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=\s\r\n]+/gi, '');
+    cleanDesc = cleanDesc.replace(/\[([^\]]+)\]\(\/uploads\/[^)]+\)/gi, '');
+    cleanDesc = cleanDesc.replace(/📎\s*\[.*?\]\(.*?\)/gi, '');
+    cleanDesc = cleanDesc.replace(/📷\s*\[.*?\]\(.*?\)/gi, '');
+    cleanDesc = cleanDesc.replace(/📎/g, '').replace(/📷/g, '').trim();
+    if (!cleanDesc) cleanDesc = 'มีรูปภาพ/ไฟล์แนบประกอบการแจ้งซ่อม';
+    if (cleanDesc.length > 500) cleanDesc = cleanDesc.substring(0, 500) + '...';
+
     const embed = {
         title: isResolved ? `🎉 งานซ่อมเสร็จสิ้น: ${ticket.title}` : (isNew ? `🔔 แจ้งปัญหาใหม่: ${ticket.title}` : `📝 อัปเดตตั๋วงาน: ${ticket.title}`),
-        description: ticket.description ? ticket.description.substring(0, 300) : 'ไม่มีรายละเอียด',
+        description: cleanDesc,
         color,
         fields: [
             { name: 'หมายเลข Ticket', value: ticket.ticket_no || '-', inline: true },
@@ -516,13 +621,70 @@ async function sendViaDiscord(webhookUrl, ticket, eventType = 'CREATED') {
         embed.fields.push({ name: 'บันทึกการแก้ไข', value: ticket.resolution_note, inline: false });
     }
 
+    const payload = {
+        content: `🔔 **มีการแจ้งปัญหาใหม่ในระบบ** (ถึง <@1553459941778399262>)`,
+        embeds: [embed]
+    };
+
+    // Attach image directly to Discord Embed
+    const attachedFiles = [];
+    if (images.length > 0) {
+        const firstImg = images[0];
+        if (firstImg.buffer) {
+            const fname = firstImg.filename || 'preview.png';
+            attachedFiles.push({ filename: fname, mimeType: firstImg.mimeType, buffer: firstImg.buffer });
+            embed.image = { url: `attachment://${fname}` };
+        } else if (firstImg.url) {
+            embed.image = { url: firstImg.url };
+        }
+    }
+
     try {
-        await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ embeds: [embed] })
-        });
-        console.log('💬 Discord Webhook notification sent successfully');
+        let response;
+        if (attachedFiles.length > 0) {
+            try {
+                const formData = new FormData();
+                formData.append('payload_json', JSON.stringify(payload));
+                attachedFiles.forEach((f, i) => {
+                    const blob = new Blob([f.buffer], { type: f.mimeType || 'image/png' });
+                    formData.append(`files[${i}]`, blob, f.filename);
+                });
+                response = await fetch(cleanWebhookUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch (formErr) {
+                // Fallback multipart manual boundary
+                const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+                const parts = [];
+                parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(payload)}\r\n`));
+                attachedFiles.forEach((f, i) => {
+                    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files[${i}]"; filename="${f.filename}"\r\nContent-Type: ${f.mimeType || 'image/png'}\r\n\r\n`));
+                    parts.push(f.buffer);
+                    parts.push(Buffer.from(`\r\n`));
+                });
+                parts.push(Buffer.from(`--${boundary}--\r\n`));
+                response = await fetch(cleanWebhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+                    body: Buffer.concat(parts)
+                });
+            }
+        } else {
+            response = await fetch(cleanWebhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
+
+        if (response && !response.ok) {
+            const errTxt = await response.text();
+            console.warn(`Discord webhook error status ${response.status}:`, errTxt);
+        } else {
+            global.__sentDiscordEvents.set(dedupeKey, now);
+            console.log(`💬 Discord Webhook notification sent successfully (attached images: ${attachedFiles.length})`);
+        }
     } catch (e) {
         console.warn('Discord webhook warning:', e.message);
     }

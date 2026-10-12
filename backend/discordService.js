@@ -39,45 +39,90 @@ function logDiscordDelivery({ channel, eventType, identifier, success, error, pa
 
 // Helper: ดึง Webhook URL ของแต่ละห้องจาก Environment Variables หรือ Server Config (ห้ามส่งออก Frontend)
 function getDiscordWebhookUrl(channel) {
+    let settingsWebhook = '';
+    try {
+        const settingsPath = path.join(__dirname, 'data', 'settings.json');
+        if (fs.existsSync(settingsPath)) {
+            const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+            settingsWebhook = s.discord_webhook_url || '';
+        }
+    } catch (e) {}
+
+    let url = '';
     switch (channel) {
         case 'URGENT':
-            return process.env.DISCORD_WEBHOOK_URGENT || process.env.DISCORD_WEBHOOK_URL || '';
+            url = process.env.DISCORD_WEBHOOK_URGENT || process.env.DISCORD_WEBHOOK_URL || settingsWebhook;
+            break;
         case 'PAYMENT':
-            return process.env.DISCORD_WEBHOOK_PAYMENT || process.env.DISCORD_WEBHOOK_URL || '';
+            url = process.env.DISCORD_WEBHOOK_PAYMENT || process.env.DISCORD_WEBHOOK_URL || settingsWebhook;
+            break;
         case 'NEW_ORDER':
-            return process.env.DISCORD_WEBHOOK_NEW_ORDER || process.env.DISCORD_WEBHOOK_URL || '';
+            url = process.env.DISCORD_WEBHOOK_NEW_ORDER || process.env.DISCORD_WEBHOOK_URL || settingsWebhook;
+            break;
         case 'SYSTEM_ERROR':
-            return process.env.DISCORD_WEBHOOK_ERROR || process.env.DISCORD_WEBHOOK_URL || '';
+            url = process.env.DISCORD_WEBHOOK_ERROR || process.env.DISCORD_WEBHOOK_URL || settingsWebhook;
+            break;
         case 'ACTIVITY':
-            return process.env.DISCORD_WEBHOOK_ACTIVITY || process.env.DISCORD_WEBHOOK_URL || '';
+            url = process.env.DISCORD_WEBHOOK_ACTIVITY || process.env.DISCORD_WEBHOOK_URL || settingsWebhook;
+            break;
         default:
-            return process.env.DISCORD_WEBHOOK_URL || '';
+            url = process.env.DISCORD_WEBHOOK_URL || settingsWebhook;
+            break;
     }
+    return (url || '').replace('discordapp.com', 'discord.com');
 }
 
 // Helper: Extract images (base64 or URLs) from markdown or ticket text
 function extractImagesFromTicket(ticket) {
     const images = [];
-    const text = (ticket.description || '') + ' ' + (ticket.resolution_note || '');
+    const text = String(ticket.description || '') + ' ' + String(ticket.resolution_note || '');
     
-    // 1. Regex match for Markdown links with data URI: [name](data:image/png;base64,...)
-    const base64Regex = /\[([^\]]+)\]\((data:image\/([A-Za-z]+);base64,([A-Za-z0-9+/=]+))\)/g;
+    // 1. Embedded base64 images
+    const base64Regex = /(?:\[([^\]]+)\]\()?(data:image\/([a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=\s\r\n]+))\)?/g;
     let match;
     let idx = 0;
     while ((match = base64Regex.exec(text)) !== null) {
         try {
-            const filename = (match[1] || `image_${idx}.png`).replace(/[^a-zA-Z0-9._-]/g, '_');
+            const rawName = match[1] || `image_${idx}.png`;
+            const filename = rawName.replace(/[^a-zA-Z0-9._-]/g, '_') || `image_${idx}.png`;
             const mimeType = `image/${match[3]}`;
-            const buffer = Buffer.from(match[4], 'base64');
-            images.push({ filename, mimeType, buffer });
-            idx++;
+            const cleanBase64 = match[4].replace(/\s+/g, '');
+            const buffer = Buffer.from(cleanBase64, 'base64');
+            if (buffer.length > 0 && buffer.length < 8 * 1024 * 1024) {
+                images.push({ filename, mimeType, buffer });
+                idx++;
+            }
         } catch (e) {}
     }
 
-    // 2. Regex match for direct web image URLs: [name](http...) or http...
-    const urlRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|webp|gif))\)/gi;
+    // 2. Uploaded files on disk (/uploads/...)
+    const uploadRegex = /\[?([^\]\n]*)\]?\(?(\/uploads\/([^)\s]+))\)?/gi;
+    let upMatch;
+    while ((upMatch = uploadRegex.exec(text)) !== null) {
+        const fname = upMatch[3];
+        const searchPaths = [
+            path.join(__dirname, 'public', 'uploads', fname),
+            path.join(__dirname, 'uploads', fname),
+            path.join(__dirname, '..', 'backend', 'public', 'uploads', fname),
+            path.join(__dirname, '..', 'backend', 'uploads', fname),
+            path.join(__dirname, '..', 'frontend', 'public', 'uploads', fname)
+        ];
+        for (const p of searchPaths) {
+            if (fs.existsSync(p)) {
+                try {
+                    const ext = path.extname(fname).toLowerCase();
+                    const mimeType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : (ext === '.gif' ? 'image/gif' : (ext === '.webp' ? 'image/webp' : 'image/png'));
+                    images.push({ filename: fname, mimeType, buffer: fs.readFileSync(p) });
+                    break;
+                } catch (e) {}
+            }
+        }
+    }
+
+    // 3. Direct web image URLs: [name](http...) or http...
+    const urlRegex = /\[?([^\]\n]*)\]?\(?(https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|webp|gif))\)?/gi;
     while ((match = urlRegex.exec(text)) !== null) {
-        images.push({ url: match[2], filename: match[1] });
+        images.push({ url: match[2], filename: match[1] || 'image.png' });
     }
 
     return images;
@@ -88,47 +133,60 @@ async function sendDiscordWebhook(channel, payload, dedupeKey, attachedFiles = [
     const webhookUrl = getDiscordWebhookUrl(channel);
 
     if (!webhookUrl || !webhookUrl.startsWith('http')) {
-        console.warn(`ℹ️ Discord channel [${channel}] Webhook URL is not configured in .env.`);
+        console.warn(`ℹ️ Discord channel [${channel}] Webhook URL is not configured.`);
         return { success: false, skipped: true, reason: 'Webhook URL not configured' };
     }
 
     // 1. ตรวจสอบการส่งซ้ำ (Deduplication Check)
+    global.__sentDiscordEvents = global.__sentDiscordEvents || new Map();
     const now = Date.now();
     if (dedupeKey) {
-        const lastSent = sentEventsCache.get(dedupeKey);
+        const lastSent = global.__sentDiscordEvents.get(dedupeKey);
         if (lastSent && (now - lastSent) < DEDUPE_CACHE_MS) {
             console.log(`⏩ [Discord Dedupe] ข้ามการส่งข้อความซ้ำ (${channel}): ${dedupeKey}`);
             return { success: true, deduped: true };
         }
     }
 
-    // 2. ส่งข้อมูลไปยัง Discord (รองรับ Multipart Form Data เมื่อมีไฟล์แนบ)
+    // 2. ส่งข้อมูลไปยัง Discord (รองรับ FormData + Multipart Form Data เมื่อมีไฟล์แนบ)
     try {
         let response;
         if (attachedFiles && attachedFiles.length > 0) {
-            const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
-            const parts = [];
+            try {
+                const formData = new FormData();
+                formData.append('payload_json', JSON.stringify(payload));
+                attachedFiles.forEach((f, i) => {
+                    const fname = f.filename || `attachment_${i}.png`;
+                    const mtype = f.mimeType || 'image/png';
+                    const blob = new Blob([f.buffer], { type: mtype });
+                    formData.append(`files[${i}]`, blob, fname);
+                });
+                response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch (formErr) {
+                // Fallback to manual multipart boundary
+                const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+                const parts = [];
 
-            // Add payload_json
-            parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(payload)}\r\n`));
+                parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(payload)}\r\n`));
 
-            // Add attached binary files
-            attachedFiles.forEach((f, i) => {
-                const fname = f.filename || `attachment_${i}.png`;
-                const mtype = f.mimeType || 'image/png';
-                parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files[${i}]"; filename="${fname}"\r\nContent-Type: ${mtype}\r\n\r\n`));
-                parts.push(f.buffer);
-                parts.push(Buffer.from(`\r\n`));
-            });
+                attachedFiles.forEach((f, i) => {
+                    const fname = f.filename || `attachment_${i}.png`;
+                    const mtype = f.mimeType || 'image/png';
+                    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files[${i}]"; filename="${fname}"\r\nContent-Type: ${mtype}\r\n\r\n`));
+                    parts.push(f.buffer);
+                    parts.push(Buffer.from(`\r\n`));
+                });
 
-            parts.push(Buffer.from(`--${boundary}--\r\n`));
-            const bodyBuffer = Buffer.concat(parts);
-
-            response = await fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
-                body: bodyBuffer
-            });
+                parts.push(Buffer.from(`--${boundary}--\r\n`));
+                response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+                    body: Buffer.concat(parts)
+                });
+            }
         } else {
             response = await fetch(webhookUrl, {
                 method: 'POST',
@@ -143,6 +201,7 @@ async function sendDiscordWebhook(channel, payload, dedupeKey, attachedFiles = [
         }
 
         if (dedupeKey) {
+            global.__sentDiscordEvents.set(dedupeKey, now);
             sentEventsCache.set(dedupeKey, now);
         }
 
@@ -168,6 +227,22 @@ async function sendDiscordWebhook(channel, payload, dedupeKey, attachedFiles = [
     }
 }
 
+// Helper: Clean description for Discord embeds
+function cleanDiscordDescription(desc) {
+    if (!desc) return 'ไม่มีรายละเอียดเพิ่มเติม';
+    let clean = String(desc);
+    clean = clean.replace(/\*\*ไฟล์แนบ:\*\*[\s\S]*$/i, '');
+    clean = clean.replace(/\[([^\]]+)\]\(data:image\/[^)]+\)/gi, '');
+    clean = clean.replace(/data:image\/[a-zA-Z0-9+.-]+;base64,[A-Za-z0-9+/=\s\r\n]+/gi, '');
+    clean = clean.replace(/\[([^\]]+)\]\(\/uploads\/[^)]+\)/gi, '');
+    clean = clean.replace(/📎\s*\[.*?\]\(.*?\)/gi, '');
+    clean = clean.replace(/📷\s*\[.*?\]\(.*?\)/gi, '');
+    clean = clean.replace(/📎/g, '').replace(/📷/g, '').trim();
+    if (!clean) clean = 'มีรูปภาพ/ไฟล์แนบประกอบการแจ้งซ่อม';
+    if (clean.length > 500) clean = clean.substring(0, 500) + '...';
+    return clean;
+}
+
 // ─────────────────────────────────────────────────────────────
 // 1. แจ้งเตือนเร่งด่วน (Urgent / Critical Alerts)
 // ─────────────────────────────────────────────────────────────
@@ -176,9 +251,7 @@ async function notifyDiscordUrgent(ticket, reason = 'งานด่วนที
     const extractedImages = extractImagesFromTicket(ticket);
     const attachedFiles = [];
 
-    let cleanDesc = ticket.description || '-';
-    cleanDesc = cleanDesc.replace(/\[([^\]]+)\]\(data:image\/[A-Za-z]+;base64,[^)]+\)/g, '📷 *$1*');
-    if (cleanDesc.length > 500) cleanDesc = cleanDesc.substring(0, 500) + '...';
+    const cleanDesc = cleanDiscordDescription(ticket.description);
 
     const embed = {
         title: `🚨 [แจ้งเตือนเร่งด่วน] Ticket #${ticket.ticket_no}: ${ticket.title}`,
@@ -267,10 +340,7 @@ async function notifyDiscordNewOrder(ticket) {
     const extractedImages = extractImagesFromTicket(ticket);
     const attachedFiles = [];
 
-    // Clean up description: strip ugly base64 string from text so Discord looks neat
-    let cleanDesc = ticket.description || 'ไม่มีรายละเอียดเพิ่มเติม';
-    cleanDesc = cleanDesc.replace(/\[([^\]]+)\]\(data:image\/[A-Za-z]+;base64,[^)]+\)/g, '📷 *$1*');
-    if (cleanDesc.length > 500) cleanDesc = cleanDesc.substring(0, 500) + '...';
+    const cleanDesc = cleanDiscordDescription(ticket.description);
 
     const embed = {
         title: `📦 [มีงานแจ้งซ่อม / ออเดอร์ใหม่] #${ticket.ticket_no}: ${ticket.title}`,
@@ -361,10 +431,11 @@ async function notifyDiscordActivity({ title, description, actor, ticket, action
 
     const attachedFiles = [];
     if (details?.url && typeof details.url === 'string') {
-        const matches = details.url.match(/^data:image\/([A-Za-z]+);base64,([A-Za-z0-9+/=]+)$/);
+        const matches = details.url.match(/^data:image\/([a-zA-Z0-9+.-]+);base64,([A-Za-z0-9+/=\s\r\n]+)$/);
         if (matches) {
             const filename = 'evidence_preview.png';
-            const buffer = Buffer.from(matches[2], 'base64');
+            const cleanBase64 = matches[2].replace(/\s+/g, '');
+            const buffer = Buffer.from(cleanBase64, 'base64');
             attachedFiles.push({ filename, mimeType: `image/${matches[1]}`, buffer });
             embed.image = { url: `attachment://${filename}` };
         } else if (details.url.startsWith('http')) {
@@ -381,6 +452,7 @@ async function notifyDiscordActivity({ title, description, actor, ticket, action
 
 module.exports = {
     getDiscordWebhookUrl,
+    extractImagesFromTicket,
     notifyDiscordUrgent,
     notifyDiscordPayment,
     notifyDiscordNewOrder,
