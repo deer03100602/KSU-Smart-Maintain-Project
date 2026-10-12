@@ -55,8 +55,36 @@ function getDiscordWebhookUrl(channel) {
     }
 }
 
-// Master Sender with deduplication, error handling and retry safety
-async function sendDiscordWebhook(channel, payload, dedupeKey) {
+// Helper: Extract images (base64 or URLs) from markdown or ticket text
+function extractImagesFromTicket(ticket) {
+    const images = [];
+    const text = (ticket.description || '') + ' ' + (ticket.resolution_note || '');
+    
+    // 1. Regex match for Markdown links with data URI: [name](data:image/png;base64,...)
+    const base64Regex = /\[([^\]]+)\]\((data:image\/([A-Za-z]+);base64,([A-Za-z0-9+/=]+))\)/g;
+    let match;
+    let idx = 0;
+    while ((match = base64Regex.exec(text)) !== null) {
+        try {
+            const filename = (match[1] || `image_${idx}.png`).replace(/[^a-zA-Z0-9._-]/g, '_');
+            const mimeType = `image/${match[3]}`;
+            const buffer = Buffer.from(match[4], 'base64');
+            images.push({ filename, mimeType, buffer });
+            idx++;
+        } catch (e) {}
+    }
+
+    // 2. Regex match for direct web image URLs: [name](http...) or http...
+    const urlRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+\.(?:png|jpg|jpeg|webp|gif))\)/gi;
+    while ((match = urlRegex.exec(text)) !== null) {
+        images.push({ url: match[2], filename: match[1] });
+    }
+
+    return images;
+}
+
+// Master Sender with deduplication, error handling, retry safety, and file attachments
+async function sendDiscordWebhook(channel, payload, dedupeKey, attachedFiles = []) {
     const webhookUrl = getDiscordWebhookUrl(channel);
 
     if (!webhookUrl || !webhookUrl.startsWith('http')) {
@@ -74,13 +102,40 @@ async function sendDiscordWebhook(channel, payload, dedupeKey) {
         }
     }
 
-    // 2. ส่งข้อมูลไปยัง Discord
+    // 2. ส่งข้อมูลไปยัง Discord (รองรับ Multipart Form Data เมื่อมีไฟล์แนบ)
     try {
-        const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        let response;
+        if (attachedFiles && attachedFiles.length > 0) {
+            const boundary = '----WebKitFormBoundary' + Math.random().toString(36).substring(2);
+            const parts = [];
+
+            // Add payload_json
+            parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(payload)}\r\n`));
+
+            // Add attached binary files
+            attachedFiles.forEach((f, i) => {
+                const fname = f.filename || `attachment_${i}.png`;
+                const mtype = f.mimeType || 'image/png';
+                parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="files[${i}]"; filename="${fname}"\r\nContent-Type: ${mtype}\r\n\r\n`));
+                parts.push(f.buffer);
+                parts.push(Buffer.from(`\r\n`));
+            });
+
+            parts.push(Buffer.from(`--${boundary}--\r\n`));
+            const bodyBuffer = Buffer.concat(parts);
+
+            response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+                body: bodyBuffer
+            });
+        } else {
+            response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        }
 
         if (!response.ok) {
             const errText = await response.text();
@@ -98,7 +153,7 @@ async function sendDiscordWebhook(channel, payload, dedupeKey) {
             success: true
         });
 
-        console.log(`💬 [Discord: ${channel}] ส่งแจ้งเตือนเรียบร้อยแล้ว`);
+        console.log(`💬 [Discord: ${channel}] ส่งแจ้งเตือนเรียบร้อยแล้ว (ไฟล์แนบ: ${attachedFiles.length})`);
         return { success: true };
     } catch (err) {
         console.error(`❌ [Discord: ${channel}] ส่งแจ้งเตือนล้มเหลว:`, err.message);
@@ -118,9 +173,16 @@ async function sendDiscordWebhook(channel, payload, dedupeKey) {
 // ─────────────────────────────────────────────────────────────
 async function notifyDiscordUrgent(ticket, reason = 'งานด่วนที่สุด / ต้องการการดำเนินการทันที') {
     const mention = '<@1553459941778399262>';
+    const extractedImages = extractImagesFromTicket(ticket);
+    const attachedFiles = [];
+
+    let cleanDesc = ticket.description || '-';
+    cleanDesc = cleanDesc.replace(/\[([^\]]+)\]\(data:image\/[A-Za-z]+;base64,[^)]+\)/g, '📷 *$1*');
+    if (cleanDesc.length > 500) cleanDesc = cleanDesc.substring(0, 500) + '...';
+
     const embed = {
         title: `🚨 [แจ้งเตือนเร่งด่วน] Ticket #${ticket.ticket_no}: ${ticket.title}`,
-        description: `⚠️ **ความเร่งด่วน: ${ticket.priority}**\n${ticket.description ? ticket.description.substring(0, 300) : '-'}\n\n**หมายเหตุ:** ${reason}`,
+        description: `⚠️ **ความเร่งด่วน: ${ticket.priority}**\n${cleanDesc}\n\n**หมายเหตุ:** ${reason}`,
         color: 0xef4444, // สีแดง
         fields: [
             { name: '📍 สถานที่', value: ticket.location || '-', inline: true },
@@ -131,11 +193,22 @@ async function notifyDiscordUrgent(ticket, reason = 'งานด่วนที
         footer: { text: `KSU Smart Maintain • แจ้งเตือนด่วน (${new Date().toLocaleString('th-TH')})` }
     };
 
+    if (extractedImages.length > 0) {
+        const firstImg = extractedImages[0];
+        if (firstImg.buffer) {
+            const filename = firstImg.filename || 'preview.png';
+            attachedFiles.push({ filename, mimeType: firstImg.mimeType, buffer: firstImg.buffer });
+            embed.image = { url: `attachment://${filename}` };
+        } else if (firstImg.url) {
+            embed.image = { url: firstImg.url };
+        }
+    }
+
     return await sendDiscordWebhook('URGENT', {
         content: `🚨 **แจ้งเตือนเร่งด่วน** ถึง ${mention}`,
         embeds: [embed],
         eventType: 'URGENT_ALERT'
-    }, `URGENT_${ticket.ticket_no}_${ticket.updated_at || ticket.created_at}`);
+    }, `URGENT_${ticket.ticket_no}_${ticket.updated_at || ticket.created_at}`, attachedFiles);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -191,9 +264,17 @@ async function notifyDiscordPayment(expense, ticket, paymentVerification = {}) {
 // 3. ออเดอร์ใหม่ / งานแจ้งซ่อมใหม่ (New Orders / Maintenance Requests)
 // ─────────────────────────────────────────────────────────────
 async function notifyDiscordNewOrder(ticket) {
+    const extractedImages = extractImagesFromTicket(ticket);
+    const attachedFiles = [];
+
+    // Clean up description: strip ugly base64 string from text so Discord looks neat
+    let cleanDesc = ticket.description || 'ไม่มีรายละเอียดเพิ่มเติม';
+    cleanDesc = cleanDesc.replace(/\[([^\]]+)\]\(data:image\/[A-Za-z]+;base64,[^)]+\)/g, '📷 *$1*');
+    if (cleanDesc.length > 500) cleanDesc = cleanDesc.substring(0, 500) + '...';
+
     const embed = {
         title: `📦 [มีงานแจ้งซ่อม / ออเดอร์ใหม่] #${ticket.ticket_no}: ${ticket.title}`,
-        description: ticket.description ? ticket.description.substring(0, 300) : 'ไม่มีรายละเอียดเพิ่มเติม',
+        description: cleanDesc,
         color: 0x3b82f6, // สีฟ้า
         fields: [
             { name: '🏷️ ประเภทปัญหา', value: ticket.issue_type || '-', inline: true },
@@ -206,11 +287,23 @@ async function notifyDiscordNewOrder(ticket) {
         footer: { text: `KSU Smart Maintain • รายการใหม่ (${new Date().toLocaleString('th-TH')})` }
     };
 
+    // If there is an image, attach it so Discord displays the actual image preview!
+    if (extractedImages.length > 0) {
+        const firstImg = extractedImages[0];
+        if (firstImg.buffer) {
+            const filename = firstImg.filename || 'preview.png';
+            attachedFiles.push({ filename, mimeType: firstImg.mimeType, buffer: firstImg.buffer });
+            embed.image = { url: `attachment://${filename}` };
+        } else if (firstImg.url) {
+            embed.image = { url: firstImg.url };
+        }
+    }
+
     return await sendDiscordWebhook('NEW_ORDER', {
         content: `🔔 **มีงานแจ้งซ่อม/ออเดอร์ใหม่ในระบบ** (ถึง <@1553459941778399262>)`,
         embeds: [embed],
         eventType: 'NEW_ORDER'
-    }, `NEW_ORDER_${ticket.ticket_no}`);
+    }, `NEW_ORDER_${ticket.ticket_no}`, attachedFiles);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -266,11 +359,24 @@ async function notifyDiscordActivity({ title, description, actor, ticket, action
         if (extraText) embed.fields.push({ name: 'รายละเอียดเพิ่มเติม', value: extraText, inline: false });
     }
 
+    const attachedFiles = [];
+    if (details?.url && typeof details.url === 'string') {
+        const matches = details.url.match(/^data:image\/([A-Za-z]+);base64,([A-Za-z0-9+/=]+)$/);
+        if (matches) {
+            const filename = 'evidence_preview.png';
+            const buffer = Buffer.from(matches[2], 'base64');
+            attachedFiles.push({ filename, mimeType: `image/${matches[1]}`, buffer });
+            embed.image = { url: `attachment://${filename}` };
+        } else if (details.url.startsWith('http')) {
+            embed.image = { url: details.url };
+        }
+    }
+
     return await sendDiscordWebhook('ACTIVITY', {
         content: `📋 **บันทึกกิจกรรมในระบบ (Activity Log)**`,
         embeds: [embed],
         eventType: 'ACTIVITY_LOG'
-    }, `ACT_${ticket?.ticket_no || 'SYS'}_${action}_${Date.now()}`);
+    }, `ACT_${ticket?.ticket_no || 'SYS'}_${action}_${Date.now()}`, attachedFiles);
 }
 
 module.exports = {
