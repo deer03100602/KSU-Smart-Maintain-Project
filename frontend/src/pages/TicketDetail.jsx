@@ -905,7 +905,7 @@ export default function TicketDetailPage(props) {
 
                     {/* Admin management area & Assignment Schedule */}
                     {isAdmin && (
-                        <div className="detail-admin-actions" style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+                        <div className="detail-admin-actions" style={{ background: 'var(--bg-card, rgba(255, 255, 255, 0.04))', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-card, rgba(0,0,0,0.08))', marginBottom: '1.5rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                                 <h3 className="detail-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: '1rem' }}>
                                     <Settings style={{ width: 16, height: 16, color: '#3b82f6' }} />

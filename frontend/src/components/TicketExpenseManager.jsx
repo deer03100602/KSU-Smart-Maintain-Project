@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     DollarSign, Plus, Check, X, Edit3, Trash2, AlertCircle, FileText, 
     Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw 
@@ -40,6 +40,17 @@ export default function TicketExpenseManager({
     const taxable = Math.max(0, subtotal - disc);
     const taxAmt = taxable * ((parseFloat(taxPercent) || 0) / 100);
     const netTotal = taxable + taxAmt;
+
+    // Close modal on Escape key
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && showAddModal) {
+                setShowAddModal(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showAddModal]);
 
     const handleOcrUpload = async (e) => {
         const file = e.target.files?.[0];
@@ -384,264 +395,283 @@ export default function TicketExpenseManager({
             )}
 
             {/* Add Expense Modal with OCR */}
+            {/* Add Expense Modal with OCR */}
             {showAddModal && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    backdropFilter: 'blur(6px)',
-                    zIndex: 9999,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '1.5rem'
-                }}>
-                    <div style={{
-                        background: 'var(--card-bg, #1e293b)',
-                        border: '1px solid var(--border-color, #334155)',
-                        borderRadius: '12px',
-                        width: '100%', maxWidth: '620px',
-                        maxHeight: '90vh', overflowY: 'auto',
-                        padding: '1.5rem', color: 'var(--text-primary, #f8fafc)'
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 600 }}>เพิ่มรายการค่าใช้จ่าย / ใบเสร็จ</h3>
-                            <button className="btn btn-ghost btn-sm" onClick={() => setShowAddModal(false)}>
+                <div 
+                    className="modal-overlay modal-active"
+                    onClick={(e) => {
+                        if (e.target.classList.contains('modal-overlay')) {
+                            setShowAddModal(false);
+                        }
+                    }}
+                >
+                    <div className="modal-container" style={{ maxWidth: '680px', width: '100%', maxHeight: '90vh' }}>
+                        <div className="modal-header">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <DollarSign style={{ width: 20, height: 20, color: 'var(--primary-color, #4f46e5)' }} />
+                                <h3 className="modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
+                                    บันทึกค่าใช้จ่าย / สแกนใบเสร็จ (Expense & Budget)
+                                </h3>
+                            </div>
+                            <button 
+                                type="button" 
+                                className="modal-close-btn" 
+                                onClick={() => setShowAddModal(false)}
+                                title="ปิดหน้าต่าง"
+                            >
                                 <X style={{ width: 18, height: 18 }} />
                             </button>
                         </div>
 
-                        {/* OCR Upload Area */}
-                        <div style={{
-                            border: '2px dashed rgba(59, 130, 246, 0.4)',
-                            background: 'rgba(59, 130, 246, 0.05)',
-                            borderRadius: '8px',
-                            padding: '1rem',
-                            textAlign: 'center',
-                            marginBottom: '1.25rem'
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '6px' }}>
-                                <Sparkles style={{ width: 18, height: 18, color: '#60a5fa' }} />
-                                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>ระบบ OCR สแกนใบเสร็จอัตโนมัติ (AI Receipt Scanner)</span>
-                            </div>
-                            <p style={{ fontSize: '0.785rem', color: 'var(--text-secondary)', margin: '0 0 10px 0' }}>
-                                รองรับไฟล์ภาพ JPG, PNG และ PDF — สกัดชื่อร้านค้า วันที่ เลขที่ใบเสร็จ และยอดรวมสุทธิอัตโนมัติ
-                            </p>
-                            <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                <Upload style={{ width: 14, height: 14 }} />
-                                {ocrLoading ? 'กำลังอ่านและประมวลผล OCR...' : 'เลือกไฟล์ใบเสร็จ (JPG / PNG / PDF)'}
-                                <input 
-                                    type="file" 
-                                    accept="image/png, image/jpeg, image/jpg, application/pdf" 
-                                    style={{ display: 'none' }}
-                                    onChange={handleOcrUpload}
-                                    disabled={ocrLoading}
-                                />
-                            </label>
-                            {ocrWarning && (
-                                <div style={{ marginTop: '8px', color: '#fbbf24', fontSize: '0.8rem' }}>
-                                    {ocrWarning}
-                                </div>
-                            )}
-                            {ocrResult && (
-                                <div style={{ marginTop: '8px', color: '#4ade80', fontSize: '0.8rem' }}>
-                                    ✅ ดึงข้อมูลสำเร็จ! กรุณาตรวจสอบความถูกต้องของฟอร์มด้านล่างก่อนบันทึก
-                                </div>
-                            )}
-                        </div>
-
-                        <form onSubmit={handleCreateExpense} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                            {formError && (
-                                <div style={{ color: '#f87171', background: 'rgba(239, 68, 68, 0.1)', padding: '8px 12px', borderRadius: 6, fontSize: '0.85rem' }}>
-                                    {formError}
-                                </div>
-                            )}
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.75rem' }}>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>หมวดหมู่ค่าใช้จ่าย *</label>
-                                    <select 
-                                        className="form-input" 
-                                        value={category} 
-                                        onChange={(e) => setCategory(e.target.value)}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    >
-                                        <option value="ค่าวัสดุและอุปกรณ์">ค่าวัสดุและอุปกรณ์</option>
-                                        <option value="ค่าอะไหล่">ค่าอะไหล่</option>
-                                        <option value="ค่าแรง">ค่าแรง</option>
-                                        <option value="ค่าเดินทาง">ค่าเดินทาง</option>
-                                        <option value="ค่าจ้างภายนอก">ค่าจ้างภายนอก</option>
-                                        <option value="ค่าใช้จ่ายอื่นๆ">ค่าใช้จ่ายอื่นๆ</option>
-                                        <option value="ส่วนลดหรือเงินคืน">ส่วนลดหรือเงินคืน</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>รายละเอียดรายการ *</label>
-                                    <input 
-                                        type="text" 
-                                        className="form-input" 
-                                        placeholder="เช่น สายแลน CAT6 10 เมตร, หัว RJ45" 
-                                        value={description} 
-                                        onChange={(e) => setDescription(e.target.value)}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', gap: '0.75rem' }}>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>จำนวน *</label>
-                                    <input 
-                                        type="number" 
-                                        min="0.1" 
-                                        step="any"
-                                        className="form-input" 
-                                        value={quantity} 
-                                        onChange={(e) => setQuantity(e.target.value)}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>หน่วยนับ</label>
-                                    <input 
-                                        type="text" 
-                                        className="form-input" 
-                                        placeholder="ชิ้น / เส้น / เมตร" 
-                                        value={unit} 
-                                        onChange={(e) => setUnit(e.target.value)}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>ราคาต่อหน่วย (บาท) *</label>
-                                    <input 
-                                        type="number" 
-                                        min="0" 
-                                        step="any"
-                                        className="form-input" 
-                                        placeholder="0.00" 
-                                        value={unitPrice} 
-                                        onChange={(e) => setUnitPrice(e.target.value)}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>ส่วนลด (บาท)</label>
-                                    <input 
-                                        type="number" 
-                                        min="0" 
-                                        step="any"
-                                        className="form-input" 
-                                        value={discount} 
-                                        onChange={(e) => setDiscount(e.target.value)}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>ภาษีมูลค่าเพิ่ม (%)</label>
-                                    <select 
-                                        className="form-input" 
-                                        value={taxPercent} 
-                                        onChange={(e) => setTaxPercent(e.target.value)}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    >
-                                        <option value="0">0% (ไม่มี VAT)</option>
-                                        <option value="7">7% (VAT ปกติ)</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* Summary Preview Box */}
+                        <div className="modal-body" style={{ padding: '1.25rem 1.5rem', overflowY: 'auto' }}>
+                            {/* OCR Upload Area */}
                             <div style={{
-                                background: 'rgba(0,0,0,0.25)',
-                                padding: '10px 14px',
-                                borderRadius: 8,
-                                border: '1px solid rgba(255,255,255,0.08)',
-                                fontSize: '0.85rem',
-                                display: 'flex',
-                                justifyContent: 'space-between',
-                                alignItems: 'center'
+                                border: '2px dashed rgba(59, 130, 246, 0.4)',
+                                background: 'rgba(59, 130, 246, 0.05)',
+                                borderRadius: '8px',
+                                padding: '1rem',
+                                textAlign: 'center',
+                                marginBottom: '1.25rem'
                             }}>
-                                <div>
-                                    <span style={{ color: 'var(--text-secondary)' }}>ยอดรวมก่อนภาษี: </span>
-                                    <span>฿{taxable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                    <span style={{ color: 'var(--text-secondary)', marginLeft: 12 }}>ภาษี: </span>
-                                    <span>฿{taxAmt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '6px' }}>
+                                    <Sparkles style={{ width: 18, height: 18, color: '#60a5fa' }} />
+                                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>ระบบ OCR สแกนใบเสร็จอัตโนมัติ (AI Receipt Scanner)</span>
                                 </div>
-                                <div>
-                                    <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>ยอดสุทธิ: </span>
-                                    <span style={{ fontWeight: 700, fontSize: '1.05rem', color: '#60a5fa' }}>
-                                        ฿{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                    </span>
-                                </div>
+                                <p style={{ fontSize: '0.785rem', color: 'var(--text-secondary)', margin: '0 0 10px 0' }}>
+                                    รองรับไฟล์ภาพ JPG, PNG และ PDF — สกัดชื่อร้านค้า วันที่ เลขที่ใบเสร็จ และยอดรวมสุทธิอัตโนมัติ
+                                </p>
+                                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                    <Upload style={{ width: 14, height: 14 }} />
+                                    {ocrLoading ? 'กำลังอ่านและประมวลผล OCR...' : 'เลือกไฟล์ใบเสร็จ (JPG / PNG / PDF)'}
+                                    <input 
+                                        type="file" 
+                                        accept="image/png, image/jpeg, image/jpg, application/pdf" 
+                                        style={{ display: 'none' }}
+                                        onChange={handleOcrUpload}
+                                        disabled={ocrLoading}
+                                    />
+                                </label>
+                                {ocrWarning && (
+                                    <div style={{ marginTop: '8px', color: '#f59e0b', fontSize: '0.8rem', fontWeight: 500 }}>
+                                        {ocrWarning}
+                                    </div>
+                                )}
+                                {ocrResult && (
+                                    <div style={{ marginTop: '8px', color: '#10b981', fontSize: '0.8rem', fontWeight: 500 }}>
+                                        ✅ ดึงข้อมูลสำเร็จ! กรุณาตรวจสอบความถูกต้องของฟอร์มด้านล่างก่อนบันทึก
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Receipt details */}
-                            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
-                                <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: '#93c5fd' }}>
-                                    ข้อมูลใบเสร็จ / ใบกำกับภาษี (ถ้ามี)
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                            <form id="expense-modal-form" onSubmit={handleCreateExpense} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                {formError && (
+                                    <div style={{ color: '#ef4444', background: 'rgba(239, 68, 68, 0.1)', padding: '8px 12px', borderRadius: 6, fontSize: '0.85rem' }}>
+                                        {formError}
+                                    </div>
+                                )}
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '0.75rem' }}>
                                     <div>
-                                        <label className="form-label" style={{ fontSize: '0.8rem' }}>ชื่อร้านค้า / ผู้ขาย</label>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>หมวดหมู่ค่าใช้จ่าย *</label>
+                                        <select 
+                                            className="form-input" 
+                                            value={category} 
+                                            onChange={(e) => setCategory(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                        >
+                                            <option value="ค่าวัสดุและอุปกรณ์">ค่าวัสดุและอุปกรณ์</option>
+                                            <option value="ค่าอะไหล่">ค่าอะไหล่</option>
+                                            <option value="ค่าแรง">ค่าแรง</option>
+                                            <option value="ค่าเดินทาง">ค่าเดินทาง</option>
+                                            <option value="ค่าจ้างภายนอก">ค่าจ้างภายนอก</option>
+                                            <option value="ค่าใช้จ่ายอื่นๆ">ค่าใช้จ่ายอื่นๆ</option>
+                                            <option value="ส่วนลดหรือเงินคืน">ส่วนลดหรือเงินคืน</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>รายละเอียดรายการ *</label>
                                         <input 
                                             type="text" 
                                             className="form-input" 
-                                            placeholder="บจก. ไอทีคอมเมิร์ซ" 
-                                            value={vendorName} 
-                                            onChange={(e) => setVendorName(e.target.value)}
+                                            placeholder="เช่น สายแลน CAT6 10 เมตร, หัว RJ45" 
+                                            value={description} 
+                                            onChange={(e) => setDescription(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', gap: '0.75rem' }}>
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>จำนวน *</label>
+                                        <input 
+                                            type="number" 
+                                            min="0.1" 
+                                            step="any"
+                                            className="form-input" 
+                                            value={quantity} 
+                                            onChange={(e) => setQuantity(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>หน่วยนับ</label>
+                                        <input 
+                                            type="text" 
+                                            className="form-input" 
+                                            placeholder="ชิ้น / เส้น / เมตร" 
+                                            value={unit} 
+                                            onChange={(e) => setUnit(e.target.value)}
                                             style={{ width: '100%', fontSize: '0.85rem' }}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label" style={{ fontSize: '0.8rem' }}>เลขที่ใบเสร็จ</label>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>ราคาต่อหน่วย (บาท) *</label>
                                         <input 
-                                            type="text" 
+                                            type="number" 
+                                            min="0" 
+                                            step="any"
                                             className="form-input" 
-                                            placeholder="INV-2026-0012" 
-                                            value={receiptNo} 
-                                            onChange={(e) => setReceiptNo(e.target.value)}
+                                            placeholder="0.00" 
+                                            value={unitPrice} 
+                                            onChange={(e) => setUnitPrice(e.target.value)}
                                             style={{ width: '100%', fontSize: '0.85rem' }}
+                                            required
                                         />
                                     </div>
                                 </div>
+
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                                     <div>
-                                        <label className="form-label" style={{ fontSize: '0.8rem' }}>วันที่ในใบเสร็จ</label>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>ส่วนลด (บาท)</label>
                                         <input 
-                                            type="date" 
+                                            type="number" 
+                                            min="0" 
+                                            step="any"
                                             className="form-input" 
-                                            value={receiptDate} 
-                                            onChange={(e) => setReceiptDate(e.target.value)}
+                                            value={discount} 
+                                            onChange={(e) => setDiscount(e.target.value)}
                                             style={{ width: '100%', fontSize: '0.85rem' }}
                                         />
                                     </div>
                                     <div>
-                                        <label className="form-label" style={{ fontSize: '0.8rem' }}>URL ไฟล์เอกสาร / ใบเสร็จ</label>
-                                        <input 
-                                            type="text" 
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>ภาษีมูลค่าเพิ่ม (%)</label>
+                                        <select 
                                             className="form-input" 
-                                            placeholder="/uploads/..." 
-                                            value={receiptUrl} 
-                                            onChange={(e) => setReceiptUrl(e.target.value)}
+                                            value={taxPercent} 
+                                            onChange={(e) => setTaxPercent(e.target.value)}
                                             style={{ width: '100%', fontSize: '0.85rem' }}
-                                        />
+                                        >
+                                            <option value="0">0% (ไม่มี VAT)</option>
+                                            <option value="7">7% (VAT ปกติ)</option>
+                                        </select>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '1rem' }}>
-                                <button type="button" className="btn btn-ghost" onClick={() => setShowAddModal(false)}>
-                                    ยกเลิก
-                                </button>
-                                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                                    {submitting ? 'กำลังบันทึก...' : 'บันทึกรายการงบประมาณ'}
-                                </button>
-                            </div>
-                        </form>
+                                {/* Summary Preview Box */}
+                                <div style={{
+                                    background: 'var(--bg-card, rgba(0,0,0,0.05))',
+                                    padding: '10px 14px',
+                                    borderRadius: 8,
+                                    border: '1px solid var(--border-card, rgba(0,0,0,0.08))',
+                                    fontSize: '0.85rem',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    color: 'var(--text-primary)'
+                                }}>
+                                    <div>
+                                        <span style={{ color: 'var(--text-secondary)' }}>ยอดรวมก่อนภาษี: </span>
+                                        <span style={{ fontWeight: 600 }}>฿{taxable.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        <span style={{ color: 'var(--text-secondary)', marginLeft: 12 }}>ภาษี: </span>
+                                        <span style={{ fontWeight: 600 }}>฿{taxAmt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                    </div>
+                                    <div>
+                                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>ยอดสุทธิ: </span>
+                                        <span style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--primary-color, #4f46e5)' }}>
+                                            ฿{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Receipt details */}
+                                <div style={{ borderTop: '1px solid var(--border-card, rgba(0,0,0,0.08))', paddingTop: '0.75rem' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--primary-color, #4f46e5)' }}>
+                                        ข้อมูลใบเสร็จ / ใบกำกับภาษี (ถ้ามี)
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                                        <div>
+                                            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>ชื่อร้านค้า / ผู้ขาย</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-input" 
+                                                placeholder="บจก. ไอทีคอมเมิร์ซ" 
+                                                value={vendorName} 
+                                                onChange={(e) => setVendorName(e.target.value)}
+                                                style={{ width: '100%', fontSize: '0.85rem' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>เลขที่ใบเสร็จ</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-input" 
+                                                placeholder="INV-2026-0012" 
+                                                value={receiptNo} 
+                                                onChange={(e) => setReceiptNo(e.target.value)}
+                                                style={{ width: '100%', fontSize: '0.85rem' }}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                                        <div>
+                                            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>วันที่ในใบเสร็จ</label>
+                                            <input 
+                                                type="date" 
+                                                className="form-input" 
+                                                value={receiptDate} 
+                                                onChange={(e) => setReceiptDate(e.target.value)}
+                                                style={{ width: '100%', fontSize: '0.85rem' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>URL ไฟล์เอกสาร / ใบเสร็จ</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-input" 
+                                                placeholder="/uploads/..." 
+                                                value={receiptUrl} 
+                                                onChange={(e) => setReceiptUrl(e.target.value)}
+                                                style={{ width: '100%', fontSize: '0.85rem' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div className="modal-footer" style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-card)' }}>
+                            <button 
+                                type="button" 
+                                className="btn btn-secondary" 
+                                onClick={() => {
+                                    setShowAddModal(false);
+                                    resetForm();
+                                }}
+                            >
+                                ยกเลิก
+                            </button>
+                            <button 
+                                type="submit" 
+                                form="expense-modal-form" 
+                                className="btn btn-primary" 
+                                disabled={submitting}
+                            >
+                                {submitting ? 'กำลังบันทึก...' : 'บันทึกรายการงบประมาณ'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

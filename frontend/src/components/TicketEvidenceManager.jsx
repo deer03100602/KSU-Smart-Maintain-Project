@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     Camera, Image as ImageIcon, Plus, Upload, X, Maximize2, 
     FileText, Calendar, User, Check 
@@ -15,24 +15,62 @@ export default function TicketEvidenceManager({
     const [uploading, setUploading] = useState(false);
     const [stage, setStage] = useState('BEFORE');
     const [description, setDescription] = useState('');
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
     const [selectedPreview, setSelectedPreview] = useState(null);
+
+    // Close on Escape key
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && showUploadModal) {
+                closeModal();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showUploadModal]);
+
+    const closeModal = () => {
+        setShowUploadModal(false);
+        setSelectedFile(null);
+        if (previewUrl) {
+            try { URL.revokeObjectURL(previewUrl); } catch (e) {}
+        }
+        setPreviewUrl(null);
+        setDescription('');
+    };
 
     const filteredEvidences = selectedTab === 'ALL' 
         ? evidences 
         : evidences.filter(e => e.stage === selectedTab);
 
-    const handleFileUpload = async (e) => {
+    const handleFileChange = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
+        setSelectedFile(file);
+        if (file.type && file.type.startsWith('image/')) {
+            const url = URL.createObjectURL(file);
+            setPreviewUrl(url);
+        } else {
+            setPreviewUrl(null);
+        }
+    };
+
+    const handleUploadSubmit = async (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (!selectedFile) {
+            alert('กรุณาเลือกไฟล์รูปภาพหรือเอกสาร');
+            return;
+        }
 
         setUploading(true);
         try {
             let fileUrl = null;
-            let fileName = file.name;
+            let fileName = selectedFile.name;
 
             try {
                 const formData = new FormData();
-                formData.append('file', file);
+                formData.append('file', selectedFile);
                 const uploadRes = await fetch('/api/upload', {
                     method: 'POST',
                     body: formData
@@ -53,7 +91,7 @@ export default function TicketEvidenceManager({
                     const reader = new FileReader();
                     reader.onload = () => resolve(reader.result);
                     reader.onerror = () => resolve(null);
-                    reader.readAsDataURL(file);
+                    reader.readAsDataURL(selectedFile);
                 });
             }
 
@@ -80,8 +118,7 @@ export default function TicketEvidenceManager({
             });
 
             if (eviRes.ok) {
-                setShowUploadModal(false);
-                setDescription('');
+                closeModal();
                 if (onEvidenceAdded) onEvidenceAdded();
             } else {
                 alert('ไม่สามารถบันทึกข้อมูลหลักฐานได้');
@@ -217,85 +254,123 @@ export default function TicketEvidenceManager({
                 </div>
             )}
 
-            {/* Upload Modal */}
+            {/* Upload Modal Window */}
             {showUploadModal && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    backdropFilter: 'blur(6px)',
-                    zIndex: 9999,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '1.5rem'
-                }}>
-                    <div style={{
-                        background: 'var(--card-bg, #1e293b)',
-                        border: '1px solid var(--border-color, #334155)',
-                        borderRadius: '12px',
-                        width: '100%', maxWidth: '460px',
-                        padding: '1.5rem', color: 'var(--text-primary, #f8fafc)'
-                    }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>อัปโหลดรูปภาพ / หลักฐานงานซ่อม</h3>
-                            <button className="btn btn-ghost btn-sm" onClick={() => setShowUploadModal(false)}>
+                <div 
+                    className="modal-overlay modal-active"
+                    onClick={(e) => {
+                        if (e.target.classList.contains('modal-overlay')) {
+                            closeModal();
+                        }
+                    }}
+                >
+                    <div className="modal-container" style={{ maxWidth: '520px', width: '100%', maxHeight: '90vh' }}>
+                        <div className="modal-header">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Camera style={{ width: 20, height: 20, color: 'var(--primary-color, #4f46e5)' }} />
+                                <h3 className="modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
+                                    อัปโหลดรูปภาพ / หลักฐานงานซ่อม
+                                </h3>
+                            </div>
+                            <button 
+                                type="button" 
+                                className="modal-close-btn" 
+                                onClick={closeModal}
+                                title="ปิดหน้าต่าง"
+                            >
                                 <X style={{ width: 18, height: 18 }} />
                             </button>
                         </div>
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-                            <div>
-                                <label className="form-label" style={{ fontSize: '0.85rem' }}>ระยะของหลักฐาน (Stage) *</label>
-                                <select 
-                                    className="form-input" 
-                                    value={stage} 
-                                    onChange={(e) => setStage(e.target.value)}
-                                    style={{ width: '100%', fontSize: '0.85rem' }}
-                                >
-                                    <option value="BEFORE">📷 ภาพก่อนดำเนินการซ่อม (Before)</option>
-                                    <option value="DURING">⚙️ ภาพระหว่างดำเนินงาน (During)</option>
-                                    <option value="PARTS">📦 อุปกรณ์และวัสดุที่ใช้ (Parts & Materials)</option>
-                                    <option value="RECEIPT">🧾 ใบเสร็จ / เอกสารค่าใช้จ่าย (Receipt & Financials)</option>
-                                    <option value="AFTER">🎉 ภาพหลังซ่อมเสร็จสิ้น (After)</option>
-                                    <option value="TESTING">🔬 ผลการทดสอบระบบ/การใช้งาน (Testing Results)</option>
-                                    <option value="HANDOVER">📋 เอกสารส่งมอบงาน / ตรวจรับ (Handover & Inspection)</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="form-label" style={{ fontSize: '0.85rem' }}>คำอธิบายรูปภาพ / รายละเอียด</label>
-                                <input 
-                                    type="text" 
-                                    className="form-input" 
-                                    placeholder="เช่น ภาพถ่ายหน้าจอดับ, ภาพหลังเปลี่ยนอะไหล่ใหม่"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                    style={{ width: '100%', fontSize: '0.85rem' }}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="form-label" style={{ fontSize: '0.85rem' }}>เลือกไฟล์รูปภาพ / เอกสาร *</label>
-                                <input 
-                                    type="file" 
-                                    accept="image/*, application/pdf"
-                                    className="form-input" 
-                                    onChange={handleFileUpload}
-                                    disabled={uploading}
-                                    style={{ width: '100%', fontSize: '0.85rem' }}
-                                />
-                            </div>
-
-                            {uploading && (
-                                <div style={{ fontSize: '0.8rem', color: '#60a5fa', textAlign: 'center' }}>
-                                    กำลังอัปโหลดและบันทึกหลักฐาน...
+                        <form id="evidence-upload-form" onSubmit={handleUploadSubmit}>
+                            <div className="modal-body" style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>ระยะของหลักฐาน (Stage) *</label>
+                                    <select 
+                                        className="form-input" 
+                                        value={stage} 
+                                        onChange={(e) => setStage(e.target.value)}
+                                        style={{ width: '100%', fontSize: '0.9rem' }}
+                                    >
+                                        <option value="BEFORE">📷 ภาพก่อนดำเนินการซ่อม (Before)</option>
+                                        <option value="DURING">⚙️ ภาพระหว่างดำเนินงาน (During)</option>
+                                        <option value="PARTS">📦 อุปกรณ์และวัสดุที่ใช้ (Parts & Materials)</option>
+                                        <option value="RECEIPT">🧾 ใบเสร็จ / เอกสารค่าใช้จ่าย (Receipt & Financials)</option>
+                                        <option value="AFTER">🎉 ภาพหลังซ่อมเสร็จสิ้น (After)</option>
+                                        <option value="TESTING">🔬 ผลการทดสอบระบบ/การใช้งาน (Testing Results)</option>
+                                        <option value="HANDOVER">📋 เอกสารส่งมอบงาน / ตรวจรับ (Handover & Inspection)</option>
+                                    </select>
                                 </div>
-                            )}
 
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '0.75rem' }}>
-                                <button className="btn btn-ghost" onClick={() => setShowUploadModal(false)}>
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>คำอธิบายรูปภาพ / รายละเอียด</label>
+                                    <input 
+                                        type="text" 
+                                        className="form-input" 
+                                        placeholder="เช่น ภาพถ่ายหน้าจอดับ, ภาพหลังเปลี่ยนอะไหล่ใหม่"
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                        style={{ width: '100%', fontSize: '0.9rem' }}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>เลือกไฟล์รูปภาพ / เอกสาร *</label>
+                                    <input 
+                                        type="file" 
+                                        accept="image/*, application/pdf"
+                                        className="form-input" 
+                                        onChange={handleFileChange}
+                                        disabled={uploading}
+                                        style={{ width: '100%', fontSize: '0.9rem' }}
+                                    />
+                                </div>
+
+                                {previewUrl && (
+                                    <div style={{
+                                        marginTop: '0.25rem',
+                                        padding: '0.75rem',
+                                        background: 'var(--bg-card, rgba(0,0,0,0.04))',
+                                        border: '1px solid var(--border-card, rgba(0,0,0,0.08))',
+                                        borderRadius: '8px',
+                                        textAlign: 'center'
+                                    }}>
+                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                                            ตัวอย่างรูปภาพที่เลือก:
+                                        </div>
+                                        <img 
+                                            src={previewUrl} 
+                                            alt="Preview" 
+                                            style={{ maxHeight: '180px', maxWidth: '100%', borderRadius: 6, objectFit: 'contain', margin: '0 auto' }} 
+                                        />
+                                    </div>
+                                )}
+
+                                {uploading && (
+                                    <div style={{ fontSize: '0.85rem', color: 'var(--primary-color, #4f46e5)', textAlign: 'center', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                        กำลังอัปโหลดและบันทึกหลักฐาน...
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="modal-footer" style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-card)' }}>
+                                <button 
+                                    type="button" 
+                                    className="btn btn-secondary" 
+                                    onClick={closeModal}
+                                    disabled={uploading}
+                                >
                                     ยกเลิก
                                 </button>
+                                <button 
+                                    type="submit" 
+                                    className="btn btn-primary" 
+                                    disabled={uploading || !selectedFile}
+                                >
+                                    {uploading ? 'กำลังอัปโหลด...' : 'อัปโหลดและบันทึก'}
+                                </button>
                             </div>
-                        </div>
+                        </form>
                     </div>
                 </div>
             )}

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     Clock, CheckCircle, Play, Pause, RotateCcw, AlertTriangle, 
-    CheckCircle2, User, FileText, ArrowRight, CornerDownRight 
+    CheckCircle2, User, FileText, ArrowRight, CornerDownRight, X 
 } from 'lucide-react';
 
 export default function TicketWorkflowTimeline({ 
@@ -25,6 +25,19 @@ export default function TicketWorkflowTimeline({
         testing_results: '',
         recommendations: ''
     });
+
+    // Close modal on Escape key
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape' && activeActionModal) {
+                setActiveActionModal(null);
+                setActionNote('');
+                setInspectionConfirmed(false);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeActionModal]);
 
     const isAssignedToCurrent = ticket.assigned_to && (
         ticket.assigned_to === currentUser.name ||
@@ -227,175 +240,188 @@ export default function TicketWorkflowTimeline({
                 )}
             </div>
 
-            {/* Workflow Action Modal */}
+            {/* Workflow Action Modal Window */}
             {activeActionModal && (
-                <div style={{
-                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                    backdropFilter: 'blur(6px)',
-                    zIndex: 9999,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '1.5rem', overflowY: 'auto'
-                }}>
-                    <div style={{
-                        background: 'var(--card-bg, #1e293b)',
-                        border: '1px solid var(--border-color, #334155)',
-                        borderRadius: '12px',
-                        width: '100%', maxWidth: activeActionModal === 'SUBMIT_INSPECTION' ? '600px' : '480px',
-                        padding: '1.5rem', color: 'var(--text-primary, #f8fafc)',
-                        maxHeight: '90vh', overflowY: 'auto'
-                    }}>
-                        <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.15rem', fontWeight: 600 }}>
-                            {activeActionModal === 'START' && '⚙️ เริ่มดำเนินงานซ่อมบำรุง'}
-                            {activeActionModal === 'WAITING_PARTS' && '⏳ บันทึกสถานะรออุปกรณ์ / อะไหล่ / งบประมาณ'}
-                            {activeActionModal === 'SUBMIT_INSPECTION' && '📋 ส่งมอบงานเพื่อตรวจรับ (Handover Report)'}
-                            {activeActionModal === 'RETURN_REVISE' && '⚠️ ส่งกลับเพื่อแก้ไขงานซ่อม'}
-                            {activeActionModal === 'COMPLETE' && '🎉 ตรวจรับและยืนยันปิดงานเสร็จสิ้น'}
-                        </h3>
+                <div 
+                    className="modal-overlay modal-active"
+                    onClick={(e) => {
+                        if (e.target.classList.contains('modal-overlay')) {
+                            setActiveActionModal(null);
+                            setActionNote('');
+                            setInspectionConfirmed(false);
+                        }
+                    }}
+                >
+                    <div className="modal-container" style={{ maxWidth: activeActionModal === 'SUBMIT_INSPECTION' ? '640px' : '500px', width: '100%', maxHeight: '90vh' }}>
+                        <div className="modal-header">
+                            <h3 className="modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
+                                {activeActionModal === 'START' && '⚙️ เริ่มดำเนินงานซ่อมบำรุง'}
+                                {activeActionModal === 'WAITING_PARTS' && '⏳ บันทึกสถานะรออุปกรณ์ / อะไหล่ / งบประมาณ'}
+                                {activeActionModal === 'SUBMIT_INSPECTION' && '📋 ส่งมอบงานเพื่อตรวจรับ (Handover Report)'}
+                                {activeActionModal === 'RETURN_REVISE' && '⚠️ ส่งกลับเพื่อแก้ไขงานซ่อม'}
+                                {activeActionModal === 'COMPLETE' && '🎉 ตรวจรับและยืนยันปิดงานเสร็จสิ้น'}
+                            </h3>
+                            <button 
+                                type="button" 
+                                className="modal-close-btn" 
+                                onClick={() => {
+                                    setActiveActionModal(null);
+                                    setActionNote('');
+                                    setInspectionConfirmed(false);
+                                }}
+                                title="ปิดหน้าต่าง"
+                            >
+                                <X style={{ width: 18, height: 18 }} />
+                            </button>
+                        </div>
 
-                        {/* Special Rich Form for SUBMIT_INSPECTION */}
-                        {activeActionModal === 'SUBMIT_INSPECTION' ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                                <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>
-                                    กรุณากรอกรายงานสรุปผลการซ่อมบำรุงเพื่อเสนอต่อผู้มีสิทธิ์ตรวจรับและผู้บริหาร
-                                </p>
+                        <div className="modal-body" style={{ padding: '1.25rem 1.5rem', overflowY: 'auto' }}>
+                            {/* Special Rich Form for SUBMIT_INSPECTION */}
+                            {activeActionModal === 'SUBMIT_INSPECTION' ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                    <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: '0 0 0.5rem 0' }}>
+                                        กรุณากรอกรายงานสรุปผลการซ่อมบำรุงเพื่อเสนอต่อผู้มีสิทธิ์ตรวจรับและผู้บริหาร
+                                    </p>
 
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>1. สรุปปัญหาที่ตรวจพบ *</label>
-                                    <input 
-                                        type="text" 
-                                        className="form-input" 
-                                        placeholder="เช่น สายสัญญาณขาดชำรุด, แหล่งจ่ายไฟไหม้"
-                                        value={submitData.problem_summary}
-                                        onChange={(e) => setSubmitData({ ...submitData, problem_summary: e.target.value })}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>2. สาเหตุของปัญหา *</label>
-                                    <input 
-                                        type="text" 
-                                        className="form-input" 
-                                        placeholder="เช่น การเสื่อมสภาพตามอายุการใช้งาน, ไฟกระชาก"
-                                        value={submitData.root_cause}
-                                        onChange={(e) => setSubmitData({ ...submitData, root_cause: e.target.value })}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>3. วิธีการและขั้นตอนการแก้ไข *</label>
-                                    <textarea 
-                                        className="form-input" 
-                                        rows={2}
-                                        placeholder="เช่น ทำการเปลี่ยนหม้อแปลงไฟฟ้าใหม่ และทดสอบการจ่ายกระแสไฟ"
-                                        value={submitData.solution_method}
-                                        onChange={(e) => setSubmitData({ ...submitData, solution_method: e.target.value })}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>4. รายการวัสดุ / อุปกรณ์ที่ใช้จริง</label>
-                                    <input 
-                                        type="text" 
-                                        className="form-input" 
-                                        placeholder="เช่น สวิตช์ไฟ 1 ตัว, สายไฟ VAF 2x1.5 5 เมตร"
-                                        value={submitData.materials_used}
-                                        onChange={(e) => setSubmitData({ ...submitData, materials_used: e.target.value })}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>5. ผลการทดสอบการใช้งานหลังดำเนินงาน *</label>
-                                    <input 
-                                        type="text" 
-                                        className="form-input" 
-                                        placeholder="เช่น อุปกรณ์เปิดใช้งานได้ปกติ สัญญาณเสถียร ไม่พบความร้อนสะสม"
-                                        value={submitData.testing_results}
-                                        onChange={(e) => setSubmitData({ ...submitData, testing_results: e.target.value })}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="form-label" style={{ fontSize: '0.8rem' }}>6. ข้อเสนอแนะหรือสิ่งที่ต้องติดตามเพิ่มเติม</label>
-                                    <input 
-                                        type="text" 
-                                        className="form-input" 
-                                        placeholder="เช่น แนะนำให้ตรวจสอบระบบกราวด์ของอาคารทุก 6 เดือน"
-                                        value={submitData.recommendations}
-                                        onChange={(e) => setSubmitData({ ...submitData, recommendations: e.target.value })}
-                                        style={{ width: '100%', fontSize: '0.85rem' }}
-                                    />
-                                </div>
-                            </div>
-                        ) : activeActionModal === 'COMPLETE' ? (
-                            <div style={{ marginBottom: '1.25rem' }}>
-                                <div style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '12px', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.85rem' }}>
-                                    <div style={{ fontWeight: 600, color: '#4ade80', marginBottom: '4px' }}>
-                                        📋 การยืนยันตรวจรับงานซ่อมบำรุง
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>1. สรุปปัญหาที่ตรวจพบ *</label>
+                                        <input 
+                                            type="text" 
+                                            className="form-input" 
+                                            placeholder="เช่น สายสัญญาณขาดชำรุด, แหล่งจ่ายไฟไหม้"
+                                            value={submitData.problem_summary}
+                                            onChange={(e) => setSubmitData({ ...submitData, problem_summary: e.target.value })}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                        />
                                     </div>
-                                    <div style={{ color: 'var(--text-secondary)' }}>
-                                        งาน: <strong>#{ticket.ticket_no} - {ticket.title}</strong><br/>
-                                        ผู้รับผิดชอบ: {ticket.assigned_to || 'เจ้าหน้าที่'}<br/>
-                                        ผู้ตรวจรับ: {currentUser.name || 'ผู้มีสิทธิ์'}
+
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>2. สาเหตุของปัญหา *</label>
+                                        <input 
+                                            type="text" 
+                                            className="form-input" 
+                                            placeholder="เช่น การเสื่อมสภาพตามอายุการใช้งาน, ไฟกระชาก"
+                                            value={submitData.root_cause}
+                                            onChange={(e) => setSubmitData({ ...submitData, root_cause: e.target.value })}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>3. วิธีการและขั้นตอนการแก้ไข *</label>
+                                        <textarea 
+                                            className="form-input" 
+                                            rows={2}
+                                            placeholder="เช่น ทำการเปลี่ยนหม้อแปลงไฟฟ้าใหม่ และทดสอบการจ่ายกระแสไฟ"
+                                            value={submitData.solution_method}
+                                            onChange={(e) => setSubmitData({ ...submitData, solution_method: e.target.value })}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>4. รายการวัสดุ / อุปกรณ์ที่ใช้จริง</label>
+                                        <input 
+                                            type="text" 
+                                            className="form-input" 
+                                            placeholder="เช่น สวิตช์ไฟ 1 ตัว, สายไฟ VAF 2x1.5 5 เมตร"
+                                            value={submitData.materials_used}
+                                            onChange={(e) => setSubmitData({ ...submitData, materials_used: e.target.value })}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>5. ผลการทดสอบการใช้งานหลังดำเนินงาน *</label>
+                                        <input 
+                                            type="text" 
+                                            className="form-input" 
+                                            placeholder="เช่น อุปกรณ์เปิดใช้งานได้ปกติ สัญญาณเสถียร ไม่พบความร้อนสะสม"
+                                            value={submitData.testing_results}
+                                            onChange={(e) => setSubmitData({ ...submitData, testing_results: e.target.value })}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>6. ข้อเสนอแนะหรือสิ่งที่ต้องติดตามเพิ่มเติม</label>
+                                        <input 
+                                            type="text" 
+                                            className="form-input" 
+                                            placeholder="เช่น แนะนำให้ตรวจสอบระบบกราวด์ของอาคารทุก 6 เดือน"
+                                            value={submitData.recommendations}
+                                            onChange={(e) => setSubmitData({ ...submitData, recommendations: e.target.value })}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                        />
                                     </div>
                                 </div>
+                            ) : activeActionModal === 'COMPLETE' ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                    <div style={{ background: 'var(--success-bg, rgba(34, 197, 94, 0.08))', border: '1px solid var(--success-border, rgba(34, 197, 94, 0.2))', padding: '12px', borderRadius: '8px', fontSize: '0.85rem' }}>
+                                        <div style={{ fontWeight: 600, color: 'var(--success-color, #10b981)', marginBottom: '4px' }}>
+                                            📋 การยืนยันตรวจรับงานซ่อมบำรุง
+                                        </div>
+                                        <div style={{ color: 'var(--text-secondary)' }}>
+                                            งาน: <strong>#{ticket.ticket_no} - {ticket.title}</strong><br/>
+                                            ผู้รับผิดชอบ: {ticket.assigned_to || 'เจ้าหน้าที่'}<br/>
+                                            ผู้ตรวจรับ: {currentUser.name || 'ผู้มีสิทธิ์'}
+                                        </div>
+                                    </div>
 
-                                <div style={{ marginBottom: '0.75rem' }}>
-                                    <label className="form-label" style={{ fontSize: '0.85rem' }}>หมายเหตุการตรวจรับ (ถ้ามี)</label>
+                                    <div>
+                                        <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>หมายเหตุการตรวจรับ (ถ้ามี)</label>
+                                        <textarea 
+                                            className="form-input" 
+                                            rows={2}
+                                            placeholder="เช่น ทดสอบใช้งานระบบเสียงแล้วทำงานได้ปกติดี"
+                                            value={actionNote}
+                                            onChange={(e) => setActionNote(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.85rem' }}
+                                        />
+                                    </div>
+
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={inspectionConfirmed} 
+                                            onChange={(e) => setInspectionConfirmed(e.target.checked)} 
+                                        />
+                                        ข้าพเจ้าได้ตรวจสอบและทดสอบงานเรียบร้อยแล้ว ยืนยันเสร็จสิ้นสมบูรณ์
+                                    </label>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                                        {activeActionModal === 'RETURN_REVISE' 
+                                            ? 'ระบุเหตุผลและจุดที่ต้องแก้ไข *' 
+                                            : (activeActionModal === 'WAITING_PARTS' ? 'ระบุอุปกรณ์หรือวัสดุที่ต้องรอ *' : 'บันทึกรายละเอียดเพิ่มเติม')}
+                                    </label>
                                     <textarea 
                                         className="form-input" 
-                                        rows={2}
-                                        placeholder="เช่น ทดสอบใช้งานระบบเสียงแล้วทำงานได้ปกติดี"
+                                        rows={3}
+                                        placeholder={
+                                            activeActionModal === 'RETURN_REVISE' 
+                                                ? 'ระบุสาเหตุ เช่น งานทาสียังไม่เรียบร้อย, อุปกรณ์ยังเปิดไม่ติด...'
+                                                : (activeActionModal === 'WAITING_PARTS' ? 'ระบุสาเหตุ เช่น รออะไหล่บอร์ดวงจรจากตัวแทนจำหน่าย, รอนำเสนอขออนุมัติงบประมาณ...' : 'บันทึกความคืบหน้า...')
+                                        }
                                         value={actionNote}
                                         onChange={(e) => setActionNote(e.target.value)}
                                         style={{ width: '100%', fontSize: '0.85rem' }}
-                                    />
+                                    ></textarea>
                                 </div>
+                            )}
+                        </div>
 
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: '#e2e8f0', marginTop: '0.5rem' }}>
-                                    <input 
-                                        type="checkbox" 
-                                        checked={inspectionConfirmed} 
-                                        onChange={(e) => setInspectionConfirmed(e.target.checked)} 
-                                    />
-                                    ข้าพเจ้าได้ตรวจสอบและทดสอบงานเรียบร้อยแล้ว ยืนยันเสร็จสิ้นสมบูรณ์
-                                </label>
-                            </div>
-                        ) : (
-                            <div style={{ marginBottom: '1rem' }}>
-                                <label className="form-label" style={{ fontSize: '0.85rem' }}>
-                                    {activeActionModal === 'RETURN_REVISE' 
-                                        ? 'ระบุเหตุผลและจุดที่ต้องแก้ไข *' 
-                                        : (activeActionModal === 'WAITING_PARTS' ? 'ระบุอุปกรณ์หรือวัสดุที่ต้องรอ *' : 'บันทึกรายละเอียดเพิ่มเติม')}
-                                </label>
-                                <textarea 
-                                    className="form-input" 
-                                    rows={3}
-                                    placeholder={
-                                        activeActionModal === 'RETURN_REVISE' 
-                                            ? 'ระบุสาเหตุ เช่น งานทาสียังไม่เรียบร้อย, อุปกรณ์ยังเปิดไม่ติด...'
-                                            : (activeActionModal === 'WAITING_PARTS' ? 'ระบุสาเหตุ เช่น รออะไหล่บอร์ดวงจรจากตัวแทนจำหน่าย, รอนำเสนอขออนุมัติงบประมาณ...' : 'บันทึกความคืบหน้า...')
-                                    }
-                                    value={actionNote}
-                                    onChange={(e) => setActionNote(e.target.value)}
-                                    style={{ width: '100%', fontSize: '0.85rem' }}
-                                ></textarea>
-                            </div>
-                        )}
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                        <div className="modal-footer" style={{ padding: '1rem 1.5rem', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-card)' }}>
                             <button 
-                                className="btn btn-ghost" 
+                                type="button"
+                                className="btn btn-secondary" 
                                 onClick={() => { setActiveActionModal(null); setActionNote(''); setInspectionConfirmed(false); }}
                             >
                                 ยกเลิก
                             </button>
                             <button 
+                                type="button"
                                 className="btn btn-primary"
                                 disabled={
                                     actionLoading || 
