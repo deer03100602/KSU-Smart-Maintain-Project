@@ -1084,6 +1084,14 @@ export default function TicketDetailPage(props) {
                         onActionCompleted={fetchTicketData} 
                     />
 
+                    {/* Integrated Evidence & Photo Manager (Before / During / After) */}
+                    <TicketEvidenceManager 
+                        ticket={ticket} 
+                        evidences={evidences} 
+                        currentUser={currentUser} 
+                        onEvidenceAdded={fetchTicketData} 
+                    />
+
                     {/* Integrated Budget & Expenses with OCR */}
                     <TicketExpenseManager 
                         ticket={ticket} 
@@ -1092,14 +1100,6 @@ export default function TicketDetailPage(props) {
                         isAdmin={isAdmin} 
                         currentUser={currentUser} 
                         onExpenseUpdated={fetchTicketData} 
-                    />
-
-                    {/* Integrated Evidence & Photo Manager (Before / During / After) */}
-                    <TicketEvidenceManager 
-                        ticket={ticket} 
-                        evidences={evidences} 
-                        currentUser={currentUser} 
-                        onEvidenceAdded={fetchTicketData} 
                     />
                 </div>
 
