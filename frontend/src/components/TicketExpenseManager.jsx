@@ -405,7 +405,7 @@ export default function TicketExpenseManager({
                         }
                     }}
                 >
-                    <div className="modal-container" style={{ maxWidth: '680px', width: '100%', maxHeight: '90vh' }}>
+                    <div className="modal-container" style={{ maxWidth: '680px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
                         <div className="modal-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <DollarSign style={{ width: 20, height: 20, color: 'var(--primary-color, #4f46e5)' }} />
@@ -423,7 +423,7 @@ export default function TicketExpenseManager({
                             </button>
                         </div>
 
-                        <div className="modal-body" style={{ padding: '1.25rem 1.5rem', overflowY: 'auto' }}>
+                        <div className="modal-body" style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
                             {/* OCR Upload Area */}
                             <div style={{
                                 border: '2px dashed rgba(59, 130, 246, 0.4)',

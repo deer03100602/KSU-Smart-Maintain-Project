@@ -252,7 +252,7 @@ export default function TicketWorkflowTimeline({
                         }
                     }}
                 >
-                    <div className="modal-container" style={{ maxWidth: activeActionModal === 'SUBMIT_INSPECTION' ? '640px' : '500px', width: '100%', maxHeight: '90vh' }}>
+                    <div className="modal-container" style={{ maxWidth: activeActionModal === 'SUBMIT_INSPECTION' ? '640px' : '500px', width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
                         <div className="modal-header">
                             <h3 className="modal-title" style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600 }}>
                                 {activeActionModal === 'START' && '⚙️ เริ่มดำเนินงานซ่อมบำรุง'}
@@ -275,7 +275,7 @@ export default function TicketWorkflowTimeline({
                             </button>
                         </div>
 
-                        <div className="modal-body" style={{ padding: '1.25rem 1.5rem', overflowY: 'auto' }}>
+                        <div className="modal-body" style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: '1 1 auto', minHeight: 0 }}>
                             {/* Special Rich Form for SUBMIT_INSPECTION */}
                             {activeActionModal === 'SUBMIT_INSPECTION' ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
