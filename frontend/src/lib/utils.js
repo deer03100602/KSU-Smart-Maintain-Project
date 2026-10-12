@@ -21,10 +21,11 @@ export function parseDescriptionAndAttachments(rawDescription) {
 
     // Regex matching markdown link/image syntax, e.g.:
     // 📎 [filename](url)
+    // - [filename](url)
     // [ไฟล์แนบ: filename](url)
     // [filename](url)
     // ![filename](url)
-    const attachmentRegex = /(?:📎\s*)?\[(?:ไฟล์แนบ:\s*)?(.*?)\]\((.*?)\)|!\[(.*?)\]\((.*?)\)/g;
+    const attachmentRegex = /(?:📎\s*)?(?:[-*]\s*)?\[(?:ไฟล์แนบ:\s*)?(.*?)\]\((.*?)\)|!\[(.*?)\]\((.*?)\)/g;
 
     for (let line of lines) {
         const trimmedLine = line.trim();
@@ -53,8 +54,13 @@ export function parseDescriptionAndAttachments(rawDescription) {
             }
         }
 
-        // If line is purely an attachment link or emoji prefix, exclude it from clean description
-        if (lineHasAttachment || trimmedLine.startsWith('📎') || /^\s*\[(ไฟล์แนบ:.*?)\]\(.*?\)\s*$/.test(trimmedLine)) {
+        // If line is purely an attachment link, markdown list link, or header/prefix, exclude it from clean description
+        if (
+            lineHasAttachment || 
+            trimmedLine.startsWith('📎') || 
+            /^\s*[-*]?\s*\[(ไฟล์แนบ:.*?)\]\(.*?\)\s*$/.test(trimmedLine) ||
+            /^\*{0,2}ไฟล์แนบ:?\*{0,2}$/i.test(trimmedLine)
+        ) {
             continue;
         }
 

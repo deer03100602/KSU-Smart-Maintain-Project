@@ -252,6 +252,7 @@ export default function TicketDetailPage(props) {
     }, [ticket]);
 
     const handlePrintSingleTicket = (t) => {
+        const { cleanDescription: cleanDesc, attachments: attList } = parseDescriptionAndAttachments(t.description);
         const printWindow = window.open('', '_blank');
         const html = `
             <html>
@@ -308,8 +309,32 @@ export default function TicketDetailPage(props) {
                         </div>
                         <div>
                              <span class="label">รายละเอียดเพิ่มเติม:</span>
-                             <div class="description">${t.description.replace(/📎 \[(.*?)\]\((.*?)\)/g, '').trim() || 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
+                             <div class="description">${cleanDesc || 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
                         </div>
+
+                        ${attList.length > 0 ? `
+                        <div style="margin-top: 15px;">
+                            <span class="label">รูปภาพและหลักฐานแนบ (${attList.length} รายการ):</span>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px;">
+                                ${attList.map(a => {
+                                    if (a.isImage) {
+                                        return `
+                                            <div style="border: 1px solid #ddd; padding: 4px; border-radius: 6px; text-align: center; background: #fff; max-width: 220px;">
+                                                <img src="${a.url}" alt="${a.name}" style="max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 4px; display: block;" onerror="this.style.display='none'" />
+                                                <div style="font-size: 11px; color: #555; margin-top: 4px; word-break: break-all;">${a.name}</div>
+                                            </div>
+                                        `;
+                                    } else {
+                                        return `
+                                            <div style="border: 1px solid #ddd; padding: 8px 12px; border-radius: 6px; font-size: 12px; background: #f8fafc;">
+                                                📎 ${a.name}
+                                            </div>
+                                        `;
+                                    }
+                                }).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
                     </div>
 
                     <div class="section">

@@ -1,15 +1,25 @@
-/**
- * generateOfficialReportPdf
- * สร้างเอกสารรายงานสรุปงานซ่อมและค่าใช้จ่ายภาษาไทย (มาตรฐาน A4)
- * มีรายละเอียดงาน ผู้รับผิดชอบ รายการวัสดุ ยอดรวม ใบเสร็จ รูปหลักฐาน และผลการตรวจรับ
- * มีช่องลงชื่อผู้จัดทำ ผู้ตรวจสอบ ผู้อนุมัติ และผู้บริหาร (ไม่สร้างลายเซ็นแทนบุคคลจริง)
- */
+import { parseDescriptionAndAttachments } from './utils';
+
 export function generateOfficialReportPdf({ ticket, expenses = [], summary = {}, evidences = [], timelines = [] }) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
         alert('กรุณาอนุญาตป๊อปอัป (Pop-up) ในเบราว์เซอร์เพื่อเปิดเอกสารรายงาน');
         return;
     }
+
+    const { cleanDescription, attachments } = parseDescriptionAndAttachments(ticket.description);
+    
+    // Combine explicit ticket evidences and attached images from ticket description
+    const allImages = [...evidences];
+    attachments.forEach(att => {
+        if (att.isImage && !allImages.some(img => img.url === att.url)) {
+            allImages.push({
+                url: att.url,
+                description: att.name,
+                stage: 'BEFORE'
+            });
+        }
+    });
 
     const formatDate = (d) => {
         if (!d) return '-';
@@ -188,8 +198,8 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
 
     <div style="margin-bottom: 12px; font-size: 13px;">
         <strong>รายละเอียดปัญหา:</strong>
-        <div style="background: #fafafa; border: 1px solid #e2e8f0; padding: 8px; border-radius: 4px; margin-top: 4px;">
-            ${(ticket.description || '-').replace(/📎\s*\[.*?\]\(.*?\)/g, '').trim()}
+        <div style="background: #fafafa; border: 1px solid #e2e8f0; padding: 8px; border-radius: 4px; margin-top: 4px; white-space: pre-wrap;">
+            ${cleanDescription || '-'}
         </div>
     </div>
 
@@ -280,10 +290,10 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
         </tfoot>
     </table>
 
-    ${evidences.length > 0 ? `
+    ${allImages.length > 0 ? `
     <div class="section-title">4. รูปภาพและหลักฐานการดำเนินงาน</div>
     <div class="evidence-grid">
-        ${evidences.slice(0, 8).map(evi => `
+        ${allImages.slice(0, 12).map(evi => `
             <div class="evidence-item">
                 <img src="${evi.url}" alt="${evi.description}" onerror="this.style.display='none'" />
                 <div style="font-weight: bold; margin-top: 2px;">${evi.stage === 'BEFORE' ? 'ก่อนซ่อม' : (evi.stage === 'DURING' ? 'ระหว่างซ่อม' : (evi.stage === 'PARTS' ? 'วัสดุ/อะไหล่' : (evi.stage === 'AFTER' ? 'หลังซ่อม' : (evi.stage === 'TESTING' ? 'ผลทดสอบ' : (evi.stage === 'HANDOVER' ? 'ส่งมอบงาน' : 'ใบเสร็จ')))))}</div>
