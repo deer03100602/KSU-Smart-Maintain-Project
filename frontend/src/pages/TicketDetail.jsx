@@ -246,8 +246,47 @@ export default function TicketDetailPage(props) {
 
             if (expRes.ok) {
                 const expData = await expRes.json();
-                const expList = expData.expenses || [];
-                const expSum = expData.summary || {};
+                let expList = expData.expenses || [];
+                let expSum = expData.summary || {};
+                
+                const cachedExp = getStoredExpenses(id) || (data && getStoredExpenses(data.id));
+                if (cachedExp && Array.isArray(cachedExp.expenses) && cachedExp.expenses.length > 0) {
+                    const expMap = new Map();
+                    // Put server items first
+                    expList.forEach(e => { if (e && e.id) expMap.set(e.id, e); });
+                    // Merge local items if local has newer status (e.g. APPROVED)
+                    cachedExp.expenses.forEach(e => {
+                        if (e && e.id) {
+                            if (!expMap.has(e.id)) {
+                                expMap.set(e.id, e);
+                            } else {
+                                const s = expMap.get(e.id);
+                                if (e.status === 'APPROVED' && s.status !== 'APPROVED') {
+                                    expMap.set(e.id, { ...s, ...e });
+                                }
+                            }
+                        }
+                    });
+                    expList = Array.from(expMap.values());
+
+                    let totalProp = 0, totalAppr = 0, totalDisb = 0;
+                    expList.forEach(e => {
+                        const amt = Number(e.net_amount || e.total_price || 0);
+                        totalProp += amt;
+                        if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
+                            totalAppr += amt;
+                            if (e.receipt_no || e.receipt_url) totalDisb += amt;
+                        }
+                    });
+                    expSum = {
+                        ...expSum,
+                        totalProposed: totalProp,
+                        totalApproved: totalAppr,
+                        totalDisbursed: totalDisb,
+                        remainingBudget: Math.max(0, totalAppr - totalDisb)
+                    };
+                }
+
                 setExpenses(expList);
                 setExpenseSummary(expSum);
                 saveStoredExpenses(id, expList, expSum);

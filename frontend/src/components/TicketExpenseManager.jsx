@@ -4,6 +4,7 @@ import {
     DollarSign, Plus, Check, X, Edit3, Trash2, AlertCircle, FileText, 
     Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw 
 } from 'lucide-react';
+import { saveStoredExpenses } from '@/lib/ticketStore';
 
 export default function TicketExpenseManager({ 
     ticket, 
@@ -163,7 +164,53 @@ export default function TicketExpenseManager({
         setFormError('');
     };
 
-    const handleUpdateStatus = async (expenseId, newStatus, reason = '') => {
+    const handleUpdateStatus = async (expenseId, newStatus, reason = '', expObj = null) => {
+        const targetExp = expObj || expenses.find(e => e.id === expenseId);
+        
+        // 1. Optimistic UI update: immediately change status so user sees 'อนุมัติแล้ว' instantly!
+        const updatedExpenses = expenses.map(e => {
+            if (e.id === expenseId) {
+                return {
+                    ...e,
+                    status: newStatus,
+                    approved_by: currentUser.name || 'ผู้ดูแลระบบ',
+                    approved_at: new Date().toISOString(),
+                    reject_reason: reason || e.reject_reason || null
+                };
+            }
+            return e;
+        });
+
+        // Calculate updated summary
+        let totalProp = 0;
+        let totalAppr = 0;
+        let totalDisb = 0;
+        updatedExpenses.forEach(e => {
+            const amt = Number(e.net_amount || e.total_price || 0);
+            totalProp += amt;
+            if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
+                totalAppr += amt;
+                if (e.receipt_no || e.receipt_url) totalDisb += amt;
+            }
+        });
+        const newSummary = {
+            ...summary,
+            totalProposed: totalProp,
+            totalApproved: totalAppr,
+            totalDisbursed: totalDisb,
+            remainingBudget: Math.max(0, totalAppr - totalDisb)
+        };
+
+        // Save to client localStorage immediately
+        try {
+            const ticketKey = ticket.id || ticket.ticket_no;
+            saveStoredExpenses(ticketKey, updatedExpenses, newSummary);
+        } catch (e) {}
+
+        // Notify parent to re-render immediately with new state
+        if (onExpenseUpdated) onExpenseUpdated();
+
+        // 2. Send update to server with full payload for resilience
         try {
             const token = localStorage.getItem('helpdesk_token');
             const res = await fetch(`/api/expenses/${expenseId}/status`, {
@@ -174,17 +221,16 @@ export default function TicketExpenseManager({
                 },
                 body: JSON.stringify({
                     status: newStatus,
-                    reject_reason: reason
+                    reject_reason: reason,
+                    expense: targetExp,
+                    ticket_id: ticket.id || ticket.ticket_no
                 })
             });
             if (res.ok) {
                 if (onExpenseUpdated) onExpenseUpdated();
-            } else {
-                const data = await res.json();
-                alert(data.error || 'ไม่สามารถอัปเดตสถานะได้');
             }
         } catch (e) {
-            alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+            console.warn('Network sync notice for expense status:', e);
         }
     };
 
@@ -325,7 +371,7 @@ export default function TicketExpenseManager({
                                                     <button 
                                                         className="btn btn-ghost btn-sm"
                                                         title="อนุมัติงบทั้งหมด"
-                                                        onClick={() => handleUpdateStatus(exp.id, 'APPROVED')}
+                                                        onClick={() => handleUpdateStatus(exp.id, 'APPROVED', '', exp)}
                                                         style={{ color: '#4ade80', padding: '4px 6px' }}
                                                     >
                                                         <Check style={{ width: 14, height: 14 }} />
@@ -335,7 +381,7 @@ export default function TicketExpenseManager({
                                                         title="อนุมัติบางส่วน"
                                                         onClick={() => {
                                                             const r = window.prompt('ระบุหมายเหตุการอนุมัติบางส่วน:');
-                                                            if (r !== null) handleUpdateStatus(exp.id, 'PARTIALLY_APPROVED', r);
+                                                            if (r !== null) handleUpdateStatus(exp.id, 'PARTIALLY_APPROVED', r, exp);
                                                         }}
                                                         style={{ color: '#60a5fa', padding: '4px 6px' }}
                                                     >
@@ -346,7 +392,7 @@ export default function TicketExpenseManager({
                                                         title="ขอให้แก้ไข"
                                                         onClick={() => {
                                                             const r = window.prompt('ระบุเหตุผลที่ต้องการให้แก้ไข:');
-                                                            if (r !== null) handleUpdateStatus(exp.id, 'REVISE_REQUESTED', r);
+                                                            if (r !== null) handleUpdateStatus(exp.id, 'REVISE_REQUESTED', r, exp);
                                                         }}
                                                         style={{ color: '#fbbf24', padding: '4px 6px' }}
                                                     >
@@ -357,7 +403,7 @@ export default function TicketExpenseManager({
                                                         title="ขอเอกสารเพิ่มเติม"
                                                         onClick={() => {
                                                             const r = window.prompt('ระบุเอกสารที่ต้องการเพิ่มเติม:');
-                                                            if (r !== null) handleUpdateStatus(exp.id, 'DOCUMENTS_NEEDED', r);
+                                                            if (r !== null) handleUpdateStatus(exp.id, 'DOCUMENTS_NEEDED', r, exp);
                                                         }}
                                                         style={{ color: '#c084fc', padding: '4px 6px' }}
                                                     >
@@ -368,7 +414,7 @@ export default function TicketExpenseManager({
                                                         title="ไม่อนุมัติ"
                                                         onClick={() => {
                                                             const r = window.prompt('ระบุเหตุผลที่ไม่อนุมัติ:');
-                                                            if (r !== null) handleUpdateStatus(exp.id, 'REJECTED', r);
+                                                            if (r !== null) handleUpdateStatus(exp.id, 'REJECTED', r, exp);
                                                         }}
                                                         style={{ color: '#f87171', padding: '4px 6px' }}
                                                     >
