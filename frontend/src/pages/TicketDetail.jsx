@@ -1128,23 +1128,36 @@ export default function TicketDetailPage(props) {
                         onActionCompleted={fetchTicketData} 
                     />
 
-                    {/* Integrated Evidence & Photo Manager (Before / During / After) */}
-                    <TicketEvidenceManager 
-                        ticket={ticket} 
-                        evidences={evidences} 
-                        currentUser={currentUser} 
-                        onEvidenceAdded={fetchTicketData} 
-                    />
+                    {/* Side-by-side Split Grid for Evidence Gallery & Budget/Expenses */}
+                    <div className="ticket-split-grid" style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+                        gap: '1.25rem',
+                        marginTop: '1.5rem',
+                        alignItems: 'start'
+                    }}>
+                        {/* Integrated Evidence & Photo Manager (Left Column) */}
+                        <div style={{ minWidth: 0 }}>
+                            <TicketEvidenceManager 
+                                ticket={ticket} 
+                                evidences={evidences} 
+                                currentUser={currentUser} 
+                                onEvidenceAdded={fetchTicketData} 
+                            />
+                        </div>
 
-                    {/* Integrated Budget & Expenses with OCR */}
-                    <TicketExpenseManager 
-                        ticket={ticket} 
-                        expenses={expenses} 
-                        summary={expenseSummary} 
-                        isAdmin={isAdmin} 
-                        currentUser={currentUser} 
-                        onExpenseUpdated={fetchTicketData} 
-                    />
+                        {/* Integrated Budget & Expenses with OCR (Right Column) */}
+                        <div style={{ minWidth: 0 }}>
+                            <TicketExpenseManager 
+                                ticket={ticket} 
+                                expenses={expenses} 
+                                summary={expenseSummary} 
+                                isAdmin={isAdmin} 
+                                currentUser={currentUser} 
+                                onExpenseUpdated={fetchTicketData} 
+                            />
+                        </div>
+                    </div>
                 </div>
 
                 {/* Sidebar Info */}
