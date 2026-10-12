@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
 import { PlusCircle, Info, User, Send, Loader, UploadCloud, FileText, X, Image as ImageIcon, Eye, ExternalLink, Download } from 'lucide-react';
+import { saveStoredTicket } from '@/lib/ticketStore';
 
 const formatFileSize = (bytes) => {
     if (!bytes || bytes === 0) return '';
@@ -237,6 +238,9 @@ export default function CreateTicketPage() {
 
             if (res.ok) {
                 const ticket = await res.json();
+                
+                // Save immediately into persistent local store for serverless survival
+                saveStoredTicket(ticket);
                 
                 // Save user profile state for next time
                 setUser(requesterName.trim(), requesterEmail.trim(), requesterGroup);

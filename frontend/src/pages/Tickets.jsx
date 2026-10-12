@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
 import { List, Plus, Search, X, FileText, Printer } from 'lucide-react';
 import { TicketGrid } from '@/components/TicketCard';
+import { mergeTicketsWithStorage, syncTicketsWithServer, getStoredTickets } from '@/lib/ticketStore';
 const THAI_MONTHS = [
     { value: 1, label: 'มกราคม' },
     { value: 2, label: 'กุมภาพันธ์' },
@@ -127,10 +128,17 @@ export default function TicketListPage() {
                 const res = await fetch(`/api/tickets?${params.toString()}`);
                 if (res.ok) {
                     const data = await res.json();
-                    setTickets(data);
+                    const merged = mergeTicketsWithStorage(data);
+                    setTickets(merged);
+                    syncTicketsWithServer(merged).catch(() => {});
+                } else {
+                    const stored = getStoredTickets();
+                    if (stored.length > 0) setTickets(stored);
                 }
             } catch (e) {
                 console.error('Error fetching tickets:', e);
+                const stored = getStoredTickets();
+                if (stored.length > 0) setTickets(stored);
             } finally {
                 setLoading(false);
             }

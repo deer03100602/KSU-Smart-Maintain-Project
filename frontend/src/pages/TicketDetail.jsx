@@ -21,6 +21,12 @@ import TicketExpenseManager from '@/components/TicketExpenseManager';
 import TicketWorkflowTimeline from '@/components/TicketWorkflowTimeline';
 import TicketEvidenceManager from '@/components/TicketEvidenceManager';
 import { generateOfficialReportPdf } from '@/lib/reportPdf';
+import { 
+    getStoredTicket, saveStoredTicket, syncTicketsWithServer, 
+    getStoredExpenses, saveStoredExpenses, 
+    getStoredTimelines, saveStoredTimelines, 
+    getStoredEvidences, saveStoredEvidences, removeStoredTicket 
+} from '@/lib/ticketStore';
 
 const STATUSES = {
     OPEN: 'Open',
@@ -189,6 +195,27 @@ export default function TicketDetailPage(props) {
 
     // Fetch ticket details, issue types, expenses, timeline, and evidence
     const fetchTicketData = async () => {
+        // Step 1: Pre-populate from local storage cache for instant rendering
+        const cachedTicket = getStoredTicket(id);
+        if (cachedTicket) {
+            setTicket(cachedTicket);
+            setNoteContent(cachedTicket.resolution_note || '');
+            const cachedExp = getStoredExpenses(id) || getStoredExpenses(cachedTicket.id);
+            if (cachedExp) {
+                setExpenses(cachedExp.expenses || []);
+                setExpenseSummary(cachedExp.summary || {});
+            }
+            const cachedTml = getStoredTimelines(id) || getStoredTimelines(cachedTicket.id);
+            if (Array.isArray(cachedTml) && cachedTml.length > 0) {
+                setTimelines(cachedTml);
+            }
+            const cachedEvi = getStoredEvidences(id) || getStoredEvidences(cachedTicket.id);
+            if (Array.isArray(cachedEvi) && cachedEvi.length > 0) {
+                setEvidences(cachedEvi);
+            }
+            setLoading(false);
+        }
+
         try {
             const [ticketRes, typesRes, expRes, tmlRes, eviRes] = await Promise.all([
                 fetch(`/api/tickets/${id}`),
@@ -201,8 +228,14 @@ export default function TicketDetailPage(props) {
                 const data = await ticketRes.json();
                 setTicket(data);
                 setNoteContent(data.resolution_note || '');
+                saveStoredTicket(data);
             } else {
-                toast.error('ไม่พบข้อมูล Ticket');
+                if (cachedTicket) {
+                    // Re-sync local ticket to serverless container in background
+                    syncTicketsWithServer([cachedTicket]).catch(() => {});
+                } else {
+                    toast.error('ไม่พบข้อมูล Ticket');
+                }
             }
 
             if (typesRes.ok) {
@@ -212,22 +245,33 @@ export default function TicketDetailPage(props) {
 
             if (expRes.ok) {
                 const expData = await expRes.json();
-                setExpenses(expData.expenses || []);
-                setExpenseSummary(expData.summary || {});
+                const expList = expData.expenses || [];
+                const expSum = expData.summary || {};
+                setExpenses(expList);
+                setExpenseSummary(expSum);
+                saveStoredExpenses(id, expList, expSum);
             }
 
             if (tmlRes.ok) {
                 const tmlData = await tmlRes.json();
-                setTimelines(Array.isArray(tmlData) ? tmlData : []);
+                if (Array.isArray(tmlData) && tmlData.length > 0) {
+                    setTimelines(tmlData);
+                    saveStoredTimelines(id, tmlData);
+                }
             }
 
             if (eviRes.ok) {
                 const eviData = await eviRes.json();
-                setEvidences(Array.isArray(eviData) ? eviData : []);
+                if (Array.isArray(eviData) && eviData.length > 0) {
+                    setEvidences(eviData);
+                    saveStoredEvidences(id, eviData);
+                }
             }
         } catch (e) {
             console.error('Error fetching ticket detail:', e);
-            toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+            if (!cachedTicket) {
+                toast.error('เกิดข้อผิดพลาดในการโหลดข้อมูล');
+            }
         } finally {
             setLoading(false);
         }

@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
 import { User, Plus, UserCircle, Save } from 'lucide-react';
 import { TicketGrid } from '@/components/TicketCard';
+import { mergeTicketsWithStorage, getStoredTickets } from '@/lib/ticketStore';
 
 export default function MyTicketsPage() {
     const { user, setUser, toast, isRealAuth } = useApp();
@@ -34,11 +35,30 @@ export default function MyTicketsPage() {
             const res = await fetch(`/api/tickets?${params.toString()}`);
             if (res.ok) {
                 const data = await res.json();
-                setTickets(data);
+                const merged = mergeTicketsWithStorage(data);
+                const filtered = merged.filter(t => {
+                    if (isRealAuth && user.email) {
+                        return (t.requester_email || '').toLowerCase() === user.email.toLowerCase();
+                    }
+                    return (t.requester_name || '').includes(user.name) || (user.email && (t.requester_email || '').toLowerCase() === user.email.toLowerCase());
+                });
+                setTickets(filtered);
+            } else {
+                const local = getStoredTickets();
+                const filtered = local.filter(t => {
+                    if (isRealAuth && user.email) {
+                        return (t.requester_email || '').toLowerCase() === user.email.toLowerCase();
+                    }
+                    return (t.requester_name || '').includes(user.name) || (user.email && (t.requester_email || '').toLowerCase() === user.email.toLowerCase());
+                });
+                setTickets(filtered);
             }
         } catch (e) {
             console.error('Error fetching my tickets:', e);
-            toast.error('ไม่สามารถโหลดรายการปัญหาได้');
+            const local = getStoredTickets();
+            const filtered = local.filter(t => (t.requester_name || '').includes(user.name) || (user.email && (t.requester_email || '').toLowerCase() === user.email.toLowerCase()));
+            if (filtered.length > 0) setTickets(filtered);
+            else toast.error('ไม่สามารถโหลดรายการปัญหาได้');
         } finally {
             setLoading(false);
         }
