@@ -42,18 +42,16 @@ model Ticket {
 }
 
 model User {
-  id          String   @id
-  email       String   @unique
-  password    String?
-  name        String
-  group       String   @default("นักศึกษา")
-  role        String   @default("user")
-  phone       String?
-  avatar_url  String?  @db.Text
-  provider    String?  @default("local") // "local" | "google"
-  google_id   String?  @unique
-  created_at  DateTime @default(now())
-  updated_at  DateTime @default(now()) @updatedAt
+  id         String   @id
+  email      String   @unique
+  password   String
+  name       String
+  group      String   @default("นักศึกษา")
+  role       String   @default("user")
+  phone      String?
+  avatar_url String?  @db.Text
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
 }
 
 model Expense {

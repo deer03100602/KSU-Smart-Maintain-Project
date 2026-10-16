@@ -14,27 +14,13 @@ import { Link } from "react-router-dom";
 export default function SignupPage() {
     const navigate = useNavigate();
     const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
-    const { signUpWithEmail, loginWithGoogleCredential, loginWithGoogleRedirect, toast } = useApp();
+    const { signUpWithEmail, toast } = useApp();
 
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
     const [userGroup, setUserGroup] = useState('นักศึกษา');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
-    const [googleLoading, setGoogleLoading] = useState(false);
-    const [googleConfig, setGoogleConfig] = useState({ isConfigured: false });
-
-    useEffect(() => {
-        fetch('/api/auth/google/config')
-            .then(res => res.json())
-            .then(data => setGoogleConfig(data))
-            .catch(() => {});
-    }, []);
-
-    const handleGoogleSignUp = () => {
-        setGoogleLoading(true);
-        window.location.href = '/api/auth/google';
-    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -63,7 +49,7 @@ export default function SignupPage() {
     };
 
     return (
-        <div className="page-signup fade-in" style={{ maxWidth: 460, margin: '3.5rem auto', padding: '1rem' }}>
+        <div className="page-signup fade-in" style={{ maxWidth: 450, margin: '4rem auto', padding: '1rem' }}>
             <div style={{ marginBottom: '1.5rem' }}>
                 <Link to="/login" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <ArrowLeft style={{ width: 16, height: 16 }} />
@@ -72,11 +58,11 @@ export default function SignupPage() {
             </div>
 
             <div className="glass-card" style={{ padding: '2.5rem 2rem' }}>
-                <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
                     <div style={{ 
-                        width: 52, 
-                        height: 52, 
-                        borderRadius: '14px', 
+                        width: 50, 
+                        height: 50, 
+                        borderRadius: '12px', 
                         background: 'linear-gradient(135deg, var(--primary-color), var(--primary-hover))', 
                         display: 'flex', 
                         alignItems: 'center', 
@@ -85,74 +71,12 @@ export default function SignupPage() {
                         color: 'white',
                         boxShadow: '0 8px 20px rgba(59, 130, 246, 0.3)'
                     }}>
-                        <UserPlus style={{ width: 26, height: 26 }} />
+                        <UserPlus style={{ width: 24, height: 24 }} />
                     </div>
                     <h2 style={{ fontSize: '1.75rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>สมัครสมาชิก</h2>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
                         สร้างบัญชีสำหรับติดตามสถานะและรับการแจ้งเตือน
                     </p>
-                </div>
-
-                {/* ── Google Single Sign-On Button ── */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <button
-                        type="button"
-                        onClick={handleGoogleSignUp}
-                        disabled={googleLoading || loading}
-                        style={{
-                            width: '100%',
-                            padding: '11px 16px',
-                            borderRadius: '10px',
-                            background: '#ffffff',
-                            color: '#1f2937',
-                            border: '1px solid #d1d5db',
-                            fontWeight: 600,
-                            fontSize: '0.95rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '12px',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#f9fafb';
-                            e.currentTarget.style.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.14)';
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#ffffff';
-                            e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.08)';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                        }}
-                    >
-                        {googleLoading ? (
-                            <>
-                                <Loader className="animate-spin" style={{ width: 20, height: 20, color: '#4285F4' }} />
-                                <span>กำลังเชื่อมต่อ Google...</span>
-                            </>
-                        ) : (
-                            <>
-                                <svg width="20" height="20" viewBox="0 0 24 24">
-                                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
-                                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
-                                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
-                                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
-                                </svg>
-                                <span>สมัคร / เข้าสู่ระบบด้วย Google</span>
-                            </>
-                        )}
-                    </button>
-                </div>
-
-                {/* ── Divider ── */}
-                <div style={{ display: 'flex', alignItems: 'center', margin: '1.25rem 0', gap: '0.75rem' }}>
-                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)', opacity: 0.6 }}></div>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        หรือลงทะเบียนด้วยอีเมล
-                    </span>
-                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)', opacity: 0.6 }}></div>
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>

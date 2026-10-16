@@ -99,7 +99,19 @@ export function AppProvider({ children }) {
         document.documentElement.style.colorScheme = newTheme;
     };
 
-    const handleAuthSuccess = (result) => {
+    // Auth methods
+    const loginWithEmail = async (email, password) => {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password }),
+        });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+        }
         const loggedInUser = result.user;
         setUserState(loggedInUser);
         localStorage.setItem('helpdesk_current_user', JSON.stringify(loggedInUser));
@@ -117,41 +129,6 @@ export function AppProvider({ children }) {
             localStorage.setItem('helpdesk_token', result.token);
         }
         return loggedInUser;
-    };
-
-    // Auth methods
-    const loginWithEmail = async (email, password) => {
-        const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ email, password }),
-        });
-        const result = await response.json();
-        if (!response.ok) {
-            throw new Error(result.error || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
-        }
-        return handleAuthSuccess(result);
-    };
-
-    const loginWithGoogleCredential = async (credential, mockUser = null) => {
-        const response = await fetch('/api/auth/google', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ credential, mockUser }),
-        });
-        const result = await response.json();
-        if (!response.ok) {
-            throw new Error(result.error || 'เข้าสู่ระบบด้วย Google ไม่สำเร็จ');
-        }
-        return handleAuthSuccess(result);
-    };
-
-    const loginWithGoogleRedirect = () => {
-        window.location.href = '/api/auth/google';
     };
 
     const signUpWithEmail = async (email, password, fullName, userGroup = 'นักศึกษา') => {
@@ -362,9 +339,6 @@ export function AppProvider({ children }) {
             closeModal,
             modal,
             loginWithEmail,
-            loginWithGoogleCredential,
-            loginWithGoogleRedirect,
-            handleAuthSuccess,
             signUpWithEmail,
             signOutUser,
             isRealAuth: !isGuest,
