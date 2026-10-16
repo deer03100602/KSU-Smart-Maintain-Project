@@ -152,13 +152,15 @@ export default function TicketEvidenceManager({
                     <Camera style={{ width: 20, height: 20, color: '#3b82f6' }} />
                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>รูปภาพและหลักฐานงานซ่อม (Before / During / After / Evidence Gallery)</h3>
                 </div>
-                <button 
-                    className="btn btn-primary btn-sm"
-                    onClick={() => setShowUploadModal(true)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                >
-                    <Plus style={{ width: 15, height: 15 }} /> อัปโหลดรูปภาพหลักฐาน
-                </button>
+                {isAdmin && (
+                    <button 
+                        className="btn btn-primary btn-sm"
+                        onClick={() => setShowUploadModal(true)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                        <Plus style={{ width: 15, height: 15 }} /> อัปโหลดรูปภาพหลักฐาน
+                    </button>
+                )}
             </div>
 
             {/* Filter Tabs */}

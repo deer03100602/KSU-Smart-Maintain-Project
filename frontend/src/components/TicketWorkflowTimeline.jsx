@@ -103,97 +103,99 @@ export default function TicketWorkflowTimeline({
                 </div>
             </div>
 
-            {/* Workflow Quick Action Buttons */}
-            <div style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '1.25rem',
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '8px'
-            }}>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginRight: '4px' }}>
-                    ปุ่มสั่งการสถานะ:
-                </span>
+            {/* Workflow Quick Action Buttons (Exclusively visible to Group B / Staff / Admin) */}
+            {isAdmin && (
+                <div style={{
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    marginBottom: '1.25rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '8px'
+                }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginRight: '4px' }}>
+                        ปุ่มสั่งการสถานะ:
+                    </span>
 
-                {/* 1. ปุ่มรับงาน (สำหรับช่างหรือ Admin) */}
-                {ticket.status === 'Open' && (isAdmin || !ticket.assigned_to || isAssignedToCurrent) && (
-                    <button 
-                        className="btn btn-primary btn-sm"
-                        disabled={actionLoading}
-                        onClick={() => handleWorkflowAction('ACCEPT', 'เจ้าหน้าที่กดรับมอบหมายงานซ่อม')}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem' }}
-                    >
-                        <User style={{ width: 14, height: 14 }} /> กดรับงานซ่อม
-                    </button>
-                )}
+                    {/* 1. ปุ่มรับงาน (สำหรับช่างหรือ Admin) */}
+                    {ticket.status === 'Open' && (
+                        <button 
+                            className="btn btn-primary btn-sm"
+                            disabled={actionLoading}
+                            onClick={() => handleWorkflowAction('ACCEPT', 'เจ้าหน้าที่กดรับมอบหมายงานซ่อม')}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem' }}
+                        >
+                            <User style={{ width: 14, height: 14 }} /> กดรับงานซ่อม
+                        </button>
+                    )}
 
-                {/* 2. เริ่มดำเนินงาน */}
-                {ticket.status !== 'Closed' && ticket.status !== 'Cancelled' && (
-                    <button 
-                        className="btn btn-ghost btn-sm"
-                        disabled={actionLoading}
-                        onClick={() => setActiveActionModal('START')}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: 'rgba(34, 197, 94, 0.1)', color: '#4ade80' }}
-                    >
-                        <Play style={{ width: 14, height: 14 }} /> เริ่มดำเนินงาน
-                    </button>
-                )}
+                    {/* 2. เริ่มดำเนินงาน */}
+                    {ticket.status !== 'Closed' && ticket.status !== 'Cancelled' && (
+                        <button 
+                            className="btn btn-ghost btn-sm"
+                            disabled={actionLoading}
+                            onClick={() => setActiveActionModal('START')}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: 'rgba(34, 197, 94, 0.1)', color: '#4ade80' }}
+                        >
+                            <Play style={{ width: 14, height: 14 }} /> เริ่มดำเนินงาน
+                        </button>
+                    )}
 
-                {/* 3. รออุปกรณ์ / อะไหล่ */}
-                {ticket.status !== 'Closed' && ticket.status !== 'Cancelled' && (
-                    <button 
-                        className="btn btn-ghost btn-sm"
-                        disabled={actionLoading}
-                        onClick={() => setActiveActionModal('WAITING_PARTS')}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: 'rgba(245, 158, 11, 0.1)', color: '#fbbf24' }}
-                    >
-                        <Pause style={{ width: 14, height: 14 }} /> รออุปกรณ์ / งบประมาณ
-                    </button>
-                )}
+                    {/* 3. รออุปกรณ์ / อะไหล่ */}
+                    {ticket.status !== 'Closed' && ticket.status !== 'Cancelled' && (
+                        <button 
+                            className="btn btn-ghost btn-sm"
+                            disabled={actionLoading}
+                            onClick={() => setActiveActionModal('WAITING_PARTS')}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: 'rgba(245, 158, 11, 0.1)', color: '#fbbf24' }}
+                        >
+                            <Pause style={{ width: 14, height: 14 }} /> รออุปกรณ์ / งบประมาณ
+                        </button>
+                    )}
 
-                {/* 4. ส่งงานตรวจรับ */}
-                {ticket.status !== 'Closed' && ticket.status !== 'Cancelled' && (
-                    <button 
-                        className="btn btn-ghost btn-sm"
-                        disabled={actionLoading}
-                        onClick={() => setActiveActionModal('SUBMIT_INSPECTION')}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: 'rgba(168, 85, 247, 0.1)', color: '#c084fc' }}
-                    >
-                        <FileText style={{ width: 14, height: 14 }} /> ส่งงานตรวจรับ
-                    </button>
-                )}
+                    {/* 4. ส่งงานตรวจรับ */}
+                    {ticket.status !== 'Closed' && ticket.status !== 'Cancelled' && (
+                        <button 
+                            className="btn btn-ghost btn-sm"
+                            disabled={actionLoading}
+                            onClick={() => setActiveActionModal('SUBMIT_INSPECTION')}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: 'rgba(168, 85, 247, 0.1)', color: '#c084fc' }}
+                        >
+                            <FileText style={{ width: 14, height: 14 }} /> ส่งงานตรวจรับ
+                        </button>
+                    )}
 
-                {/* 5. ส่งกลับแก้ไขงาน (สำหรับผู้แจ้งซ่อม หรือ Admin) */}
-                {ticket.status !== 'Closed' && (isAdmin || isRequester) && (
-                    <button 
-                        className="btn btn-ghost btn-sm"
-                        disabled={actionLoading}
-                        onClick={() => setActiveActionModal('RETURN_REVISE')}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171' }}
-                    >
-                        <RotateCcw style={{ width: 14, height: 14 }} /> ส่งกลับแก้ไขงาน
-                    </button>
-                )}
+                    {/* 5. ส่งกลับแก้ไขงาน */}
+                    {ticket.status !== 'Closed' && (
+                        <button 
+                            className="btn btn-ghost btn-sm"
+                            disabled={actionLoading}
+                            onClick={() => setActiveActionModal('RETURN_REVISE')}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171' }}
+                        >
+                            <RotateCcw style={{ width: 14, height: 14 }} /> ส่งกลับแก้ไขงาน
+                        </button>
+                    )}
 
-                {/* 6. ยืนยันเสร็จสิ้นงาน (เฉพาะ Admin หรือ ผู้แจ้ง) */}
-                {ticket.status !== 'Closed' && (isAdmin || isRequester) && (
-                    <button 
-                        className="btn btn-primary btn-sm"
-                        disabled={actionLoading}
-                        onClick={() => {
-                            setActiveActionModal('COMPLETE');
-                            setInspectionConfirmed(true);
-                        }}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: '#16a34a', borderColor: '#16a34a' }}
-                    >
-                        <CheckCircle2 style={{ width: 14, height: 14 }} /> ยืนยันตรวจรับเสร็จสิ้นสมบูรณ์
-                    </button>
-                )}
-            </div>
+                    {/* 6. ยืนยันเสร็จสิ้นงาน */}
+                    {ticket.status !== 'Closed' && (
+                        <button 
+                            className="btn btn-primary btn-sm"
+                            disabled={actionLoading}
+                            onClick={() => {
+                                setActiveActionModal('COMPLETE');
+                                setInspectionConfirmed(true);
+                            }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.8rem', background: '#16a34a', borderColor: '#16a34a' }}
+                        >
+                            <CheckCircle2 style={{ width: 14, height: 14 }} /> ยืนยันตรวจรับเสร็จสิ้นสมบูรณ์
+                        </button>
+                    )}
+                </div>
+            )}
 
             {/* Timeline Stream */}
             <div style={{ position: 'relative', paddingLeft: '24px', borderLeft: '2px solid rgba(255, 255, 255, 0.1)', marginLeft: '10px' }}>

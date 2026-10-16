@@ -277,13 +277,15 @@ export default function TicketExpenseManager({
                     <DollarSign style={{ width: 20, height: 20, color: '#3b82f6' }} />
                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>ระบบบริหารงบประมาณและบันทึกค่าใช้จ่าย (Budget & Expenses)</h3>
                 </div>
-                <button 
-                    className="btn btn-primary btn-sm"
-                    onClick={() => { resetForm(); setShowAddModal(true); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                    <Plus style={{ width: 15, height: 15 }} /> บันทึกค่าใช้จ่าย / สแกนใบเสร็จ
-                </button>
+                {isAdmin && (
+                    <button 
+                        className="btn btn-primary btn-sm"
+                        onClick={() => { resetForm(); setShowAddModal(true); }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                    >
+                        <Plus style={{ width: 15, height: 15 }} /> บันทึกค่าใช้จ่าย / สแกนใบเสร็จ
+                    </button>
+                )}
             </div>
 
             {/* Financial Summary Cards */}
@@ -327,7 +329,7 @@ export default function TicketExpenseManager({
                                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>ยอดสุทธิ</th>
                                 <th style={{ padding: '8px 10px' }}>เลขที่ใบเสร็จ</th>
                                 <th style={{ padding: '8px 10px' }}>สถานะ</th>
-                                <th style={{ padding: '8px 10px', textAlign: 'center' }}>จัดการ</th>
+                                {isAdmin && <th style={{ padding: '8px 10px', textAlign: 'center' }}>จัดการ</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -364,65 +366,65 @@ export default function TicketExpenseManager({
                                     <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
                                         {getStatusBadge(exp.status)}
                                     </td>
-                                    <td style={{ padding: '8px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                                            {isAdmin && exp.status === 'PENDING' && (
-                                                <>
-                                                    <button 
-                                                        className="btn btn-ghost btn-sm"
-                                                        title="อนุมัติงบทั้งหมด"
-                                                        onClick={() => handleUpdateStatus(exp.id, 'APPROVED', '', exp)}
-                                                        style={{ color: '#4ade80', padding: '4px 6px' }}
-                                                    >
-                                                        <Check style={{ width: 14, height: 14 }} />
-                                                    </button>
-                                                    <button 
-                                                        className="btn btn-ghost btn-sm"
-                                                        title="อนุมัติบางส่วน"
-                                                        onClick={() => {
-                                                            const r = window.prompt('ระบุหมายเหตุการอนุมัติบางส่วน:');
-                                                            if (r !== null) handleUpdateStatus(exp.id, 'PARTIALLY_APPROVED', r, exp);
-                                                        }}
-                                                        style={{ color: '#60a5fa', padding: '4px 6px' }}
-                                                    >
-                                                        <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>½</span>
-                                                    </button>
-                                                    <button 
-                                                        className="btn btn-ghost btn-sm"
-                                                        title="ขอให้แก้ไข"
-                                                        onClick={() => {
-                                                            const r = window.prompt('ระบุเหตุผลที่ต้องการให้แก้ไข:');
-                                                            if (r !== null) handleUpdateStatus(exp.id, 'REVISE_REQUESTED', r, exp);
-                                                        }}
-                                                        style={{ color: '#fbbf24', padding: '4px 6px' }}
-                                                    >
-                                                        <Edit3 style={{ width: 14, height: 14 }} />
-                                                    </button>
-                                                    <button 
-                                                        className="btn btn-ghost btn-sm"
-                                                        title="ขอเอกสารเพิ่มเติม"
-                                                        onClick={() => {
-                                                            const r = window.prompt('ระบุเอกสารที่ต้องการเพิ่มเติม:');
-                                                            if (r !== null) handleUpdateStatus(exp.id, 'DOCUMENTS_NEEDED', r, exp);
-                                                        }}
-                                                        style={{ color: '#c084fc', padding: '4px 6px' }}
-                                                    >
-                                                        <FileText style={{ width: 14, height: 14 }} />
-                                                    </button>
-                                                    <button 
-                                                        className="btn btn-ghost btn-sm"
-                                                        title="ไม่อนุมัติ"
-                                                        onClick={() => {
-                                                            const r = window.prompt('ระบุเหตุผลที่ไม่อนุมัติ:');
-                                                            if (r !== null) handleUpdateStatus(exp.id, 'REJECTED', r, exp);
-                                                        }}
-                                                        style={{ color: '#f87171', padding: '4px 6px' }}
-                                                    >
-                                                        <X style={{ width: 14, height: 14 }} />
-                                                    </button>
-                                                </>
-                                            )}
-                                            {(isAdmin || exp.status === 'PENDING' || exp.status === 'REVISE_REQUESTED') && (
+                                    {isAdmin && (
+                                        <td style={{ padding: '8px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                                {exp.status === 'PENDING' && (
+                                                    <>
+                                                        <button 
+                                                            className="btn btn-ghost btn-sm"
+                                                            title="อนุมัติงบทั้งหมด"
+                                                            onClick={() => handleUpdateStatus(exp.id, 'APPROVED', '', exp)}
+                                                            style={{ color: '#4ade80', padding: '4px 6px' }}
+                                                        >
+                                                            <Check style={{ width: 14, height: 14 }} />
+                                                        </button>
+                                                        <button 
+                                                            className="btn btn-ghost btn-sm"
+                                                            title="อนุมัติบางส่วน"
+                                                            onClick={() => {
+                                                                const r = window.prompt('ระบุหมายเหตุการอนุมัติบางส่วน:');
+                                                                if (r !== null) handleUpdateStatus(exp.id, 'PARTIALLY_APPROVED', r, exp);
+                                                            }}
+                                                            style={{ color: '#60a5fa', padding: '4px 6px' }}
+                                                        >
+                                                            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>½</span>
+                                                        </button>
+                                                        <button 
+                                                            className="btn btn-ghost btn-sm"
+                                                            title="ขอให้แก้ไข"
+                                                            onClick={() => {
+                                                                const r = window.prompt('ระบุเหตุผลที่ต้องการให้แก้ไข:');
+                                                                if (r !== null) handleUpdateStatus(exp.id, 'REVISE_REQUESTED', r, exp);
+                                                            }}
+                                                            style={{ color: '#fbbf24', padding: '4px 6px' }}
+                                                        >
+                                                            <Edit3 style={{ width: 14, height: 14 }} />
+                                                        </button>
+                                                        <button 
+                                                            className="btn btn-ghost btn-sm"
+                                                            title="ขอเอกสารเพิ่มเติม"
+                                                            onClick={() => {
+                                                                const r = window.prompt('ระบุเอกสารที่ต้องการเพิ่มเติม:');
+                                                                if (r !== null) handleUpdateStatus(exp.id, 'DOCUMENTS_NEEDED', r, exp);
+                                                            }}
+                                                            style={{ color: '#c084fc', padding: '4px 6px' }}
+                                                        >
+                                                            <FileText style={{ width: 14, height: 14 }} />
+                                                        </button>
+                                                        <button 
+                                                            className="btn btn-ghost btn-sm"
+                                                            title="ไม่อนุมัติ"
+                                                            onClick={() => {
+                                                                const r = window.prompt('ระบุเหตุผลที่ไม่อนุมัติ:');
+                                                                if (r !== null) handleUpdateStatus(exp.id, 'REJECTED', r, exp);
+                                                            }}
+                                                            style={{ color: '#f87171', padding: '4px 6px' }}
+                                                        >
+                                                            <X style={{ width: 14, height: 14 }} />
+                                                        </button>
+                                                    </>
+                                                )}
                                                 <button 
                                                     className="btn btn-ghost btn-sm"
                                                     title="ลบรายการ"
@@ -431,9 +433,9 @@ export default function TicketExpenseManager({
                                                 >
                                                     <Trash2 style={{ width: 14, height: 14 }} />
                                                 </button>
-                                            )}
-                                        </div>
-                                    </td>
+                                            </div>
+                                        </td>
+                                    )}
                                 </tr>
                             ))}
                         </tbody>
