@@ -252,28 +252,13 @@ export default function LoginPage() {
                                             </div>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            {!isLoggingInThis && (
-                                                <span style={{
-                                                    fontSize: '0.74rem',
-                                                    color: 'var(--primary-color)',
-                                                    background: 'rgba(59, 130, 246, 0.1)',
-                                                    padding: '3px 8px',
-                                                    borderRadius: '6px',
-                                                    fontWeight: 500,
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: 3
-                                                }}>
-                                                    เข้าสู่ระบบ ➜
-                                                </span>
-                                            )}
                                             <button
                                                 type="button"
                                                 title="ลบบัญชีนี้ออกจากเครื่อง"
                                                 onClick={(e) => handleRemoveSavedAccount(e, acc.email)}
-                                                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
+                                                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '6px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
                                             >
-                                                <X style={{ width: 14, height: 14 }} />
+                                                <X style={{ width: 15, height: 15 }} />
                                             </button>
                                         </div>
                                     </div>
