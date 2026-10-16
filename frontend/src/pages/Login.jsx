@@ -1,24 +1,52 @@
-// ============================================================
-// page.js — Sign In Page
-// Route: /login
-// ============================================================
-
-
-
-import React, { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
-import { LogIn, Mail, Lock, Loader, ArrowLeft } from 'lucide-react';
+import { LogIn, Mail, Lock, Loader, ArrowLeft, Sparkles } from 'lucide-react';
 import { Link } from "react-router-dom";
 
 export default function LoginPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
-    const { loginWithEmail, toast } = useApp();
+    const { loginWithEmail, loginWithGoogleCredential, loginWithGoogleRedirect, handleAuthSuccess, toast } = useApp();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [googleLoading, setGoogleLoading] = useState(false);
+    const [googleConfig, setGoogleConfig] = useState({ isConfigured: false, clientId: '' });
+
+    // Handle OAuth callback parameters (when Google redirects back to /login?google_token=...&user=...)
+    useEffect(() => {
+        const token = searchParams.get('google_token') || searchParams.get('token');
+        const userParam = searchParams.get('user');
+        const errorParam = searchParams.get('error');
+
+        if (errorParam) {
+            toast.error(decodeURIComponent(errorParam));
+            return;
+        }
+
+        if (token && userParam) {
+            try {
+                const userData = JSON.parse(decodeURIComponent(userParam));
+                handleAuthSuccess({ token, user: userData });
+                toast.success(`เข้าสู่ระบบด้วย Google สำเร็จ ยินดีต้อนรับคุณ ${userData.name || 'ผู้ใช้งาน'}`);
+                navigate('/', { replace: true });
+            } catch (err) {
+                console.error('Failed to parse Google user payload:', err);
+                toast.error('เกิดข้อผิดพลาดในการรับข้อมูลผู้ใช้จาก Google');
+            }
+        }
+    }, [searchParams]);
+
+    // Check Google OAuth backend configuration
+    useEffect(() => {
+        fetch('/api/auth/google/config')
+            .then(res => res.json())
+            .then(data => setGoogleConfig(data))
+            .catch(() => {});
+    }, []);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -41,8 +69,36 @@ export default function LoginPage() {
         }
     };
 
+    // Google Sign-In Handler
+    const handleGoogleLogin = async () => {
+        setGoogleLoading(true);
+        try {
+            // If Client ID is configured in backend, redirect to server-side Google OAuth
+            if (googleConfig.isConfigured) {
+                loginWithGoogleRedirect();
+                return;
+            }
+
+            // If not yet configured on Google Cloud Console, offer simulated test login for developer
+            const mockUser = {
+                email: 'user.ksu@gmail.com',
+                name: 'ผู้ใช้งาน Google (ทดสอบ SSO)',
+                picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80'
+            };
+
+            const user = await loginWithGoogleCredential(null, mockUser);
+            toast.success(`เข้าสู่ระบบด้วย Google สำเร็จ (โหมดทดสอบ) ยินดีต้อนรับคุณ ${user?.name}`);
+            router.push('/');
+        } catch (err) {
+            console.error('Google login error:', err);
+            toast.error(err.message || 'ไม่สามารถเข้าสู่ระบบด้วย Google ได้');
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
+
     return (
-        <div className="page-login fade-in" style={{ maxWidth: 450, margin: '4rem auto', padding: '1rem' }}>
+        <div className="page-login fade-in" style={{ maxWidth: 460, margin: '3.5rem auto', padding: '1rem' }}>
             <div style={{ marginBottom: '1.5rem' }}>
                 <Link to="/" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <ArrowLeft style={{ width: 16, height: 16 }} />
@@ -51,11 +107,11 @@ export default function LoginPage() {
             </div>
 
             <div className="glass-card" style={{ padding: '2.5rem 2rem' }}>
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
                     <div style={{ 
-                        width: 50, 
-                        height: 50, 
-                        borderRadius: '12px', 
+                        width: 52, 
+                        height: 52, 
+                        borderRadius: '14px', 
                         background: 'linear-gradient(135deg, var(--primary-color), var(--primary-hover))', 
                         display: 'flex', 
                         alignItems: 'center', 
@@ -64,12 +120,80 @@ export default function LoginPage() {
                         color: 'white',
                         boxShadow: '0 8px 20px rgba(59, 130, 246, 0.3)'
                     }}>
-                        <LogIn style={{ width: 24, height: 24 }} />
+                        <LogIn style={{ width: 26, height: 26 }} />
                     </div>
                     <h2 style={{ fontSize: '1.75rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>เข้าสู่ระบบ</h2>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
                         ลงชื่อเข้าใช้งานระบบแจ้งซ่อมบำรุง มหาวิทยาลัยกาฬสินธุ์
                     </p>
+                </div>
+
+                {/* ── Google Single Sign-On (SSO) Button ── */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                    <button
+                        type="button"
+                        onClick={handleGoogleLogin}
+                        disabled={googleLoading || loading}
+                        style={{
+                            width: '100%',
+                            padding: '11px 16px',
+                            borderRadius: '10px',
+                            background: '#ffffff',
+                            color: '#1f2937',
+                            border: '1px solid #d1d5db',
+                            fontWeight: 600,
+                            fontSize: '0.95rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '12px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                            boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+                            position: 'relative'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#f9fafb';
+                            e.currentTarget.style.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.14)';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#ffffff';
+                            e.currentTarget.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.08)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                        }}
+                    >
+                        {googleLoading ? (
+                            <>
+                                <Loader className="animate-spin" style={{ width: 20, height: 20, color: '#4285F4' }} />
+                                <span>กำลังเชื่อมต่อ Google...</span>
+                            </>
+                        ) : (
+                            <>
+                                <svg width="20" height="20" viewBox="0 0 24 24">
+                                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+                                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.99 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+                                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                                </svg>
+                                <span>เข้าสู่ระบบด้วย Google</span>
+                            </>
+                        )}
+                    </button>
+                    {!googleConfig.isConfigured && (
+                        <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.4rem' }}>
+                            💡 โหมดพัฒนา: สามารถคลิกเพื่อทดสอบ Single Sign-On ได้ทันที
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Divider ── */}
+                <div style={{ display: 'flex', alignItems: 'center', margin: '1.25rem 0', gap: '0.75rem' }}>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)', opacity: 0.6 }}></div>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        หรือเข้าสู่ระบบด้วยอีเมล
+                    </span>
+                    <div style={{ flex: 1, height: '1px', background: 'var(--border-color)', opacity: 0.6 }}></div>
                 </div>
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -85,7 +209,7 @@ export default function LoginPage() {
                             required 
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            disabled={loading}
+                            disabled={loading || googleLoading}
                         />
                     </div>
 
@@ -101,7 +225,7 @@ export default function LoginPage() {
                             required 
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            disabled={loading}
+                            disabled={loading || googleLoading}
                         />
                     </div>
 
@@ -109,7 +233,7 @@ export default function LoginPage() {
                         type="submit" 
                         className="btn btn-primary btn-lg" 
                         style={{ marginTop: '0.5rem', width: '100%', justifyContent: 'center' }}
-                        disabled={loading}
+                        disabled={loading || googleLoading}
                     >
                         {loading ? (
                             <>

@@ -2758,6 +2758,343 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// Google OAuth 2.0 (Single Sign-On / SSO) API
+// ─────────────────────────────────────────────────────────────
+async function upsertGoogleUser(googleProfile) {
+    const cleanEmail = String(googleProfile.email).trim().toLowerCase();
+    const googleId = String(googleProfile.sub || googleProfile.id || '').trim();
+    const name = String(googleProfile.name || cleanEmail.split('@')[0]).trim();
+    const avatarUrl = String(googleProfile.picture || '').trim();
+
+    // Check if user exists by email or google_id
+    let foundUser = null;
+    try {
+        foundUser = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: cleanEmail },
+                    ...(googleId ? [{ google_id: googleId }] : [])
+                ]
+            }
+        });
+    } catch (dbErr) {
+        console.warn('Prisma query note for Google user:', dbErr.message);
+    }
+
+    if (!foundUser) {
+        const localUsers = getLocalUsers();
+        foundUser = localUsers.find(u => 
+            (u.email && u.email.toLowerCase() === cleanEmail) || 
+            (googleId && u.google_id === googleId)
+        );
+    }
+
+    if (foundUser) {
+        // User already exists: update Google ID, provider, avatar if needed
+        const updatedFields = {
+            provider: 'google',
+            ...(googleId && !foundUser.google_id ? { google_id: googleId } : {}),
+            ...(avatarUrl && !foundUser.avatar_url ? { avatar_url: avatarUrl } : {})
+        };
+
+        try {
+            await prisma.user.update({
+                where: { id: foundUser.id },
+                data: updatedFields
+            });
+        } catch (dbErr) {
+            console.warn('Prisma update note for Google user:', dbErr.message);
+        }
+
+        // Update local users store
+        const currentUsers = getLocalUsers();
+        const idx = currentUsers.findIndex(u => u.id === foundUser.id || (u.email && u.email.toLowerCase() === cleanEmail));
+        if (idx !== -1) {
+            currentUsers[idx] = { ...currentUsers[idx], ...updatedFields };
+            saveLocalUsers(currentUsers);
+            foundUser = currentUsers[idx];
+        } else {
+            foundUser = { ...foundUser, ...updatedFields };
+        }
+
+        return {
+            id: foundUser.id,
+            email: foundUser.email,
+            name: foundUser.name,
+            group: foundUser.group || 'นักศึกษา',
+            role: foundUser.role || 'user',
+            phone: foundUser.phone || '',
+            avatar_url: foundUser.avatar_url || avatarUrl || '',
+            provider: 'google'
+        };
+    }
+
+    // Determine role & group for new user
+    const role = (
+        cleanEmail.includes('admin') ||
+        cleanEmail === 'ksu.smart.maintain@gmail.com'
+    ) ? 'admin' : 'user';
+    const group = role === 'admin' ? 'ผู้ดูแลระบบ' : 'นักศึกษา';
+    const userId = 'usr-g-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
+
+    const newUserObj = {
+        id: userId,
+        email: cleanEmail,
+        password: null,
+        name: name,
+        group: group,
+        role: role,
+        phone: '',
+        avatar_url: avatarUrl,
+        provider: 'google',
+        google_id: googleId,
+        created_at: new Date().toISOString()
+    };
+
+    // Save to PostgreSQL via Prisma
+    try {
+        await prisma.user.create({
+            data: {
+                id: userId,
+                email: cleanEmail,
+                password: null,
+                name: name,
+                group: group,
+                role: role,
+                avatar_url: avatarUrl,
+                provider: 'google',
+                google_id: googleId || null
+            }
+        });
+        console.log(`✨ New user registered via Google: ${cleanEmail} (${name})`);
+    } catch (dbErr) {
+        console.warn('Prisma create note for Google user:', dbErr.message);
+    }
+
+    // Save to local users.json
+    const currentUsers = getLocalUsers();
+    currentUsers.push(newUserObj);
+    saveLocalUsers(currentUsers);
+
+    return {
+        id: userId,
+        email: cleanEmail,
+        name: name,
+        group: group,
+        role: role,
+        phone: '',
+        avatar_url: avatarUrl,
+        provider: 'google'
+    };
+}
+
+// 1. Get Google OAuth Configuration Status
+app.get('/api/auth/google/config', (req, res) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID || '';
+    const hasSecret = !!(process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_CLIENT_SECRET.trim());
+    res.json({
+        clientId: clientId.trim(),
+        isConfigured: !!(clientId.trim() && hasSecret)
+    });
+});
+
+// 2. Initiate Google OAuth Flow (Redirect to Google)
+app.get('/api/auth/google', (req, res) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.trim() : '';
+    const callbackUrl = process.env.GOOGLE_CALLBACK_URL || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+
+    if (!clientId) {
+        return res.status(400).send(`
+            <!DOCTYPE html>
+            <html lang="th">
+            <head>
+                <meta charset="UTF-8">
+                <title>Google OAuth Config Needed</title>
+                <style>
+                    body { font-family: -apple-system, Sarabun, sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem; display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+                    .card { background: #1e293b; border: 1px solid #334155; padding: 2rem; border-radius: 12px; max-width: 550px; text-align: center; }
+                    h2 { color: #f59e0b; margin-top: 0; }
+                    code { background: #0f172a; color: #38bdf8; padding: 3px 8px; border-radius: 4px; font-size: 0.9em; }
+                    a { color: #38bdf8; text-decoration: none; }
+                    .btn { display: inline-block; background: #2563eb; color: white; padding: 10px 20px; border-radius: 6px; margin-top: 1.5rem; text-decoration: none; }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <h2>⚠️ ยังไม่ได้ระบุ GOOGLE_CLIENT_ID</h2>
+                    <p>กรุณาระบุ <code>GOOGLE_CLIENT_ID</code> และ <code>GOOGLE_CLIENT_SECRET</code> ในไฟล์ <code>backend/.env</code> ของคุณก่อนใช้งานระบบ Google Single Sign-On</p>
+                    <a href="/login" class="btn">กลับหน้าเข้าสู่ระบบ</a>
+                </div>
+            </body>
+            </html>
+        `);
+    }
+
+    const scope = encodeURIComponent('openid email profile');
+    const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(clientId)}&redirect_uri=${encodeURIComponent(callbackUrl)}&response_type=code&scope=${scope}&access_type=offline&prompt=select_account`;
+    res.redirect(googleAuthUrl);
+});
+
+// 3. Handle Google OAuth Callback
+app.get('/api/auth/google/callback', async (req, res) => {
+    const { code, error } = req.query;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    if (error) {
+        return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('การยืนยันตัวตนกับ Google ถูกยกเลิก: ' + error)}`);
+    }
+
+    if (!code) {
+        return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('ไม่ได้รับ Authorization Code จาก Google')}`);
+    }
+
+    const clientId = process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.trim() : '';
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET ? process.env.GOOGLE_CLIENT_SECRET.trim() : '';
+    const callbackUrl = process.env.GOOGLE_CALLBACK_URL || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+
+    try {
+        // Exchange code for token
+        const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code: String(code),
+                client_id: clientId,
+                client_secret: clientSecret,
+                redirect_uri: callbackUrl,
+                grant_type: 'authorization_code'
+            })
+        });
+
+        const tokenData = await tokenRes.json();
+        if (!tokenRes.ok || !tokenData.access_token) {
+            console.error('Google token exchange error:', tokenData);
+            return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent(tokenData.error_description || 'แลกเปลี่ยน Token กับ Google ล้มเหลว กรุณาตรวจสอบ Client Secret')}`);
+        }
+
+        // Fetch user profile from Google
+        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` }
+        });
+
+        if (!userInfoRes.ok) {
+            return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('ไม่สามารถดึงข้อมูลโปรไฟล์จาก Google ได้')}`);
+        }
+
+        const googleProfile = await userInfoRes.json();
+        if (!googleProfile.email) {
+            return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('บัญชี Google นี้ไม่มีอีเมลที่ยืนยันแล้ว')}`);
+        }
+
+        // Upsert user into database
+        const appUser = await upsertGoogleUser(googleProfile);
+
+        // Sign application JWT
+        const token = jwt.sign(
+            {
+                id: appUser.id,
+                email: appUser.email,
+                name: appUser.name,
+                role: appUser.role,
+                group: appUser.group,
+                phone: appUser.phone || '',
+                avatar_url: appUser.avatar_url || ''
+            },
+            JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        console.log(`🎉 Google SSO Success: ${appUser.email} (${appUser.name}) [Role: ${appUser.role}]`);
+
+        // Redirect to frontend with auth payload
+        res.redirect(`${frontendUrl}/login?google_token=${encodeURIComponent(token)}&user=${encodeURIComponent(JSON.stringify(appUser))}`);
+    } catch (err) {
+        console.error('Google callback error:', err);
+        res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('เกิดข้อผิดพลาดในการเชื่อมต่อกับ Google OAuth')}`);
+    }
+});
+
+// 4. Client-side Google Credential / ID Token Verification API (For Google One-Tap or GIS Button)
+app.post('/api/auth/google', async (req, res) => {
+    try {
+        const { credential, mockUser } = req.body;
+
+        if (credential) {
+            // Verify ID Token with Google tokeninfo endpoint
+            const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+            if (!verifyRes.ok) {
+                return res.status(401).json({ error: 'Google Credential Token ไม่ถูกต้องหรือหมดอายุ' });
+            }
+
+            const googleData = await verifyRes.json();
+            if (!googleData.email) {
+                return res.status(400).json({ error: 'ไม่พบข้อมูลอีเมลจาก Google Credential' });
+            }
+
+            const appUser = await upsertGoogleUser(googleData);
+            const token = jwt.sign(
+                {
+                    id: appUser.id,
+                    email: appUser.email,
+                    name: appUser.name,
+                    role: appUser.role,
+                    group: appUser.group,
+                    phone: appUser.phone || '',
+                    avatar_url: appUser.avatar_url || ''
+                },
+                JWT_SECRET,
+                { expiresIn: '7d' }
+            );
+
+            console.log(`🎉 Google Credential Verified: ${appUser.email} (${appUser.name})`);
+            return res.json({
+                success: true,
+                message: 'เข้าสู่ระบบด้วย Google สำเร็จ',
+                token,
+                user: appUser
+            });
+        }
+
+        // Demo simulation fallback if Client ID is not yet configured on Google Cloud
+        if (mockUser && (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID.trim() === '')) {
+            const demoProfile = {
+                sub: 'demo-google-' + Date.now().toString(36),
+                email: mockUser.email || 'ksu.student@ksu.ac.th',
+                name: mockUser.name || 'ผู้ใช้งาน Google (โหมดจำลอง)',
+                picture: mockUser.picture || 'https://lh3.googleusercontent.com/a/default-user'
+            };
+            const appUser = await upsertGoogleUser(demoProfile);
+            const token = jwt.sign(
+                {
+                    id: appUser.id,
+                    email: appUser.email,
+                    name: appUser.name,
+                    role: appUser.role,
+                    group: appUser.group,
+                    phone: appUser.phone || '',
+                    avatar_url: appUser.avatar_url || ''
+                },
+                JWT_SECRET,
+                { expiresIn: '7d' }
+            );
+
+            return res.json({
+                success: true,
+                message: 'เข้าสู่ระบบด้วย Google (โหมดทดสอบ) สำเร็จ',
+                token,
+                user: appUser,
+                isDemo: true
+            });
+        }
+
+        return res.status(400).json({ error: 'กรุณาระบุ Google Credential Token' });
+    } catch (err) {
+        console.error('Google token verify error:', err);
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการตรวจสอบบัญชี Google' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────
 // User Profile & Settings API (Profile edit, password change, avatar)
 // ─────────────────────────────────────────────────────────────
 app.get('/api/user/profile', requireAuth, async (req, res) => {
