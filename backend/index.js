@@ -40,36 +40,56 @@ function getLocalDb() {
             } catch (e) {}
         }
         if (db) {
+            const deletedSet = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
+
             // Guarantee bundled sample tickets, timelines, expenses and evidences are merged if missing
             if (fs.existsSync(bundledDbPath)) {
                 try {
                     const bundled = JSON.parse(fs.readFileSync(bundledDbPath, 'utf8'));
                     if (!db.tickets || db.tickets.length === 0) {
-                        db.tickets = bundled.tickets || [];
+                        db.tickets = (bundled.tickets || []).filter(t => {
+                            const id = String(t.id || '').trim().toLowerCase();
+                            const no = String(t.ticket_no || '').trim().toLowerCase();
+                            return !deletedSet.has(id) && !deletedSet.has(no);
+                        });
                     }
                     const existingExpIds = new Set((db.expenses || []).map(e => e.id));
                     (bundled.expenses || []).forEach(e => {
-                        if (!existingExpIds.has(e.id)) {
+                        const tId = String(e.ticket_id || '').trim().toLowerCase();
+                        const tNo = String(e.ticket_no || '').trim().toLowerCase();
+                        if (!existingExpIds.has(e.id) && !deletedSet.has(tId) && !deletedSet.has(tNo)) {
                             db.expenses = db.expenses || [];
                             db.expenses.push(e);
                         }
                     });
                     const existingTmlIds = new Set((db.timelines || []).map(t => t.id));
                     (bundled.timelines || []).forEach(t => {
-                        if (!existingTmlIds.has(t.id)) {
+                        const tId = String(t.ticket_id || '').trim().toLowerCase();
+                        const tNo = String(t.ticket_no || '').trim().toLowerCase();
+                        if (!existingTmlIds.has(t.id) && !deletedSet.has(tId) && !deletedSet.has(tNo)) {
                             db.timelines = db.timelines || [];
                             db.timelines.push(t);
                         }
                     });
                     const existingEviIds = new Set((db.evidences || []).map(ev => ev.id));
                     (bundled.evidences || []).forEach(ev => {
-                        if (!existingEviIds.has(ev.id)) {
+                        const tId = String(ev.ticket_id || '').trim().toLowerCase();
+                        const tNo = String(ev.ticket_no || '').trim().toLowerCase();
+                        if (!existingEviIds.has(ev.id) && !deletedSet.has(tId) && !deletedSet.has(tNo)) {
                             db.evidences = db.evidences || [];
                             db.evidences.push(ev);
                         }
                     });
                 } catch (e) {}
             }
+
+            // Always ensure no deleted tickets remain in active db.tickets
+            db.tickets = (db.tickets || []).filter(t => {
+                const id = String(t.id || '').trim().toLowerCase();
+                const no = String(t.ticket_no || '').trim().toLowerCase();
+                return !deletedSet.has(id) && !deletedSet.has(no);
+            });
+
             return db;
         }
     } catch (e) {
@@ -912,12 +932,19 @@ app.post('/api/tickets/sync', async (req, res) => {
         const db = getLocalDb();
         db.tickets = db.tickets || [];
         const incoming = Array.isArray(tickets) ? tickets : (ticket ? [ticket] : []);
+        const deletedSet = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
         let syncedCount = 0;
 
         for (const item of incoming) {
             if (!item || (!item.id && !item.ticket_no)) continue;
             const targetId = String(item.id || '').trim().toLowerCase();
             const targetNo = String(item.ticket_no || '').trim().toLowerCase();
+
+            // DO NOT RESURRECT TICKETS THAT WERE DELETED!
+            if (deletedSet.has(targetId) || deletedSet.has(targetNo)) {
+                continue;
+            }
+
             const existingIdx = db.tickets.findIndex(t => {
                 const tId = String(t.id || '').trim().toLowerCase();
                 const tNo = String(t.ticket_no || '').trim().toLowerCase();
@@ -1036,8 +1063,37 @@ app.put('/api/tickets/:id', handleUpdateTicket);
 app.delete('/api/tickets/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.ticket.delete({ where: { id } });
-        res.json({ success: true, message: 'Ticket deleted successfully' });
+        const target = await prisma.ticket.findFirst({
+            where: { OR: [{ id }, { ticket_no: id }] }
+        });
+        const targetId = target ? target.id : id;
+        const targetNo = target ? target.ticket_no : id;
+
+        // Delete from Prisma
+        await prisma.ticket.delete({ where: { id: targetId } });
+
+        // Clean up from local JSON storage
+        const db = getLocalDb();
+        db.tickets = (db.tickets || []).filter(t => t.id !== targetId && t.ticket_no !== targetNo && t.ticket_no !== id && t.id !== id);
+        db.expenses = (db.expenses || []).filter(e => e.ticket_id !== targetId && e.ticket_no !== targetNo && e.ticket_id !== id && e.ticket_no !== id);
+        db.timelines = (db.timelines || []).filter(t => t.ticket_id !== targetId && t.ticket_no !== targetNo && t.ticket_id !== id && t.ticket_no !== id);
+        db.evidences = (db.evidences || []).filter(ev => ev.ticket_id !== targetId && ev.ticket_no !== targetNo && ev.ticket_id !== id && ev.ticket_no !== id);
+
+        // Record in deletedTicketIds to prevent re-merging from bundled templates
+        db.deletedTicketIds = db.deletedTicketIds || [];
+        if (!db.deletedTicketIds.includes(targetId)) db.deletedTicketIds.push(targetId);
+        if (!db.deletedTicketIds.includes(targetNo)) db.deletedTicketIds.push(targetNo);
+        if (!db.deletedTicketIds.includes(id)) db.deletedTicketIds.push(id);
+        saveLocalDb(db);
+
+        // Cascade delete Prisma related records if database is connected
+        if (realPrisma) {
+            try { await realPrisma.expense.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }] } }); } catch (e) {}
+            try { await realPrisma.ticketTimeline.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }] } }); } catch (e) {}
+            try { if (realPrisma.evidence) await realPrisma.evidence.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }] } }); } catch (e) {}
+        }
+
+        res.json({ success: true, message: 'Ticket deleted successfully', id: targetId, ticket_no: targetNo });
     } catch (error) {
         console.error('Error deleting ticket:', error);
         res.status(500).json({ error: 'Internal Server Error' });

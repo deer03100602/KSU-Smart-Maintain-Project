@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { timeAgo } from '@/components/TicketCard';
 import { parseDescriptionAndAttachments, isImageFile } from '@/lib/utils';
+import { removeStoredTicket } from '@/lib/ticketStore';
 // DEFAULT_ISSUE_TYPES is loaded dynamically
 
 const STATUSES = {
@@ -136,6 +137,21 @@ export default function AdminManagementPage() {
             router.push('/');
         }
     }, [role]);
+
+    useEffect(() => {
+        const handleDeleted = (e) => {
+            const deletedId = e.detail?.id;
+            if (deletedId) {
+                const target = String(deletedId).trim().toLowerCase();
+                setTickets(prev => prev.filter(t => 
+                    String(t.id || '').trim().toLowerCase() !== target && 
+                    String(t.ticket_no || '').trim().toLowerCase() !== target
+                ));
+            }
+        };
+        window.addEventListener('ksu_ticket_deleted', handleDeleted);
+        return () => window.removeEventListener('ksu_ticket_deleted', handleDeleted);
+    }, []);
 
     const fetchData = async () => {
         try {
@@ -406,13 +422,17 @@ export default function AdminManagementPage() {
             'คุณแน่ใจหรือไม่ว่าต้องการลบ Ticket นี้ออกถาวร?',
             async () => {
                 try {
+                    // Remove from localStorage and broadcast deletion immediately
+                    removeStoredTicket(id);
+                    setTickets(prev => prev.filter(t => t.id !== id && t.ticket_no !== id));
+                    setSelectedIds(prev => prev.filter(item => item !== id));
+                    if (viewingTicket?.id === id || viewingTicket?.ticket_no === id) {
+                        setViewingTicket(null);
+                    }
+
                     const res = await fetch(`/api/tickets/${id}`, { method: 'DELETE' });
                     if (res.ok) {
                         toast.success('ลบรายการสำเร็จ');
-                        setSelectedIds(prev => prev.filter(item => item !== id));
-                        if (viewingTicket?.id === id) {
-                            setViewingTicket(null);
-                        }
                         fetchData();
                     } else {
                         toast.error('ไม่สามารถลบได้');
@@ -504,12 +524,16 @@ export default function AdminManagementPage() {
             `คุณต้องการลบ Ticket ที่เลือกทั้งหมด ${selectedIds.length} รายการ ใช่หรือไม่? การลบนี้ไม่สามารถย้อนกลับได้!`,
             async () => {
                 try {
-                    const promises = selectedIds.map(id => 
+                    const idsToDelete = [...selectedIds];
+                    idsToDelete.forEach(id => removeStoredTicket(id));
+                    setTickets(prev => prev.filter(t => !idsToDelete.includes(t.id) && !idsToDelete.includes(t.ticket_no)));
+                    setSelectedIds([]);
+
+                    const promises = idsToDelete.map(id => 
                         fetch(`/api/tickets/${id}`, { method: 'DELETE' })
                     );
                     await Promise.all(promises);
-                    toast.success(`ลบสำเร็จ ${selectedIds.length} รายการ`);
-                    setSelectedIds([]);
+                    toast.success(`ลบสำเร็จ ${idsToDelete.length} รายการ`);
                     fetchData();
                 } catch (e) {
                     console.error(e);

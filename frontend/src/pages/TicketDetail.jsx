@@ -625,6 +625,10 @@ export default function TicketDetailPage(props) {
             'คุณต้องการลบ Ticket นี้ใช่หรือไม่? การลบจะไม่สามารถกู้คืนได้',
             async () => {
                 try {
+                    // Remove from localStorage and notify other views immediately
+                    removeStoredTicket(id);
+                    if (ticket?.ticket_no) removeStoredTicket(ticket.ticket_no);
+
                     const res = await fetch(`/api/tickets/${id}`, { method: 'DELETE' });
                     if (res.ok) {
                         toast.success('ลบ Ticket เรียบร้อย');

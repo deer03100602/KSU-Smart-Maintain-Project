@@ -7,6 +7,39 @@ const TICKETS_KEY = 'ksu_tickets_store_v1';
 const EXPENSES_KEY = 'ksu_expenses_store_v1';
 const TIMELINES_KEY = 'ksu_timelines_store_v1';
 const EVIDENCES_KEY = 'ksu_evidences_store_v1';
+const DELETED_KEY = 'ksu_deleted_tickets_v1';
+
+export function getDeletedTicketIds() {
+    if (typeof window === 'undefined') return [];
+    try {
+        const raw = localStorage.getItem(DELETED_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+export function markTicketAsDeleted(idOrNo) {
+    if (typeof window === 'undefined' || !idOrNo) return;
+    try {
+        const target = String(idOrNo).trim().toLowerCase();
+        const deleted = getDeletedTicketIds();
+        if (!deleted.includes(target)) {
+            deleted.push(target);
+            localStorage.setItem(DELETED_KEY, JSON.stringify(deleted));
+        }
+    } catch (e) {}
+}
+
+export function unmarkTicketAsDeleted(idOrNo) {
+    if (typeof window === 'undefined' || !idOrNo) return;
+    try {
+        const target = String(idOrNo).trim().toLowerCase();
+        const deleted = getDeletedTicketIds().filter(d => d !== target);
+        localStorage.setItem(DELETED_KEY, JSON.stringify(deleted));
+    } catch (e) {}
+}
 
 export function getStoredTickets() {
     if (typeof window === 'undefined') return [];
@@ -14,7 +47,13 @@ export function getStoredTickets() {
         const raw = localStorage.getItem(TICKETS_KEY);
         if (!raw) return [];
         const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+        if (!Array.isArray(parsed)) return [];
+        const deleted = new Set(getDeletedTicketIds());
+        return parsed.filter(t => {
+            const id = String(t.id || '').trim().toLowerCase();
+            const no = String(t.ticket_no || '').trim().toLowerCase();
+            return !deleted.has(id) && !deleted.has(no);
+        });
     } catch (e) {
         console.warn('Error reading stored tickets:', e);
         return [];
@@ -25,6 +64,10 @@ export function saveStoredTicket(ticket) {
     if (!ticket || (!ticket.id && !ticket.ticket_no)) return;
     if (typeof window === 'undefined') return;
     try {
+        // If re-adding or creating new ticket, unmark from deleted
+        if (ticket.id) unmarkTicketAsDeleted(ticket.id);
+        if (ticket.ticket_no) unmarkTicketAsDeleted(ticket.ticket_no);
+
         const list = getStoredTickets();
         const existingIdx = list.findIndex(t => 
             (ticket.id && t.id === ticket.id) || 
@@ -36,6 +79,8 @@ export function saveStoredTicket(ticket) {
             list.unshift(ticket);
         }
         localStorage.setItem(TICKETS_KEY, JSON.stringify(list));
+
+        window.dispatchEvent(new CustomEvent('ksu_ticket_updated', { detail: { ticket } }));
     } catch (e) {
         console.warn('Error saving stored ticket:', e);
     }
@@ -44,14 +89,49 @@ export function saveStoredTicket(ticket) {
 export function removeStoredTicket(idOrNo) {
     if (typeof window === 'undefined' || !idOrNo) return;
     try {
-        const list = getStoredTickets().filter(t => t.id !== idOrNo && t.ticket_no !== idOrNo);
-        localStorage.setItem(TICKETS_KEY, JSON.stringify(list));
-    } catch (e) {}
+        const target = String(idOrNo).trim().toLowerCase();
+        markTicketAsDeleted(target);
+
+        // Remove from stored tickets
+        const currentList = [];
+        try {
+            const raw = localStorage.getItem(TICKETS_KEY);
+            if (raw) currentList.push(...JSON.parse(raw));
+        } catch (e) {}
+
+        const filtered = currentList.filter(t => {
+            const id = String(t.id || '').trim().toLowerCase();
+            const no = String(t.ticket_no || '').trim().toLowerCase();
+            return id !== target && no !== target;
+        });
+        localStorage.setItem(TICKETS_KEY, JSON.stringify(filtered));
+
+        // Cleanup sub-stores
+        [EXPENSES_KEY, TIMELINES_KEY, EVIDENCES_KEY].forEach(key => {
+            try {
+                const raw = localStorage.getItem(key);
+                if (raw) {
+                    const map = JSON.parse(raw);
+                    delete map[idOrNo];
+                    delete map[target];
+                    localStorage.setItem(key, JSON.stringify(map));
+                }
+            } catch (e) {}
+        });
+
+        // Broadcast deletion event to all components and tabs
+        window.dispatchEvent(new CustomEvent('ksu_ticket_deleted', { detail: { id: idOrNo } }));
+    } catch (e) {
+        console.warn('Error removing stored ticket:', e);
+    }
 }
 
 export function getStoredTicket(idOrNo) {
     if (!idOrNo) return null;
     const target = String(idOrNo).trim().toLowerCase();
+    const deleted = new Set(getDeletedTicketIds());
+    if (deleted.has(target)) return null;
+
     const list = getStoredTickets();
     return list.find(t => 
         (t.id && String(t.id).trim().toLowerCase() === target) ||
@@ -60,29 +140,37 @@ export function getStoredTicket(idOrNo) {
 }
 
 export function mergeTicketsWithStorage(serverTickets = []) {
+    const deleted = new Set(getDeletedTicketIds());
+    const validServerTickets = (serverTickets || []).filter(t => {
+        if (!t) return false;
+        const id = String(t.id || '').trim().toLowerCase();
+        const no = String(t.ticket_no || '').trim().toLowerCase();
+        return !deleted.has(id) && !deleted.has(no);
+    });
+
+    // If server returned a definitive array (even empty or with items):
+    // The server is the authority! We only keep local tickets that are genuinely newly created
+    // in this browser session (within last 30 seconds) that might not have reached server yet.
     const localList = getStoredTickets();
     const map = new Map();
 
-    // Prioritize server tickets
-    (serverTickets || []).forEach(t => {
-        if (t && (t.id || t.ticket_no)) {
-            const key = t.id || t.ticket_no;
-            map.set(key, t);
-        }
+    validServerTickets.forEach(t => {
+        const key = t.id || t.ticket_no;
+        if (key) map.set(key, t);
     });
 
-    // Add local tickets that may not yet be on server (e.g. serverless cold start)
+    const now = Date.now();
     localList.forEach(t => {
-        if (t && (t.id || t.ticket_no)) {
-            const key = t.id || t.ticket_no;
-            if (!map.has(key)) {
-                map.set(key, t);
-            } else {
-                // Merge newer fields from local if server has older data
-                const s = map.get(key);
-                if (new Date(t.updated_at || 0) > new Date(s.updated_at || 0)) {
-                    map.set(key, { ...s, ...t });
-                }
+        const key = t.id || t.ticket_no;
+        if (!key) return;
+        const createdMs = new Date(t.created_at || 0).getTime();
+        const isVeryRecent = (now - createdMs) < 30000; // 30 seconds
+        if (!map.has(key) && isVeryRecent) {
+            map.set(key, t);
+        } else if (map.has(key)) {
+            const s = map.get(key);
+            if (new Date(t.updated_at || 0) > new Date(s.updated_at || 0)) {
+                map.set(key, { ...s, ...t });
             }
         }
     });
@@ -90,7 +178,6 @@ export function mergeTicketsWithStorage(serverTickets = []) {
     const merged = Array.from(map.values());
     merged.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
 
-    // Keep localStorage updated with merged collection
     try {
         if (typeof window !== 'undefined') {
             localStorage.setItem(TICKETS_KEY, JSON.stringify(merged));
@@ -102,11 +189,20 @@ export function mergeTicketsWithStorage(serverTickets = []) {
 
 export async function syncTicketsWithServer(ticketsToSync) {
     if (!Array.isArray(ticketsToSync) || ticketsToSync.length === 0) return;
+    const deleted = new Set(getDeletedTicketIds());
+    const valid = ticketsToSync.filter(t => {
+        if (!t) return false;
+        const id = String(t.id || '').trim().toLowerCase();
+        const no = String(t.ticket_no || '').trim().toLowerCase();
+        return !deleted.has(id) && !deleted.has(no);
+    });
+    if (valid.length === 0) return;
+
     try {
         await fetch('/api/tickets/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tickets: ticketsToSync })
+            body: JSON.stringify({ tickets: valid })
         });
     } catch (e) {
         console.warn('Background ticket sync skipped:', e.message);

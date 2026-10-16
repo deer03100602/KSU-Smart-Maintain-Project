@@ -46,6 +46,22 @@ export default function TicketListPage() {
         fetchIssueTypes();
     }, []);
 
+    // Listen to deletion events to keep list in real-time sync with Admin and other views
+    useEffect(() => {
+        const handleDeleted = (e) => {
+            const deletedId = e.detail?.id;
+            if (deletedId) {
+                const target = String(deletedId).trim().toLowerCase();
+                setTickets(prev => prev.filter(t => 
+                    String(t.id || '').trim().toLowerCase() !== target && 
+                    String(t.ticket_no || '').trim().toLowerCase() !== target
+                ));
+            }
+        };
+        window.addEventListener('ksu_ticket_deleted', handleDeleted);
+        return () => window.removeEventListener('ksu_ticket_deleted', handleDeleted);
+    }, []);
+
     // Filter states
     const [query, setQuery] = useState('');
     const [status, setStatus] = useState('');
