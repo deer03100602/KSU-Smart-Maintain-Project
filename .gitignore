@@ -12,6 +12,8 @@ yarn-error.log*
 .env.production.local
 backend/.env
 frontend/.env
+*client_secret*.json
+backend/data/google_client_secret.json
 
 # Build outputs & caches
 dist/
