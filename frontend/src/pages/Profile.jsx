@@ -55,7 +55,7 @@ export default function ProfilePage() {
         }
     }, [isGuest, navigate]);
 
-    // Populate user details
+    // Populate user details and fetch latest from server
     useEffect(() => {
         if (user) {
             setName(user.name || '');
@@ -64,7 +64,31 @@ export default function ProfilePage() {
             setGroup(user.group || 'นักศึกษา');
             setAvatarUrl(user.avatar_url || '');
         }
-    }, [user]);
+
+        async function loadLatestProfile() {
+            try {
+                const token = localStorage.getItem('helpdesk_token');
+                if (!token) return;
+                const res = await fetch('/api/user/profile', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.name) setName(data.name);
+                    if (data.email) setEmail(data.email);
+                    if (data.phone) setPhone(data.phone);
+                    if (data.group) setGroup(data.group);
+                    if (data.avatar_url) setAvatarUrl(data.avatar_url);
+                }
+            } catch (e) {
+                console.warn('Error loading latest profile:', e);
+            }
+        }
+
+        if (!isGuest) {
+            loadLatestProfile();
+        }
+    }, [user, isGuest]);
 
     // Handle avatar file selection
     const handleAvatarSelect = async (e) => {

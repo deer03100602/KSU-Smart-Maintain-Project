@@ -159,12 +159,19 @@ VALUES
 ON CONFLICT ("id") DO NOTHING;
 
 -- 2. ผู้ใช้งานเริ่มต้น (Default Users)
-INSERT INTO "User" ("id", "email", "password", "name", "group", "role")
+INSERT INTO "User" ("id", "email", "password", "name", "phone", "group", "role", "avatar_url")
 VALUES
-    ('usr-admin-deer', 'admin@ksu.ac.th', 'admin1234', 'Deer (ผู้ดูแลระบบ)', 'เจ้าหน้าที่ IT', 'admin'),
-    ('usr-staff-tech', 'tech@ksu.ac.th', 'tech1234', 'เจ้าหน้าที่ IT ช่างเทคนิค', 'ฝ่ายซ่อมบำรุง', 'technician'),
-    ('usr-user-wipada', 'wipada@ksu.ac.th', 'user1234', 'อาจารย์วิภาดา สังกัดคณะวิทยาศาสตร์', 'อาจารย์', 'user')
-ON CONFLICT ("id") DO NOTHING;
+    ('usr-admin-deer-main', 'thunyaratboonrod03@gmail.com', '$2b$10$52NR.7JTFXd5lWxLgK/Rfet/EB8zWV1pmGh88H5yODavy0E8ZZUPa', 'Deer', '0642297536', 'ผู้ดูแลระบบ', 'admin', '/uploads/images.webp'),
+    ('usr-admin-deer', 'admin@ksu.ac.th', 'admin1234', 'ผู้ดูแลระบบ ม.กาฬสินธุ์', '0642297536', 'ผู้ดูแลระบบ', 'admin', '/uploads/images.webp'),
+    ('usr-admin-ksu', 'ksu.smart.maintain@gmail.com', '$2b$10$52NR.7JTFXd5lWxLgK/Rfet/EB8zWV1pmGh88H5yODavy0E8ZZUPa', 'Deer (ผู้ดูแลระบบ)', '0642297536', 'ผู้ดูแลระบบ', 'admin', '/uploads/images.webp'),
+    ('usr-staff-tech', 'tech@ksu.ac.th', 'tech1234', 'เจ้าหน้าที่ IT ช่างเทคนิค', '0812345678', 'ฝ่ายซ่อมบำรุง', 'technician', NULL),
+    ('usr-user-wipada', 'wipada@ksu.ac.th', 'user1234', 'อาจารย์วิภาดา สังกัดคณะวิทยาศาสตร์', '0898765432', 'อาจารย์', 'user', NULL)
+ON CONFLICT ("email") DO UPDATE SET
+    "name" = EXCLUDED."name",
+    "phone" = EXCLUDED."phone",
+    "group" = EXCLUDED."group",
+    "role" = EXCLUDED."role",
+    "avatar_url" = EXCLUDED."avatar_url";
 
 -- 3. ตั๋วงานซ่อมเริ่มต้น (Sample Tickets)
 INSERT INTO "Ticket" (

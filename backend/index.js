@@ -584,33 +584,42 @@ async function initDatabase() {
             console.log(`✅ Database ready with ${issueTypeCount} issue types.`);
         }
 
-        // Seed initial users if table is empty
+        // Synchronize and upsert all users into PostgreSQL database (ensures phone, avatar, role are permanently saved)
         try {
-            const userCount = await prisma.user.count();
-            if (userCount === 0) {
-                console.log('🔄 Seeding initial users...');
-                const localUsers = getLocalUsers();
-                for (const u of localUsers) {
+            console.log('🔄 Synchronizing users into database...');
+            const localUsers = getLocalUsers();
+            for (const u of localUsers) {
+                const cleanEmail = String(u.email || '').trim().toLowerCase();
+                if (!cleanEmail) continue;
+                try {
                     await prisma.user.upsert({
-                        where: { email: u.email },
-                        update: {},
-                        create: {
-                            id: u.id,
-                            email: u.email,
-                            password: u.password,
+                        where: { email: cleanEmail },
+                        update: {
                             name: u.name,
+                            phone: u.phone || '',
+                            avatar_url: u.avatar_url || '',
+                            group: u.group || 'นักศึกษา',
+                            role: u.role || 'user'
+                        },
+                        create: {
+                            id: u.id || ('usr-' + Math.random().toString(36).substring(2, 8)),
+                            email: cleanEmail,
+                            password: u.password || '$2a$10$wE9l1lU6h8N6R0mYp69.o.sPZzI9XjZp6Z7p8y7d.q5s/4nS6l7.K',
+                            name: u.name,
+                            phone: u.phone || '',
+                            avatar_url: u.avatar_url || '',
                             group: u.group || 'นักศึกษา',
                             role: u.role || 'user',
                             created_at: new Date(u.created_at || Date.now())
                         }
                     });
+                } catch (upsertErr) {
+                    console.warn(`Prisma upsert note for ${cleanEmail}:`, upsertErr.message);
                 }
-                console.log('✅ Initial users successfully seeded into PostgreSQL!');
-            } else {
-                console.log(`✅ Database ready with ${userCount} users.`);
             }
+            console.log(`✅ Users successfully synchronized into database!`);
         } catch (uErr) {
-            console.warn('Prisma user check/seed note:', uErr.message);
+            console.warn('Prisma user sync note:', uErr.message);
         }
     } catch (err) {
         console.warn('ℹ️ PostgreSQL not immediately ready, running in resilient mode:', err.message);
