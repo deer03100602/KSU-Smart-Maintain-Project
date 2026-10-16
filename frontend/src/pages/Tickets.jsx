@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
 import { List, Plus, Search, X, FileText, Printer } from 'lucide-react';
 import { TicketGrid } from '@/components/TicketCard';
-import { mergeTicketsWithStorage, syncTicketsWithServer, getStoredTickets } from '@/lib/ticketStore';
+import { mergeTicketsWithStorage, syncTicketsWithServer, getStoredTickets, resequenceStoredTickets } from '@/lib/ticketStore';
 const THAI_MONTHS = [
     { value: 1, label: 'มกราคม' },
     { value: 2, label: 'กุมภาพันธ์' },
@@ -52,14 +52,26 @@ export default function TicketListPage() {
             const deletedId = e.detail?.id;
             if (deletedId) {
                 const target = String(deletedId).trim().toLowerCase();
-                setTickets(prev => prev.filter(t => 
-                    String(t.id || '').trim().toLowerCase() !== target && 
-                    String(t.ticket_no || '').trim().toLowerCase() !== target
-                ));
+                setTickets(prev => {
+                    const filtered = prev.filter(t => 
+                        String(t.id || '').trim().toLowerCase() !== target && 
+                        String(t.ticket_no || '').trim().toLowerCase() !== target
+                    );
+                    return resequenceStoredTickets(filtered);
+                });
+            }
+        };
+        const handleResequenced = (e) => {
+            if (e.detail?.tickets) {
+                setTickets(e.detail.tickets);
             }
         };
         window.addEventListener('ksu_ticket_deleted', handleDeleted);
-        return () => window.removeEventListener('ksu_ticket_deleted', handleDeleted);
+        window.addEventListener('ksu_tickets_resequenced', handleResequenced);
+        return () => {
+            window.removeEventListener('ksu_ticket_deleted', handleDeleted);
+            window.removeEventListener('ksu_tickets_resequenced', handleResequenced);
+        };
     }, []);
 
     // Filter states

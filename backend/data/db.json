@@ -1,5 +1,5 @@
 {
-  "counter": 2,
+  "counter": 1,
   "issueTypes": [
     {
       "id": "it-hw",
@@ -47,7 +47,7 @@
   "tickets": [
     {
       "id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "title": "เครื่องคอมพิวเตอร์ห้องสืบค้นเปิดไม่ติด จอภาพไม่แสดงผล",
       "description": "เครื่องคอมพิวเตอร์หมายเลข PC-12 ห้องสมุดกลางเปิดเครื่องแล้วมีเสียงเตือน Bios Beep Code จอภาพมืด สนับสนุนการเรียนรู้ของนักศึกษา",
       "issue_type": "it-hw",
@@ -75,7 +75,7 @@
     {
       "id": "exp-tkt002-01",
       "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "category": "ค่าอะไหล่",
       "description": "หน่วยความจำ RAM DDR4 8GB Kingston ValueRAM 2666MHz",
       "quantity": 1,
@@ -99,7 +99,7 @@
     {
       "id": "exp-tkt002-02",
       "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "category": "ค่าวัสดุและอุปกรณ์",
       "description": "ถ่านกระดุมไบออส CR2032 Lithium 3V",
       "quantity": 1,
@@ -125,7 +125,7 @@
     {
       "id": "tml-tkt002-01",
       "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "action": "CREATED",
       "title": "สร้างรายการแจ้งซ่อมใหม่ในระบบ",
       "description": "ผู้แจ้ง: อาจารย์วิภาดา สังกัดคณะวิทยาศาสตร์ | สถานที่: อาคารบรรณราชนครินทร์ ชั้น 1 ห้องสืบค้นข้อมูล | ความเร่งด่วน: Medium",
@@ -137,7 +137,7 @@
     {
       "id": "tml-tkt002-02",
       "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "action": "ASSIGNED",
       "title": "มอบหมายเจ้าหน้าที่รับผิดชอบงาน",
       "description": "มอบหมายงานให้ เจ้าหน้าที่ IT ช่างเทคนิค รับผิดชอบตรวจสอบเครื่อง PC-12 ห้องสมุดกลาง",
@@ -149,7 +149,7 @@
     {
       "id": "tml-tkt002-03",
       "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "action": "STAFF_ACCEPTED",
       "title": "เจ้าหน้าที่กดรับงานซ่อมบำรุง",
       "description": "เจ้าหน้าที่ IT ช่างเทคนิค ได้ทำการกดรับมอบหมายงานเข้าสู่กระบวนการตรวจสอบ",
@@ -161,7 +161,7 @@
     {
       "id": "tml-tkt002-04",
       "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "action": "STATUS_CHANGED",
       "title": "เริ่มดำเนินการตรวจสอบเครื่อง (In Progress)",
       "description": "ตรวจเช็คสัญญาณเตือน Beep Code ของ BIOS ทำความสะอาดแรม และเปลี่ยนถ่านกระดุมไบออส",
@@ -175,7 +175,7 @@
     {
       "id": "evi-tkt002-01",
       "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "stage": "BEFORE",
       "url": "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?w=800&auto=format&fit=crop&q=80",
       "name": "สภาพเครื่องคอมพิวเตอร์ PC-12 ก่อนตรวจเช็ค",
@@ -186,7 +186,7 @@
     {
       "id": "evi-tkt002-02",
       "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "stage": "DURING",
       "url": "https://images.unsplash.com/photo-1588508065123-287b28e013da?w=800&auto=format&fit=crop&q=80",
       "name": "ขั้นตอนการถอดตรวจสอบแผงวงจรและแรม",
@@ -197,7 +197,7 @@
     {
       "id": "evi-tkt002-03",
       "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-002",
+      "ticket_no": "TKT-01",
       "stage": "AFTER",
       "url": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80",
       "name": "ทดสอบการทำงานของเครื่องหลังเปลี่ยนอะไหล่",
@@ -208,7 +208,6 @@
   ],
   "auditLogs": [],
   "deletedTicketIds": [
-    "id-mv5j19jv-3b0qtw8",
-    "TKT-001"
+    "id-mv5j19jv-3b0qtw8"
   ]
 }

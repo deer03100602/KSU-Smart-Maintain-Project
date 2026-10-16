@@ -139,6 +139,57 @@ export function getStoredTicket(idOrNo) {
     ) || null;
 }
 
+export function resequenceStoredTickets(providedList = null) {
+    if (typeof window === 'undefined') return [];
+    try {
+        let list = providedList ? [...providedList] : getStoredTickets();
+        const deleted = new Set(getDeletedTicketIds());
+        list = list.filter(t => {
+            const id = String(t.id || '').trim().toLowerCase();
+            const no = String(t.ticket_no || '').trim().toLowerCase();
+            return !deleted.has(id) && !deleted.has(no);
+        });
+
+        // Sort chronologically ascending
+        list.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+
+        const updated = [];
+        list.forEach((t, idx) => {
+            const seq = idx + 1;
+            const newNo = `TKT-${String(seq).padStart(2, '0')}`;
+            const oldNo = t.ticket_no;
+
+            // Migrate child stores if ticket_no changed
+            if (oldNo && oldNo !== newNo) {
+                [EXPENSES_KEY, TIMELINES_KEY, EVIDENCES_KEY].forEach(key => {
+                    try {
+                        const raw = localStorage.getItem(key);
+                        if (raw) {
+                            const map = JSON.parse(raw);
+                            if (map[oldNo]) {
+                                map[newNo] = map[oldNo];
+                                delete map[oldNo];
+                                localStorage.setItem(key, JSON.stringify(map));
+                            }
+                        }
+                    } catch (e) {}
+                });
+            }
+
+            updated.push({ ...t, ticket_no: newNo });
+        });
+
+        // Save back sorted descending for display
+        const displayList = [...updated].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        localStorage.setItem(TICKETS_KEY, JSON.stringify(displayList));
+        window.dispatchEvent(new CustomEvent('ksu_tickets_resequenced', { detail: { tickets: displayList } }));
+        return displayList;
+    } catch (e) {
+        console.warn('Error resequencing stored tickets:', e);
+        return [];
+    }
+}
+
 export function mergeTicketsWithStorage(serverTickets = []) {
     const deleted = new Set(getDeletedTicketIds());
     const validServerTickets = (serverTickets || []).filter(t => {

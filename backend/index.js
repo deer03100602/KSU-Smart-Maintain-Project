@@ -788,6 +788,111 @@ app.get('/api/tickets', async (req, res) => {
     }
 });
 
+// Helper: Resequence all active tickets chronologically (e.g. TKT-01, TKT-02, ...)
+async function resequenceAllTickets() {
+    try {
+        const db = getLocalDb();
+        const deletedSet = new Set((db.deletedTicketIds || []).map(d => String(d).toLowerCase().trim()));
+
+        let allTickets = [];
+        try {
+            allTickets = await prisma.ticket.findMany({
+                orderBy: { created_at: 'asc' }
+            });
+        } catch (e) {
+            allTickets = (db.tickets || []).sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+        }
+
+        // Filter out deleted tickets
+        allTickets = allTickets.filter(t => {
+            const id = String(t.id || '').toLowerCase().trim();
+            const no = String(t.ticket_no || '').toLowerCase().trim();
+            return !deletedSet.has(id) && !deletedSet.has(no);
+        });
+
+        // Sort chronologically ascending
+        allTickets.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+
+        const updatedTickets = [];
+        for (let i = 0; i < allTickets.length; i++) {
+            const ticket = allTickets[i];
+            const oldNo = ticket.ticket_no;
+            const seq = i + 1;
+            const newNo = `TKT-${String(seq).padStart(2, '0')}`;
+
+            if (oldNo !== newNo) {
+                console.log(`🔄 Resequenced ticket ${ticket.id}: ${oldNo} -> ${newNo}`);
+                ticket.ticket_no = newNo;
+
+                // Update in Prisma
+                try {
+                    await prisma.ticket.update({
+                        where: { id: ticket.id },
+                        data: { ticket_no: newNo }
+                    });
+                } catch (dbErr) {
+                    console.warn(`Prisma ticket_no update note for ${ticket.id}:`, dbErr.message);
+                }
+
+                if (realPrisma) {
+                    try {
+                        await realPrisma.expense.updateMany({
+                            where: { OR: [{ ticket_id: ticket.id }, { ticket_no: oldNo }] },
+                            data: { ticket_no: newNo }
+                        });
+                        await realPrisma.ticketTimeline.updateMany({
+                            where: { OR: [{ ticket_id: ticket.id }, { ticket_no: oldNo }] },
+                            data: { ticket_no: newNo }
+                        });
+                        if (realPrisma.evidence) {
+                            await realPrisma.evidence.updateMany({
+                                where: { OR: [{ ticket_id: ticket.id }, { ticket_no: oldNo }] },
+                                data: { ticket_no: newNo }
+                            });
+                        }
+                    } catch (relErr) {
+                        console.warn(`Prisma relation update note:`, relErr.message);
+                    }
+                }
+
+                // Update in local db.json
+                if (db.tickets) {
+                    const localT = db.tickets.find(t => t.id === ticket.id);
+                    if (localT) localT.ticket_no = newNo;
+                }
+                if (db.expenses) {
+                    db.expenses.forEach(e => {
+                        if (e.ticket_id === ticket.id || e.ticket_no === oldNo) e.ticket_no = newNo;
+                    });
+                }
+                if (db.timelines) {
+                    db.timelines.forEach(tl => {
+                        if (tl.ticket_id === ticket.id || tl.ticket_no === oldNo) tl.ticket_no = newNo;
+                    });
+                }
+                if (db.evidences) {
+                    db.evidences.forEach(ev => {
+                        if (ev.ticket_id === ticket.id || ev.ticket_no === oldNo) ev.ticket_no = newNo;
+                    });
+                }
+
+                // Remove newNo from deleted list if present
+                if (db.deletedTicketIds) {
+                    db.deletedTicketIds = db.deletedTicketIds.filter(d => String(d).toLowerCase().trim() !== newNo.toLowerCase());
+                }
+            }
+            updatedTickets.push(ticket);
+        }
+
+        db.counter = updatedTickets.length;
+        saveLocalDb(db);
+        return updatedTickets;
+    } catch (err) {
+        console.error('Error in resequenceAllTickets:', err);
+        return [];
+    }
+}
+
 app.post('/api/tickets', async (req, res) => {
     try {
         const body = req.body;
@@ -795,24 +900,32 @@ app.post('/api/tickets', async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
-        // Generate Ticket Number (e.g. TKT-001, TKT-002, ...)
-        const existingTickets = await prisma.ticket.findMany({ select: { ticket_no: true } });
-        let maxNum = 0;
-        let paddingLength = 3;
-        existingTickets.forEach(t => {
+        // Generate Ticket Number: sequentially starting from 01 (e.g. TKT-01, TKT-02, ...)
+        let existingNums = new Set();
+        try {
+            const existingTickets = await prisma.ticket.findMany({ select: { ticket_no: true } });
+            existingTickets.forEach(t => {
+                if (t.ticket_no) {
+                    const match = t.ticket_no.match(/TKT-(\d+)/i);
+                    if (match) existingNums.add(parseInt(match[1], 10));
+                }
+            });
+        } catch (e) {}
+
+        const localDb = getLocalDb();
+        (localDb.tickets || []).forEach(t => {
             if (t.ticket_no) {
                 const match = t.ticket_no.match(/TKT-(\d+)/i);
-                if (match) {
-                    const num = parseInt(match[1], 10);
-                    if (num > maxNum) {
-                        maxNum = num;
-                        paddingLength = match[1].length;
-                    }
-                }
+                if (match) existingNums.add(parseInt(match[1], 10));
             }
         });
-        const nextNum = maxNum + 1;
-        const ticketNo = 'TKT-' + String(nextNum).padStart(Math.max(3, paddingLength), '0');
+
+        // Find the lowest available sequential number starting from 1
+        let nextNum = 1;
+        while (existingNums.has(nextNum)) {
+            nextNum++;
+        }
+        const ticketNo = 'TKT-' + String(nextNum).padStart(2, '0');
 
         const now = new Date();
         const id = 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 9);
@@ -1068,10 +1181,34 @@ app.delete('/api/tickets/:id', async (req, res) => {
             try { if (realPrisma.evidence) await realPrisma.evidence.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }] } }); } catch (e) {}
         }
 
-        res.json({ success: true, message: 'Ticket deleted successfully', id: targetId, ticket_no: targetNo });
+        // Auto-resequence remaining tickets so there are never any gaps (01, 02, 03...)
+        const resequenced = await resequenceAllTickets();
+
+        res.json({ 
+            success: true, 
+            message: 'ลบ Ticket และจัดเรียงเลขคิวใหม่เรียบร้อยแล้ว', 
+            id: targetId, 
+            ticket_no: targetNo,
+            resequenced 
+        });
     } catch (error) {
         console.error('Error deleting ticket:', error);
         res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Endpoint: Explicitly Resequence All Tickets (01, 02, 03...)
+app.post('/api/tickets/resequence', async (req, res) => {
+    try {
+        const resequenced = await resequenceAllTickets();
+        res.json({
+            success: true,
+            message: `จัดเรียงเลขคิวใหม่สำเร็จ (${resequenced.length} รายการ: 01, 02...)`,
+            tickets: resequenced
+        });
+    } catch (error) {
+        console.error('Error resequencing tickets:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 

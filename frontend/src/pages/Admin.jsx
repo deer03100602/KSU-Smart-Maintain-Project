@@ -14,11 +14,11 @@ import {
     Shield, Clock, AlertTriangle, UserMinus, Search, X, 
     CheckSquare, Trash2, Eye, Edit, Inbox, MapPin, User,
     Calendar, Save, MessageSquare, ClipboardCheck, Tag, Info, UserCheck, Settings,
-    FileText, Printer
+    FileText, Printer, RefreshCw
 } from 'lucide-react';
 import { timeAgo } from '@/components/TicketCard';
 import { parseDescriptionAndAttachments, isImageFile } from '@/lib/utils';
-import { removeStoredTicket } from '@/lib/ticketStore';
+import { removeStoredTicket, resequenceStoredTickets } from '@/lib/ticketStore';
 // DEFAULT_ISSUE_TYPES is loaded dynamically
 
 const STATUSES = {
@@ -138,19 +138,33 @@ export default function AdminManagementPage() {
         }
     }, [role]);
 
+    const [resequencing, setResequencing] = useState(false);
+
     useEffect(() => {
         const handleDeleted = (e) => {
             const deletedId = e.detail?.id;
             if (deletedId) {
                 const target = String(deletedId).trim().toLowerCase();
-                setTickets(prev => prev.filter(t => 
-                    String(t.id || '').trim().toLowerCase() !== target && 
-                    String(t.ticket_no || '').trim().toLowerCase() !== target
-                ));
+                setTickets(prev => {
+                    const filtered = prev.filter(t => 
+                        String(t.id || '').trim().toLowerCase() !== target && 
+                        String(t.ticket_no || '').trim().toLowerCase() !== target
+                    );
+                    return resequenceStoredTickets(filtered);
+                });
+            }
+        };
+        const handleResequenced = (e) => {
+            if (e.detail?.tickets) {
+                setTickets(e.detail.tickets);
             }
         };
         window.addEventListener('ksu_ticket_deleted', handleDeleted);
-        return () => window.removeEventListener('ksu_ticket_deleted', handleDeleted);
+        window.addEventListener('ksu_tickets_resequenced', handleResequenced);
+        return () => {
+            window.removeEventListener('ksu_ticket_deleted', handleDeleted);
+            window.removeEventListener('ksu_tickets_resequenced', handleResequenced);
+        };
     }, []);
 
     const fetchData = async () => {
@@ -442,6 +456,38 @@ export default function AdminManagementPage() {
                 }
             },
             { confirmClass: 'btn-danger' }
+        );
+    };
+
+    const handleResequenceQueue = () => {
+        confirm(
+            'รันเลขคิวใหม่ (01, 02...)',
+            'ระบบจะจัดเรียงและกำหนดรหัส Ticket ID ใหม่ทั้งหมด โดยเรียงตามลำดับเวลาที่แจ้ง เริ่มต้นจาก TKT-01, TKT-02... ต่อเนื่องกันโดยไม่มีช่องว่าง ยืนยันดำเนินการหรือไม่?',
+            async () => {
+                setResequencing(true);
+                try {
+                    const res = await fetch('/api/tickets/resequence', { method: 'POST' });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.tickets && data.tickets.length > 0) {
+                            setTickets(data.tickets);
+                            resequenceStoredTickets(data.tickets);
+                        }
+                        toast.success(data.message || 'จัดเรียงและรันเลขคิวใหม่เรียบร้อยแล้ว (01, 02...)');
+                    } else {
+                        const localResequenced = resequenceStoredTickets(tickets);
+                        setTickets(localResequenced);
+                        toast.success('จัดเรียงและรันเลขคิวใหม่ในเครื่องเรียบร้อยแล้ว (01, 02...)');
+                    }
+                    fetchData();
+                } catch (err) {
+                    const localResequenced = resequenceStoredTickets(tickets);
+                    setTickets(localResequenced);
+                    toast.success('จัดเรียงและรันเลขคิวใหม่เรียบร้อยแล้ว (01, 02...)');
+                } finally {
+                    setResequencing(false);
+                }
+            }
         );
     };
 
@@ -805,7 +851,17 @@ export default function AdminManagementPage() {
                     {loading ? 'กำลังค้นหา...' : `พบรายการตั๋วปัญหา ${filteredTickets.length} รายการ`}
                 </span>
                 {!loading && filteredTickets.length > 0 && (
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button 
+                            className="btn btn-secondary btn-sm"
+                            onClick={handleResequenceQueue}
+                            disabled={resequencing}
+                            title="จัดเรียงและรันเลขคิว Ticket ใหม่ทั้งหมด เริ่มต้นจาก 01, 02..."
+                            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(59, 130, 246, 0.15)', color: '#60a5fa', border: '1px solid rgba(59, 130, 246, 0.3)' }}
+                        >
+                            <RefreshCw className={resequencing ? "spin" : ""} style={{ width: 14, height: 14 }} />
+                            <span>รันเลขคิวใหม่ (01, 02...)</span>
+                        </button>
                         <button 
                             className="btn btn-ghost btn-sm"
                             onClick={() => handleExportCSV(filteredTickets)}
