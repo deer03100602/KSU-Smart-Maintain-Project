@@ -352,27 +352,58 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
         .signature-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
+            gap: 10px;
             margin-top: 24px;
             margin-bottom: 10px;
             page-break-inside: avoid;
         }
         .sign-box {
             text-align: center;
-            font-size: 12px;
-            line-height: 1.6;
+            font-size: 11.5px;
+            line-height: 1.5;
             background: #fafafa;
             border: 1px dashed #cbd5e1;
             border-radius: 6px;
             padding: 10px 4px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .sign-title {
+            font-weight: 600;
+            color: #475569;
+            font-size: 11.5px;
+            white-space: nowrap;
         }
         .sign-line {
-            margin-top: 36px;
+            margin-top: 34px;
             margin-bottom: 6px;
             border-bottom: 1px dotted #475569;
-            width: 80%;
+            width: 82%;
             margin-left: auto;
             margin-right: auto;
+        }
+        .sign-name {
+            font-size: 10.5px;
+            color: #1e293b;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 2px;
+            line-height: 1.4;
+        }
+        .sign-sub {
+            color: #64748b;
+            font-size: 10.5px;
+            white-space: nowrap;
+            line-height: 1.4;
+        }
+        .sign-date {
+            color: #64748b;
+            font-size: 10.5px;
+            margin-top: 2px;
+            white-space: nowrap;
+            line-height: 1.4;
         }
 
         /* Print Settings */
@@ -638,35 +669,35 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
         <div class="section-title">5. การลงนามตรวจรับและอนุมัติ (ห้ามสร้างลายเซ็นแทนบุคคลจริง)</div>
         <div class="signature-grid">
             <div class="sign-box">
-                <div style="font-weight: 600; color: #475569;">ผู้ปฏิบัติงาน / ผู้จัดทำ</div>
+                <div class="sign-title">ผู้ปฏิบัติงาน / ผู้จัดทำ</div>
                 <div class="sign-line"></div>
-                <div>( ${ticket.assigned_to || '..........................................................'} )</div>
-                <div style="color: #64748b; font-size: 11px;">เจ้าหน้าที่ผู้รับผิดชอบ</div>
-                <div style="color: #64748b; font-size: 11px; margin-top: 2px;">วันที่ ...... / ...... / ..........</div>
+                <div class="sign-name">( ${ticket.assigned_to || '..............................'} )</div>
+                <div class="sign-sub">เจ้าหน้าที่ผู้รับผิดชอบ</div>
+                <div class="sign-date">วันที่ ...... / ...... / ..........</div>
             </div>
 
             <div class="sign-box">
-                <div style="font-weight: 600; color: #475569;">ผู้แจ้งซ่อม / ตรวจรับ</div>
+                <div class="sign-title">ผู้แจ้งซ่อม / ตรวจรับ</div>
                 <div class="sign-line"></div>
-                <div>( ${ticket.requester_name ? ticket.requester_name.replace(/\(.*?\)/, '').trim() : '..........................................................'} )</div>
-                <div style="color: #64748b; font-size: 11px;">ผู้แจ้งซ่อม / ผู้ตรวจรับงาน</div>
-                <div style="color: #64748b; font-size: 11px; margin-top: 2px;">วันที่ ...... / ...... / ..........</div>
+                <div class="sign-name">( ${ticket.requester_name ? ticket.requester_name.replace(/\(.*?\)/, '').trim() : '..............................'} )</div>
+                <div class="sign-sub">ผู้แจ้งซ่อม / ผู้ตรวจรับงาน</div>
+                <div class="sign-date">วันที่ ...... / ...... / ..........</div>
             </div>
 
             <div class="sign-box">
-                <div style="font-weight: 600; color: #475569;">ผู้ตรวจสอบงบประมาณ</div>
+                <div class="sign-title">ผู้ตรวจสอบงบประมาณ</div>
                 <div class="sign-line"></div>
-                <div>( .......................................................... )</div>
-                <div style="color: #64748b; font-size: 11px;">หัวหน้างาน / ผู้ตรวจสอบ</div>
-                <div style="color: #64748b; font-size: 11px; margin-top: 2px;">วันที่ ...... / ...... / ..........</div>
+                <div class="sign-name">( .............................. )</div>
+                <div class="sign-sub">หัวหน้างาน / ผู้ตรวจสอบ</div>
+                <div class="sign-date">วันที่ ...... / ...... / ..........</div>
             </div>
 
             <div class="sign-box">
-                <div style="font-weight: 600; color: #475569;">ผู้อนุมัติเบิกจ่าย</div>
+                <div class="sign-title">ผู้อนุมัติเบิกจ่าย</div>
                 <div class="sign-line"></div>
-                <div>( .......................................................... )</div>
-                <div style="color: #64748b; font-size: 11px;">ผู้บริหาร / ผู้อนุมัติงบประมาณ</div>
-                <div style="color: #64748b; font-size: 11px; margin-top: 2px;">วันที่ ...... / ...... / ..........</div>
+                <div class="sign-name">( .............................. )</div>
+                <div class="sign-sub">ผู้บริหาร / ผู้อนุมัติงบประมาณ</div>
+                <div class="sign-date">วันที่ ...... / ...... / ..........</div>
             </div>
         </div>
     </div>
