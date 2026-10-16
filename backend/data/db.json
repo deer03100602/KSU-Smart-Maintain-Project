@@ -1,5 +1,5 @@
 {
-  "counter": 1,
+  "counter": 13,
   "issueTypes": [
     {
       "id": "it-hw",
@@ -44,170 +44,31 @@
       "icon": "circle-help"
     }
   ],
-  "tickets": [
-    {
-      "id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
-      "title": "เครื่องคอมพิวเตอร์ห้องสืบค้นเปิดไม่ติด จอภาพไม่แสดงผล",
-      "description": "เครื่องคอมพิวเตอร์หมายเลข PC-12 ห้องสมุดกลางเปิดเครื่องแล้วมีเสียงเตือน Bios Beep Code จอภาพมืด สนับสนุนการเรียนรู้ของนักศึกษา",
-      "issue_type": "it-hw",
-      "location": "อาคารบรรณราชนครินทร์ ชั้น 1 ห้องสืบค้นข้อมูล",
-      "priority": "Medium",
-      "status": "In Progress",
-      "requester_name": "อาจารย์วิภาดา สังกัดคณะวิทยาศาสตร์ (อาจารย์)",
-      "requester_email": "wipada@ksu.ac.th",
-      "assigned_to": "เจ้าหน้าที่ IT ช่างเทคนิค",
-      "co_workers": [],
-      "start_date": "2026-10-13T09:00:00.000Z",
-      "due_date": "2026-10-16T17:00:00.000Z",
-      "budget_status": "อนุมัติแล้ว",
-      "approved_budget": 735,
-      "disbursed_amount": 735,
-      "staff_accepted_at": "2026-10-13T09:15:00.000Z",
-      "staff_accepted_by": "เจ้าหน้าที่ IT ช่างเทคนิค",
-      "resolution_note": "ตรวจเช็คหน้าสัมผัสแรมและเปลี่ยนแบตเตอรี่ไบออส CR2032 เรียบร้อยแล้ว เครื่องเปิดติดปกติ",
-      "created_at": "2026-10-13T01:10:00.000Z",
-      "updated_at": "2026-10-13T09:30:00.000Z",
-      "closed_at": null
-    }
-  ],
-  "expenses": [
-    {
-      "id": "exp-tkt002-01",
-      "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
-      "category": "ค่าอะไหล่",
-      "description": "หน่วยความจำ RAM DDR4 8GB Kingston ValueRAM 2666MHz",
-      "quantity": 1,
-      "unit": "แผง",
-      "unit_price": 690,
-      "total_price": 690,
-      "discount": 0,
-      "tax_percent": 0,
-      "tax_amount": 0,
-      "net_amount": 690,
-      "receipt_no": "REC-IT-2026-081",
-      "vendor_name": "Advice IT Infinite สาขากาฬสินธุ์",
-      "receipt_date": "2026-10-13T10:00:00.000Z",
-      "receipt_url": null,
-      "status": "APPROVED",
-      "created_by": "usr-staff-tech",
-      "created_by_name": "เจ้าหน้าที่ IT ช่างเทคนิค",
-      "created_at": "2026-10-13T09:20:00.000Z",
-      "updated_at": "2026-10-13T09:25:00.000Z"
-    },
-    {
-      "id": "exp-tkt002-02",
-      "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
-      "category": "ค่าวัสดุและอุปกรณ์",
-      "description": "ถ่านกระดุมไบออส CR2032 Lithium 3V",
-      "quantity": 1,
-      "unit": "ก้อน",
-      "unit_price": 45,
-      "total_price": 45,
-      "discount": 0,
-      "tax_percent": 0,
-      "tax_amount": 0,
-      "net_amount": 45,
-      "receipt_no": "REC-IT-2026-082",
-      "vendor_name": "ร้านอิเล็กทรอนิกส์ กาฬสินธุ์",
-      "receipt_date": "2026-10-13T10:15:00.000Z",
-      "receipt_url": null,
-      "status": "APPROVED",
-      "created_by": "usr-staff-tech",
-      "created_by_name": "เจ้าหน้าที่ IT ช่างเทคนิค",
-      "created_at": "2026-10-13T09:22:00.000Z",
-      "updated_at": "2026-10-13T09:25:00.000Z"
-    }
-  ],
+  "tickets": [],
+  "expenses": [],
   "timelines": [
     {
-      "id": "tml-tkt002-01",
-      "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
+      "id": "tml-mvbehpym-isnrv",
+      "ticket_id": "id-mvbehpyh-ycndh1q",
+      "ticket_no": "TKT-014",
       "action": "CREATED",
       "title": "สร้างรายการแจ้งซ่อมใหม่ในระบบ",
-      "description": "ผู้แจ้ง: อาจารย์วิภาดา สังกัดคณะวิทยาศาสตร์ | สถานที่: อาคารบรรณราชนครินทร์ ชั้น 1 ห้องสืบค้นข้อมูล | ความเร่งด่วน: Medium",
-      "actor_name": "อาจารย์วิภาดา สังกัดคณะวิทยาศาสตร์ (อาจารย์)",
-      "actor_email": "wipada@ksu.ac.th",
+      "description": "ผู้แจ้ง: Tester | สถานที่: Test Room | ความเร่งด่วน: Low",
+      "actor_name": "Tester",
+      "actor_email": "test@example.com",
       "actor_role": "user",
-      "created_at": "2026-10-13T01:10:00.000Z"
-    },
-    {
-      "id": "tml-tkt002-02",
-      "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
-      "action": "ASSIGNED",
-      "title": "มอบหมายเจ้าหน้าที่รับผิดชอบงาน",
-      "description": "มอบหมายงานให้ เจ้าหน้าที่ IT ช่างเทคนิค รับผิดชอบตรวจสอบเครื่อง PC-12 ห้องสมุดกลาง",
-      "actor_name": "ผู้ดูแลระบบ",
-      "actor_email": "admin@ksu.ac.th",
-      "actor_role": "admin",
-      "created_at": "2026-10-13T01:12:00.000Z"
-    },
-    {
-      "id": "tml-tkt002-03",
-      "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
-      "action": "STAFF_ACCEPTED",
-      "title": "เจ้าหน้าที่กดรับงานซ่อมบำรุง",
-      "description": "เจ้าหน้าที่ IT ช่างเทคนิค ได้ทำการกดรับมอบหมายงานเข้าสู่กระบวนการตรวจสอบ",
-      "actor_name": "เจ้าหน้าที่ IT ช่างเทคนิค",
-      "actor_email": "tech@ksu.ac.th",
-      "actor_role": "technician",
-      "created_at": "2026-10-13T09:15:00.000Z"
-    },
-    {
-      "id": "tml-tkt002-04",
-      "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
-      "action": "STATUS_CHANGED",
-      "title": "เริ่มดำเนินการตรวจสอบเครื่อง (In Progress)",
-      "description": "ตรวจเช็คสัญญาณเตือน Beep Code ของ BIOS ทำความสะอาดแรม และเปลี่ยนถ่านกระดุมไบออส",
-      "actor_name": "เจ้าหน้าที่ IT ช่างเทคนิค",
-      "actor_email": "tech@ksu.ac.th",
-      "actor_role": "technician",
-      "created_at": "2026-10-13T09:20:00.000Z"
+      "data": null,
+      "created_at": "2026-10-16T20:08:51.886Z"
     }
   ],
-  "evidences": [
-    {
-      "id": "evi-tkt002-01",
-      "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
-      "stage": "BEFORE",
-      "url": "https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?w=800&auto=format&fit=crop&q=80",
-      "name": "สภาพเครื่องคอมพิวเตอร์ PC-12 ก่อนตรวจเช็ค",
-      "description": "เครื่อง PC-12 เปิดไม่ติด มีเสียง Beep Code เตือนจากเมนบอร์ด จอภาพไม่มีสัญญาณ",
-      "created_by_name": "เจ้าหน้าที่ IT ช่างเทคนิค",
-      "created_at": "2026-10-13T09:16:00.000Z"
-    },
-    {
-      "id": "evi-tkt002-02",
-      "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
-      "stage": "DURING",
-      "url": "https://images.unsplash.com/photo-1588508065123-287b28e013da?w=800&auto=format&fit=crop&q=80",
-      "name": "ขั้นตอนการถอดตรวจสอบแผงวงจรและแรม",
-      "description": "ทำความสะอาดสล็อตแรม ตรวจวัดแรงดันไฟแบตเตอรี่ไบออส และเตรียมเปลี่ยนอะไหล่",
-      "created_by_name": "เจ้าหน้าที่ IT ช่างเทคนิค",
-      "created_at": "2026-10-13T09:25:00.000Z"
-    },
-    {
-      "id": "evi-tkt002-03",
-      "ticket_id": "id-tkt-sample-002",
-      "ticket_no": "TKT-01",
-      "stage": "AFTER",
-      "url": "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&auto=format&fit=crop&q=80",
-      "name": "ทดสอบการทำงานของเครื่องหลังเปลี่ยนอะไหล่",
-      "description": "เครื่องเปิดติด บูตเข้าสู่ระบบ Windows ได้ราบรื่น จอภาพแสดงผลคมชัดพร้อมให้บริการ",
-      "created_by_name": "เจ้าหน้าที่ IT ช่างเทคนิค",
-      "created_at": "2026-10-13T09:30:00.000Z"
-    }
-  ],
+  "evidences": [],
   "auditLogs": [],
   "deletedTicketIds": [
-    "id-mv5j19jv-3b0qtw8"
-  ]
+    "id-mv5j19jv-3b0qtw8",
+    "id-tkt-sample-002",
+    "id-sample-0",
+    "id-mvbekaad-7fcjfrf",
+    "TKT-14"
+  ],
+  "initialized": true
 }

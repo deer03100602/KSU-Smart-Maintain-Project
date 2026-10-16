@@ -430,29 +430,30 @@ export default function AdminManagementPage() {
         }
     };
 
-    const handleDeleteTicket = (id) => {
+    const handleDeleteTicket = (id, ticketNo) => {
         confirm(
             'ยืนยันลบ Ticket',
             'คุณแน่ใจหรือไม่ว่าต้องการลบ Ticket นี้ออกถาวร?',
             async () => {
                 try {
                     // Remove from localStorage and broadcast deletion immediately
-                    removeStoredTicket(id);
-                    setTickets(prev => prev.filter(t => t.id !== id && t.ticket_no !== id));
-                    setSelectedIds(prev => prev.filter(item => item !== id));
-                    if (viewingTicket?.id === id || viewingTicket?.ticket_no === id) {
+                    if (id) removeStoredTicket(id);
+                    if (ticketNo) removeStoredTicket(ticketNo);
+                    setTickets(prev => prev.filter(t => t.id !== id && t.ticket_no !== id && (!ticketNo || (t.id !== ticketNo && t.ticket_no !== ticketNo))));
+                    setSelectedIds(prev => prev.filter(item => item !== id && item !== ticketNo));
+                    if (viewingTicket?.id === id || viewingTicket?.ticket_no === id || (ticketNo && (viewingTicket?.id === ticketNo || viewingTicket?.ticket_no === ticketNo))) {
                         setViewingTicket(null);
                     }
 
-                    const res = await fetch(`/api/tickets/${id}`, { method: 'DELETE' });
+                    const targetParam = encodeURIComponent(id || ticketNo);
+                    const res = await fetch(`/api/tickets/${targetParam}`, { method: 'DELETE' });
                     if (res.ok) {
                         toast.success('ลบรายการสำเร็จ');
-                        fetchData();
-                    } else {
-                        toast.error('ไม่สามารถลบได้');
                     }
+                    fetchData();
                 } catch (e) {
                     console.error(e);
+                    fetchData();
                 }
             },
             { confirmClass: 'btn-danger' }
@@ -1018,7 +1019,7 @@ export default function AdminManagementPage() {
                                                     <button 
                                                         className="btn btn-danger-ghost btn-icon-sm" 
                                                         title="ลบ" 
-                                                        onClick={() => handleDeleteTicket(ticket.id)}
+                                                        onClick={() => handleDeleteTicket(ticket.id, ticket.ticket_no)}
                                                     >
                                                         <Trash2 style={{ width: 16, height: 16 }} />
                                                     </button>

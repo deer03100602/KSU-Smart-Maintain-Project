@@ -36,54 +36,31 @@ function getLocalDb() {
         if (!db && fs.existsSync(bundledDbPath)) {
             try {
                 db = JSON.parse(fs.readFileSync(bundledDbPath, 'utf8'));
+                if (db) db.initialized = true;
                 fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2), 'utf8');
             } catch (e) {}
         }
         if (db) {
+            db.tickets = db.tickets || [];
+            db.deletedTicketIds = db.deletedTicketIds || [];
             const deletedSet = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
 
-            // Guarantee bundled sample tickets, timelines, expenses and evidences are merged if missing
-            if (fs.existsSync(bundledDbPath)) {
+            // Only seed on initial launch when db has never been marked initialized
+            if (!db.initialized && fs.existsSync(bundledDbPath)) {
                 try {
                     const bundled = JSON.parse(fs.readFileSync(bundledDbPath, 'utf8'));
-                    if (!db.tickets || db.tickets.length === 0) {
+                    if (db.tickets.length === 0) {
                         db.tickets = (bundled.tickets || []).filter(t => {
                             const id = String(t.id || '').trim().toLowerCase();
                             const no = String(t.ticket_no || '').trim().toLowerCase();
                             return !deletedSet.has(id) && !deletedSet.has(no);
                         });
                     }
-                    const existingExpIds = new Set((db.expenses || []).map(e => e.id));
-                    (bundled.expenses || []).forEach(e => {
-                        const tId = String(e.ticket_id || '').trim().toLowerCase();
-                        const tNo = String(e.ticket_no || '').trim().toLowerCase();
-                        if (!existingExpIds.has(e.id) && !deletedSet.has(tId) && !deletedSet.has(tNo)) {
-                            db.expenses = db.expenses || [];
-                            db.expenses.push(e);
-                        }
-                    });
-                    const existingTmlIds = new Set((db.timelines || []).map(t => t.id));
-                    (bundled.timelines || []).forEach(t => {
-                        const tId = String(t.ticket_id || '').trim().toLowerCase();
-                        const tNo = String(t.ticket_no || '').trim().toLowerCase();
-                        if (!existingTmlIds.has(t.id) && !deletedSet.has(tId) && !deletedSet.has(tNo)) {
-                            db.timelines = db.timelines || [];
-                            db.timelines.push(t);
-                        }
-                    });
-                    const existingEviIds = new Set((db.evidences || []).map(ev => ev.id));
-                    (bundled.evidences || []).forEach(ev => {
-                        const tId = String(ev.ticket_id || '').trim().toLowerCase();
-                        const tNo = String(ev.ticket_no || '').trim().toLowerCase();
-                        if (!existingEviIds.has(ev.id) && !deletedSet.has(tId) && !deletedSet.has(tNo)) {
-                            db.evidences = db.evidences || [];
-                            db.evidences.push(ev);
-                        }
-                    });
+                    db.initialized = true;
                 } catch (e) {}
             }
 
-            // Always ensure no deleted tickets remain in active db.tickets
+            // Always ensure deleted tickets are filtered out
             db.tickets = (db.tickets || []).filter(t => {
                 const id = String(t.id || '').trim().toLowerCase();
                 const no = String(t.ticket_no || '').trim().toLowerCase();
@@ -95,11 +72,14 @@ function getLocalDb() {
     } catch (e) {
         console.error('Error reading db.json:', e);
     }
-    return { issueTypes: [], tickets: [], counter: 0, expenses: [], timelines: [], evidences: [], auditLogs: [] };
+    return { issueTypes: [], tickets: [], counter: 0, expenses: [], timelines: [], evidences: [], auditLogs: [], deletedTicketIds: [], initialized: true };
 }
 
 function saveLocalDb(data) {
     try {
+        if (data && typeof data === 'object') {
+            data.initialized = true;
+        }
         fs.writeFileSync(dbFilePath, JSON.stringify(data, null, 2), 'utf8');
     } catch (e) {
         console.error('Error saving db.json:', e);
@@ -734,6 +714,17 @@ app.get('/api/tickets', async (req, res) => {
             orderBy: { created_at: 'desc' }
         });
 
+        // Always filter out any tickets that were marked/recorded as deleted
+        const db = getLocalDb();
+        if (db && Array.isArray(db.deletedTicketIds) && db.deletedTicketIds.length > 0) {
+            const deletedSet = new Set(db.deletedTicketIds.map(d => String(d).trim().toLowerCase()));
+            tickets = tickets.filter(t => {
+                const tId = String(t.id || '').trim().toLowerCase();
+                const tNo = String(t.ticket_no || '').trim().toLowerCase();
+                return !deletedSet.has(tId) && !deletedSet.has(tNo);
+            });
+        }
+
         // Date Filtering
         const now = new Date();
         if (period === 'day') {
@@ -1069,6 +1060,14 @@ app.post('/api/tickets/sync', async (req, res) => {
 app.get('/api/tickets/:id', async (req, res) => {
     try {
         const rawId = decodeURIComponent(req.params.id || '').trim();
+        const db = getLocalDb();
+        if (db && Array.isArray(db.deletedTicketIds)) {
+            const low = rawId.toLowerCase();
+            if (db.deletedTicketIds.some(d => String(d).trim().toLowerCase() === low)) {
+                return res.status(404).json({ error: 'Ticket not found' });
+            }
+        }
+
         const ticket = await prisma.ticket.findFirst({
             where: {
                 OR: [
@@ -1161,38 +1160,59 @@ app.put('/api/tickets/:id', handleUpdateTicket);
 app.delete('/api/tickets/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const target = await prisma.ticket.findFirst({
-            where: { OR: [{ id }, { ticket_no: id }] }
-        });
+        let target = null;
+        try {
+            target = await prisma.ticket.findFirst({
+                where: { OR: [{ id }, { ticket_no: id }] }
+            });
+        } catch (e) {}
+
         const targetId = target ? target.id : id;
         const targetNo = target ? target.ticket_no : id;
 
-        // Delete from Prisma
-        await prisma.ticket.delete({ where: { id: targetId } });
+        // 1. Cascade delete Prisma related records FIRST if database is connected
+        if (realPrisma) {
+            try { await realPrisma.expense.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }, { ticket_id: id }, { ticket_no: id }] } }); } catch (e) {}
+            try { await realPrisma.ticketTimeline.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }, { ticket_id: id }, { ticket_no: id }] } }); } catch (e) {}
+            try { if (realPrisma.evidence) await realPrisma.evidence.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }, { ticket_id: id }, { ticket_no: id }] } }); } catch (e) {}
+            try {
+                await realPrisma.ticket.deleteMany({
+                    where: { OR: [{ id: targetId }, { ticket_no: targetNo }, { id }, { ticket_no: id }] }
+                });
+            } catch (e) {}
+        } else {
+            try {
+                await prisma.ticket.delete({ where: { id: targetId } });
+            } catch (dbErr) {
+                try {
+                    await prisma.ticket.delete({ where: { id } });
+                } catch (e) {}
+            }
+        }
 
-        // Clean up from local JSON storage
+        // 2. Clean up from local JSON storage
         const db = getLocalDb();
         db.tickets = (db.tickets || []).filter(t => t.id !== targetId && t.ticket_no !== targetNo && t.ticket_no !== id && t.id !== id);
         db.expenses = (db.expenses || []).filter(e => e.ticket_id !== targetId && e.ticket_no !== targetNo && e.ticket_id !== id && e.ticket_no !== id);
         db.timelines = (db.timelines || []).filter(t => t.ticket_id !== targetId && t.ticket_no !== targetNo && t.ticket_id !== id && t.ticket_no !== id);
         db.evidences = (db.evidences || []).filter(ev => ev.ticket_id !== targetId && ev.ticket_no !== targetNo && ev.ticket_id !== id && ev.ticket_no !== id);
 
-        // Record in deletedTicketIds to prevent re-merging from bundled templates
+        // 3. Record in deletedTicketIds to prevent re-merging from bundled templates
         db.deletedTicketIds = db.deletedTicketIds || [];
-        if (!db.deletedTicketIds.includes(targetId)) db.deletedTicketIds.push(targetId);
-        if (!db.deletedTicketIds.includes(targetNo)) db.deletedTicketIds.push(targetNo);
-        if (!db.deletedTicketIds.includes(id)) db.deletedTicketIds.push(id);
+        [targetId, targetNo, id].forEach(val => {
+            if (val && !db.deletedTicketIds.includes(val)) {
+                db.deletedTicketIds.push(val);
+            }
+        });
         saveLocalDb(db);
 
-        // Cascade delete Prisma related records if database is connected
-        if (realPrisma) {
-            try { await realPrisma.expense.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }] } }); } catch (e) {}
-            try { await realPrisma.ticketTimeline.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }] } }); } catch (e) {}
-            try { if (realPrisma.evidence) await realPrisma.evidence.deleteMany({ where: { OR: [{ ticket_id: targetId }, { ticket_no: targetNo }] } }); } catch (e) {}
+        // 4. Auto-resequence remaining tickets so there are never any gaps (01, 02, 03...)
+        let resequenced = [];
+        try {
+            resequenced = await resequenceAllTickets();
+        } catch (e) {
+            console.error('Error resequencing after delete:', e);
         }
-
-        // Auto-resequence remaining tickets so there are never any gaps (01, 02, 03...)
-        const resequenced = await resequenceAllTickets();
 
         res.json({ 
             success: true, 
