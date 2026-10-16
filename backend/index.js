@@ -239,37 +239,6 @@ const prisma = {
             });
             if (found) return found;
 
-            // Resilient Serverless Fallback Recovery:
-            // If requested id matches pattern and missing, auto-create a recovery ticket
-            if (rawId && (String(rawId).startsWith('id-') || String(rawId).toUpperCase().startsWith('TKT-'))) {
-                const sId = String(rawId).trim();
-                const recNo = sId.toUpperCase().startsWith('TKT-') ? sId.toUpperCase() : ('TKT-' + sId.slice(-4).toUpperCase());
-                const recovered = {
-                    id: sId.startsWith('id-') ? sId : ('id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6)),
-                    ticket_no: recNo,
-                    title: 'แจ้งซ่อมเครื่องปรับอากาศและระบบไฟฟ้า ห้องปฏิบัติการคอมพิวเตอร์',
-                    description: 'เครื่องปรับอากาศมีน้ำหยดและคอมเพรสเซอร์ไม่ทำงาน ระบบไฟส่องสว่างกระพริบ ต้องการให้เจ้าหน้าที่เข้ามาตรวจสอบและซ่อมแซมเร่งด่วน',
-                    issue_type: 'it-room',
-                    location: 'อาคาร 3 ชั้น 2 ห้อง Lab 204',
-                    priority: 'Urgent',
-                    status: 'In Progress',
-                    requester_name: 'Deer (ผู้ดูแลระบบ)',
-                    requester_email: 'admin@ksu.ac.th',
-                    assigned_to: 'นายสมชาย ช่างซ่อม (ฝ่ายอาคารสถานที่)',
-                    co_workers: ['นายวิชัย ไฟฟ้า (ฝ่ายซ่อมบำรุง)'],
-                    start_date: '2026-10-12T08:30:00.000Z',
-                    due_date: '2026-10-15T16:30:00.000Z',
-                    resolution_note: 'เจ้าหน้าที่เข้าตรวจเช็กพบพัดลมคอยล์เย็นชำรุด อยู่ระหว่างเปลี่ยนอะไหล่',
-                    created_at: new Date(Date.now() - 3600000).toISOString(),
-                    updated_at: new Date().toISOString(),
-                    closed_at: null
-                };
-                db.tickets = db.tickets || [];
-                db.tickets.unshift(recovered);
-                saveLocalDb(db);
-                return recovered;
-            }
-
             return null;
         },
         create: async ({ data }) => {
@@ -300,9 +269,15 @@ const prisma = {
                 try { return await realPrisma.ticket.delete({ where }); } catch (e) {}
             }
             const db = getLocalDb();
-            db.tickets = (db.tickets || []).filter(t => t.id !== where.id);
+            const targetId = where.id || where.ticket_no;
+            db.tickets = (db.tickets || []).filter(t => 
+                t.id !== targetId && 
+                t.ticket_no !== targetId && 
+                t.id !== where.id && 
+                t.ticket_no !== where.ticket_no
+            );
             saveLocalDb(db);
-            return { id: where.id };
+            return { id: where.id || where.ticket_no };
         },
         count: async () => {
             if (realPrisma) {
