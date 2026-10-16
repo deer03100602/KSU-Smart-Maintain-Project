@@ -6,6 +6,44 @@ const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config({ path: path.join(process.cwd(), '.env') });
+require('dotenv').config({ path: path.join(process.cwd(), 'backend', '.env') });
+
+function resolveGoogleCredentials() {
+    let clientId = (process.env.GOOGLE_CLIENT_ID || '').trim();
+    let clientSecret = (process.env.GOOGLE_CLIENT_SECRET || '').trim();
+
+    if (!clientId || !clientSecret) {
+        const secretCandidates = [
+            path.join(__dirname, 'data', 'google_client_secret.json'),
+            path.join(__dirname, 'google_client_secret.json'),
+            path.join(process.cwd(), 'backend', 'data', 'google_client_secret.json'),
+            path.join(process.cwd(), 'data', 'google_client_secret.json'),
+            path.join(process.cwd(), 'google_client_secret.json')
+        ];
+        for (const sp of secretCandidates) {
+            if (fs.existsSync(sp)) {
+                try {
+                    const parsed = JSON.parse(fs.readFileSync(sp, 'utf8'));
+                    const w = parsed.web || parsed.installed || parsed;
+                    if (w.client_id && !clientId) {
+                        clientId = w.client_id.trim();
+                        process.env.GOOGLE_CLIENT_ID = clientId;
+                    }
+                    if (w.client_secret && !clientSecret) {
+                        clientSecret = w.client_secret.trim();
+                        process.env.GOOGLE_CLIENT_SECRET = clientSecret;
+                    }
+                    if (clientId && clientSecret) break;
+                } catch (e) {}
+            }
+        }
+    }
+    return { clientId, clientSecret };
+}
+
 const { notifyTicketEvent, sendTestNotification, getSettings } = require('./notifications');
 const { 
     notifyDiscordUrgent, 
@@ -2890,17 +2928,16 @@ async function upsertGoogleUser(googleProfile) {
 
 // 1. Get Google OAuth Configuration Status
 app.get('/api/auth/google/config', (req, res) => {
-    const clientId = process.env.GOOGLE_CLIENT_ID || '';
-    const hasSecret = !!(process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_CLIENT_SECRET.trim());
+    const { clientId, clientSecret } = resolveGoogleCredentials();
     res.json({
-        clientId: clientId.trim(),
-        isConfigured: !!(clientId.trim() && hasSecret)
+        clientId: clientId,
+        isConfigured: !!(clientId && clientSecret)
     });
 });
 
 // 2. Initiate Google OAuth Flow (Redirect to Google)
 app.get('/api/auth/google', (req, res) => {
-    const clientId = process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.trim() : '';
+    const { clientId } = resolveGoogleCredentials();
     const callbackUrl = process.env.GOOGLE_CALLBACK_URL || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
 
     if (!clientId) {
@@ -2948,8 +2985,7 @@ app.get('/api/auth/google/callback', async (req, res) => {
         return res.redirect(`${frontendUrl}/login?error=${encodeURIComponent('ไม่ได้รับ Authorization Code จาก Google')}`);
     }
 
-    const clientId = process.env.GOOGLE_CLIENT_ID ? process.env.GOOGLE_CLIENT_ID.trim() : '';
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET ? process.env.GOOGLE_CLIENT_SECRET.trim() : '';
+    const { clientId, clientSecret } = resolveGoogleCredentials();
     const callbackUrl = process.env.GOOGLE_CALLBACK_URL || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
 
     try {
@@ -3420,5 +3456,6 @@ if (require.main === module) {
     });
 }
 
+app.resolveGoogleCredentials = resolveGoogleCredentials;
 module.exports = app;
 
