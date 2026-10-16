@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "AI-Powered University Maintenance Ticket Management Web Application",
   "scripts": {
+    "server": "node backend/index.js",
+    "client": "npm --prefix frontend run dev",
+    "start": "node backend/index.js",
     "build": "cd frontend && npm install && npm run build"
   },
   "dependencies": {
