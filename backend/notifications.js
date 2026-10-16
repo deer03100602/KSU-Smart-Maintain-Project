@@ -18,7 +18,7 @@ function getSettings() {
         smtp_port: 465,
         smtp_secure: true,
         smtp_user: 'ksu.smart.maintain@gmail.com',
-        smtp_pass: 'gklj mjbd xbqy unte',
+        smtp_pass: 'styo izpu utyi yjvt',
         sender_name: 'KSU Smart Maintain (แจ้งซ่อม)',
         sender_email: 'ksu.smart.maintain@gmail.com',
         discord_webhook_url: '',
