@@ -5,20 +5,75 @@
 
 
 
-import React, { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
-import { LogIn, Mail, Lock, Loader, ArrowLeft } from 'lucide-react';
+import { LogIn, Mail, Lock, Loader, ArrowLeft, CheckCircle2, UserCheck, X } from 'lucide-react';
 import { Link } from "react-router-dom";
 
 export default function LoginPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
-    const { loginWithEmail, toast } = useApp();
+    const { loginWithEmail, user, isGuest, signOutUser, toast } = useApp();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [rememberMe, setRememberMe] = useState(true);
+    const [savedAccounts, setSavedAccounts] = useState([]);
     const [loading, setLoading] = useState(false);
+
+    // Load saved / remembered account on initial mount
+    useEffect(() => {
+        try {
+            const rawAccounts = localStorage.getItem('helpdesk_saved_accounts');
+            if (rawAccounts) {
+                const parsed = JSON.parse(rawAccounts);
+                if (Array.isArray(parsed)) {
+                    setSavedAccounts(parsed);
+                }
+            }
+
+            const queryEmail = searchParams.get('email');
+            if (queryEmail) {
+                setEmail(queryEmail);
+            } else {
+                const rememberedEmail = localStorage.getItem('helpdesk_remembered_email');
+                const rememberedPassword = localStorage.getItem('helpdesk_remembered_password');
+                const isRemembered = localStorage.getItem('helpdesk_remember_login') !== 'false';
+                
+                setRememberMe(isRemembered);
+                if (rememberedEmail && isRemembered) {
+                    setEmail(rememberedEmail);
+                    if (rememberedPassword) {
+                        setPassword(rememberedPassword);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error loading remembered account:', e);
+        }
+    }, [searchParams]);
+
+    const handleSelectAccount = (acc) => {
+        setEmail(acc.email || '');
+        if (acc.password) {
+            setPassword(acc.password);
+        }
+        toast.info(`เลือกบัญชี: ${acc.name || acc.email}`);
+    };
+
+    const handleRemoveSavedAccount = (e, accEmail) => {
+        e.stopPropagation();
+        const updated = savedAccounts.filter(a => a.email.toLowerCase() !== accEmail.toLowerCase());
+        setSavedAccounts(updated);
+        localStorage.setItem('helpdesk_saved_accounts', JSON.stringify(updated));
+        if (email.toLowerCase() === accEmail.toLowerCase()) {
+            localStorage.removeItem('helpdesk_remembered_email');
+            localStorage.removeItem('helpdesk_remembered_password');
+        }
+        toast.info('ลบบัญชีที่บันทึกไว้ออกจากเครื่องนี้แล้ว');
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -30,7 +85,21 @@ export default function LoginPage() {
 
         setLoading(true);
         try {
-            const loggedInUser = await loginWithEmail(email.trim(), password.trim());
+            const cleanEmail = email.trim();
+            const cleanPassword = password.trim();
+            const loggedInUser = await loginWithEmail(cleanEmail, cleanPassword);
+
+            // Handle Remember Me settings
+            if (rememberMe) {
+                localStorage.setItem('helpdesk_remember_login', 'true');
+                localStorage.setItem('helpdesk_remembered_email', cleanEmail);
+                localStorage.setItem('helpdesk_remembered_password', cleanPassword);
+            } else {
+                localStorage.setItem('helpdesk_remember_login', 'false');
+                localStorage.removeItem('helpdesk_remembered_email');
+                localStorage.removeItem('helpdesk_remembered_password');
+            }
+
             toast.success(`เข้าสู่ระบบสำเร็จ ยินดีต้อนรับคุณ ${loggedInUser?.name || 'ผู้ใช้งาน'}`);
             router.push('/');
         } catch (error) {
@@ -42,7 +111,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="page-login fade-in" style={{ maxWidth: 450, margin: '4rem auto', padding: '1rem' }}>
+        <div className="page-login fade-in" style={{ maxWidth: 460, margin: '3.5rem auto', padding: '1rem' }}>
             <div style={{ marginBottom: '1.5rem' }}>
                 <Link to="/" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <ArrowLeft style={{ width: 16, height: 16 }} />
@@ -51,11 +120,52 @@ export default function LoginPage() {
             </div>
 
             <div className="glass-card" style={{ padding: '2.5rem 2rem' }}>
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                {/* ── Status Banner if Already Logged In ── */}
+                {!isGuest && user?.email && (
+                    <div style={{
+                        padding: '1.25rem',
+                        borderRadius: '12px',
+                        background: 'rgba(59, 130, 246, 0.08)',
+                        border: '1px solid rgba(59, 130, 246, 0.25)',
+                        marginBottom: '1.75rem',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#38bdf8', fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.4rem' }}>
+                            <UserCheck style={{ width: 20, height: 20 }} />
+                            เข้าสู่ระบบอยู่แล้ว
+                        </div>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                            {user.name}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                            {user.email} • กลุ่ม: {user.group || user.role}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => router.push('/')} 
+                                className="btn btn-primary btn-sm"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                                <CheckCircle2 style={{ width: 16, height: 16 }} />
+                                เข้าสู่หน้าหลักทันที
+                            </button>
+                            <button 
+                                type="button" 
+                                onClick={signOutUser} 
+                                className="btn btn-ghost btn-sm"
+                            >
+                                สลับบัญชี / ออกจากระบบ
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
                     <div style={{ 
-                        width: 50, 
-                        height: 50, 
-                        borderRadius: '12px', 
+                        width: 52, 
+                        height: 52, 
+                        borderRadius: '14px', 
                         background: 'linear-gradient(135deg, var(--primary-color), var(--primary-hover))', 
                         display: 'flex', 
                         alignItems: 'center', 
@@ -64,13 +174,69 @@ export default function LoginPage() {
                         color: 'white',
                         boxShadow: '0 8px 20px rgba(59, 130, 246, 0.3)'
                     }}>
-                        <LogIn style={{ width: 24, height: 24 }} />
+                        <LogIn style={{ width: 26, height: 26 }} />
                     </div>
                     <h2 style={{ fontSize: '1.75rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>เข้าสู่ระบบ</h2>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
                         ลงชื่อเข้าใช้งานระบบแจ้งซ่อมบำรุง มหาวิทยาลัยกาฬสินธุ์
                     </p>
                 </div>
+
+                {/* ── Saved Accounts Quick Switcher ── */}
+                {savedAccounts.length > 0 && (
+                    <div style={{
+                        marginBottom: '1.5rem',
+                        padding: '0.85rem',
+                        borderRadius: '10px',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: '1px solid var(--border-color)'
+                    }}>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.6rem' }}>
+                            ⚡ บัญชีที่จำไว้ในเครื่องนี้ (คลิกเพื่อเข้าสู่ระบบ):
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                            {savedAccounts.map((acc, idx) => (
+                                <div
+                                    key={idx}
+                                    onClick={() => handleSelectAccount(acc)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '7px 10px',
+                                        borderRadius: '8px',
+                                        background: email.toLowerCase() === (acc.email || '').toLowerCase() ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                                        border: email.toLowerCase() === (acc.email || '').toLowerCase() ? '1px solid var(--primary-color)' : '1px solid transparent',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                                        <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--primary-color)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0 }}>
+                                            {(acc.name || acc.email || 'U').charAt(0).toUpperCase()}
+                                        </div>
+                                        <div style={{ textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                                {acc.name || acc.email}
+                                            </div>
+                                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                                {acc.email} • {acc.group || acc.role}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        title="ลบบัญชีนี้ออกจากเครื่อง"
+                                        onClick={(e) => handleRemoveSavedAccount(e, acc.email)}
+                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
+                                    >
+                                        <X style={{ width: 14, height: 14 }} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     <div className="form-group">
@@ -105,10 +271,23 @@ export default function LoginPage() {
                         />
                     </div>
 
+                    {/* ── Remember Me Checkbox ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.88rem' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', color: 'var(--text-secondary)' }}>
+                            <input 
+                                type="checkbox"
+                                checked={rememberMe}
+                                onChange={(e) => setRememberMe(e.target.checked)}
+                                style={{ width: 16, height: 16, accentColor: 'var(--primary-color)', cursor: 'pointer' }}
+                            />
+                            <span>จดจำการเข้าสู่ระบบในเครื่องนี้</span>
+                        </label>
+                    </div>
+
                     <button 
                         type="submit" 
                         className="btn btn-primary btn-lg" 
-                        style={{ marginTop: '0.5rem', width: '100%', justifyContent: 'center' }}
+                        style={{ marginTop: '0.25rem', width: '100%', justifyContent: 'center' }}
                         disabled={loading}
                     >
                         {loading ? (

@@ -124,7 +124,17 @@ function getLocalUsers() {
 
 function saveLocalUsers(users) {
     try {
-        fs.writeFileSync(usersFilePath, JSON.stringify(users, null, 2), 'utf8');
+        const map = new Map();
+        for (const u of users) {
+            if (u && u.email) {
+                map.set(String(u.email).toLowerCase().trim(), u);
+            }
+        }
+        const uniqueUsers = Array.from(map.values());
+        fs.writeFileSync(usersFilePath, JSON.stringify(uniqueUsers, null, 2), 'utf8');
+        if (bundledUsersPath && bundledUsersPath !== usersFilePath) {
+            try { fs.writeFileSync(bundledUsersPath, JSON.stringify(uniqueUsers, null, 2), 'utf8'); } catch (e) {}
+        }
     } catch (e) {
         console.error('Error writing users.json:', e);
     }
@@ -2583,14 +2593,25 @@ app.post('/api/auth/signup', async (req, res) => {
         // Check if user already exists in DB or local store
         let existingUser = null;
         try {
-            existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
+            if (realPrisma) {
+                existingUser = await realPrisma.user.findUnique({ where: { email: cleanEmail } });
+            }
         } catch (dbErr) {
+            console.warn('Prisma check user note:', dbErr.message);
+        }
+
+        if (!existingUser) {
             const localUsers = getLocalUsers();
-            existingUser = localUsers.find(u => u.email.toLowerCase() === cleanEmail);
+            existingUser = localUsers.find(u => (u.email || '').toLowerCase() === cleanEmail);
         }
 
         if (existingUser) {
-            return res.status(400).json({ error: 'อีเมลนี้ถูกลงทะเบียนไว้ในระบบแล้ว กรุณาเข้าสู่ระบบ' });
+            return res.status(400).json({ 
+                error: 'อีเมลนี้ถูกลงทะเบียนไว้ในระบบแล้ว กรุณาเข้าสู่ระบบ',
+                alreadyExists: true,
+                email: cleanEmail,
+                name: existingUser.name || ''
+            });
         }
 
         const salt = await bcrypt.genSalt(10);
@@ -2610,17 +2631,19 @@ app.post('/api/auth/signup', async (req, res) => {
 
         // Attempt save to PostgreSQL via Prisma
         try {
-            await prisma.user.create({
-                data: {
-                    id: userId,
-                    email: cleanEmail,
-                    password: hashedPassword,
-                    name: cleanName,
-                    group: cleanGroup,
-                    role: role
-                }
-            });
-            console.log(`👤 User created in DB: ${cleanEmail} (${cleanName})`);
+            if (realPrisma) {
+                await realPrisma.user.create({
+                    data: {
+                        id: userId,
+                        email: cleanEmail,
+                        password: hashedPassword,
+                        name: cleanName,
+                        group: cleanGroup,
+                        role: role
+                    }
+                });
+                console.log(`👤 User created in DB: ${cleanEmail} (${cleanName})`);
+            }
         } catch (dbErr) {
             console.warn('Prisma user creation note, falling back to local file store:', dbErr.message);
         }
@@ -2630,11 +2653,11 @@ app.post('/api/auth/signup', async (req, res) => {
         currentUsers.push(newUserObj);
         saveLocalUsers(currentUsers);
 
-        // Generate JWT token
+        // Generate JWT token (90-day persistent session)
         const token = jwt.sign(
             { id: userId, email: cleanEmail, name: cleanName, role: role, group: cleanGroup },
             JWT_SECRET,
-            { expiresIn: '7d' }
+            { expiresIn: '90d' }
         );
 
         res.status(201).json({
@@ -2706,7 +2729,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' });
         }
 
-        // Generate JWT token
+        // Generate JWT token (90-day persistent session)
         const token = jwt.sign(
             { 
                 id: foundUser.id, 
@@ -2718,7 +2741,7 @@ app.post('/api/auth/login', async (req, res) => {
                 avatar_url: foundUser.avatar_url || ''
             },
             JWT_SECRET,
-            { expiresIn: '7d' }
+            { expiresIn: '90d' }
         );
 
         console.log(`🔓 User logged in: ${foundUser.email} (${foundUser.name})`);

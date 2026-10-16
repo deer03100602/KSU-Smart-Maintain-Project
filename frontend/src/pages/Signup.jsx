@@ -6,24 +6,26 @@
 
 
 import React, { useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
-import { UserPlus, Mail, Lock, User, Loader, ArrowLeft } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, Loader, ArrowLeft, LogIn, CheckCircle2, UserCheck } from 'lucide-react';
 import { Link } from "react-router-dom";
 
 export default function SignupPage() {
     const navigate = useNavigate();
     const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
-    const { signUpWithEmail, toast } = useApp();
+    const { signUpWithEmail, user, isGuest, signOutUser, toast } = useApp();
 
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
     const [userGroup, setUserGroup] = useState('นักศึกษา');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [existingAccountEmail, setExistingAccountEmail] = useState(null);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setExistingAccountEmail(null);
         
         if (!fullName.trim() || !email.trim() || !password.trim()) {
             toast.error('กรุณากรอกข้อมูลให้ครบถ้วน');
@@ -42,14 +44,19 @@ export default function SignupPage() {
             router.push('/');
         } catch (error) {
             console.error('Signup error:', error);
-            toast.error(error.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
+            if (error.alreadyExists || (error.message && error.message.includes('ลงทะเบียน'))) {
+                setExistingAccountEmail(email.trim());
+                toast.info('อีเมลนี้เคยลงทะเบียนไว้แล้ว ท่านสามารถเข้าสู่ระบบได้ทันที');
+            } else {
+                toast.error(error.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
+            }
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="page-signup fade-in" style={{ maxWidth: 450, margin: '4rem auto', padding: '1rem' }}>
+        <div className="page-signup fade-in" style={{ maxWidth: 460, margin: '3.5rem auto', padding: '1rem' }}>
             <div style={{ marginBottom: '1.5rem' }}>
                 <Link to="/login" className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <ArrowLeft style={{ width: 16, height: 16 }} />
@@ -58,11 +65,79 @@ export default function SignupPage() {
             </div>
 
             <div className="glass-card" style={{ padding: '2.5rem 2rem' }}>
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+                {/* ── Status Banner if Already Logged In ── */}
+                {!isGuest && user?.email && (
+                    <div style={{
+                        padding: '1.25rem',
+                        borderRadius: '12px',
+                        background: 'rgba(59, 130, 246, 0.08)',
+                        border: '1px solid rgba(59, 130, 246, 0.25)',
+                        marginBottom: '1.75rem',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#38bdf8', fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.4rem' }}>
+                            <UserCheck style={{ width: 20, height: 20 }} />
+                            เข้าสู่ระบบอยู่แล้ว ไม่จำเป็นต้องสมัครใหม่
+                        </div>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                            {user.name}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                            {user.email} • กลุ่ม: {user.group || user.role}
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                            <button 
+                                type="button" 
+                                onClick={() => router.push('/')} 
+                                className="btn btn-primary btn-sm"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                                <CheckCircle2 style={{ width: 16, height: 16 }} />
+                                เข้าสู่หน้าหลักทันที
+                            </button>
+                            <button 
+                                type="button" 
+                                onClick={signOutUser} 
+                                className="btn btn-ghost btn-sm"
+                            >
+                                ออกจากระบบเพื่อสมัครบัญชีใหม่
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Notice If Email Already Exists in Database ── */}
+                {existingAccountEmail && (
+                    <div style={{
+                        padding: '1.1rem',
+                        borderRadius: '10px',
+                        background: 'rgba(59, 130, 246, 0.12)',
+                        border: '1px solid rgba(59, 130, 246, 0.35)',
+                        marginBottom: '1.5rem',
+                        textAlign: 'center'
+                    }}>
+                        <div style={{ color: '#38bdf8', fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.35rem' }}>
+                            ℹ️ อีเมล "{existingAccountEmail}" เคยสมัครไว้แล้ว!
+                        </div>
+                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0 0 0.85rem 0' }}>
+                            คุณมีบัญชีนี้อยู่ในระบบแล้ว ไม่ต้องสมัครใหม่ สามารถเข้าสู่ระบบได้เลย
+                        </p>
+                        <Link 
+                            to={`/login?email=${encodeURIComponent(existingAccountEmail)}`}
+                            className="btn btn-primary btn-sm"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '0 auto', textDecoration: 'none' }}
+                        >
+                            <LogIn style={{ width: 16, height: 16 }} />
+                            เข้าสู่ระบบด้วยอีเมลนี้ทันที
+                        </Link>
+                    </div>
+                )}
+
+                <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
                     <div style={{ 
-                        width: 50, 
-                        height: 50, 
-                        borderRadius: '12px', 
+                        width: 52, 
+                        height: 52, 
+                        borderRadius: '14px', 
                         background: 'linear-gradient(135deg, var(--primary-color), var(--primary-hover))', 
                         display: 'flex', 
                         alignItems: 'center', 
@@ -71,7 +146,7 @@ export default function SignupPage() {
                         color: 'white',
                         boxShadow: '0 8px 20px rgba(59, 130, 246, 0.3)'
                     }}>
-                        <UserPlus style={{ width: 24, height: 24 }} />
+                        <UserPlus style={{ width: 26, height: 26 }} />
                     </div>
                     <h2 style={{ fontSize: '1.75rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>สมัครสมาชิก</h2>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>

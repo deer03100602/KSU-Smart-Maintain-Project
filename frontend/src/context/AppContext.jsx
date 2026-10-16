@@ -128,6 +128,20 @@ export function AppProvider({ children }) {
         if (result.token) {
             localStorage.setItem('helpdesk_token', result.token);
         }
+
+        // Remember this account on device so users never have to re-register
+        try {
+            const existingSaved = JSON.parse(localStorage.getItem('helpdesk_saved_accounts') || '[]');
+            const updated = [
+                { email: loggedInUser.email, name: loggedInUser.name, group: loggedInUser.group, role: userRole, password: password },
+                ...existingSaved.filter(a => a.email.toLowerCase() !== loggedInUser.email.toLowerCase())
+            ].slice(0, 8);
+            localStorage.setItem('helpdesk_saved_accounts', JSON.stringify(updated));
+            localStorage.setItem('helpdesk_remember_login', 'true');
+            localStorage.setItem('helpdesk_remembered_email', loggedInUser.email);
+            localStorage.setItem('helpdesk_remembered_password', password);
+        } catch (e) {}
+
         return loggedInUser;
     };
 
@@ -141,7 +155,12 @@ export function AppProvider({ children }) {
         });
         const result = await response.json();
         if (!response.ok) {
-            throw new Error(result.error || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
+            const error = new Error(result.error || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
+            if (result.alreadyExists) {
+                error.alreadyExists = true;
+                error.email = result.email;
+            }
+            throw error;
         }
         const newUser = result.user;
         if (newUser) {
@@ -159,6 +178,19 @@ export function AppProvider({ children }) {
             if (result.token) {
                 localStorage.setItem('helpdesk_token', result.token);
             }
+
+            // Save registered account so it's remembered permanently on this machine
+            try {
+                const existingSaved = JSON.parse(localStorage.getItem('helpdesk_saved_accounts') || '[]');
+                const updated = [
+                    { email: newUser.email, name: newUser.name, group: newUser.group, role: userRole, password: password },
+                    ...existingSaved.filter(a => a.email.toLowerCase() !== newUser.email.toLowerCase())
+                ].slice(0, 8);
+                localStorage.setItem('helpdesk_saved_accounts', JSON.stringify(updated));
+                localStorage.setItem('helpdesk_remember_login', 'true');
+                localStorage.setItem('helpdesk_remembered_email', newUser.email);
+                localStorage.setItem('helpdesk_remembered_password', password);
+            } catch (e) {}
         }
         return newUser;
     };
