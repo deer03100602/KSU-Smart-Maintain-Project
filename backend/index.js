@@ -2537,7 +2537,11 @@ app.post('/api/auth/login', async (req, res) => {
 
         if (!foundUser) {
             const localUsers = getLocalUsers();
-            foundUser = localUsers.find(u => u.email.toLowerCase() === cleanEmail);
+            foundUser = localUsers.find(u => 
+                u.email.toLowerCase() === cleanEmail ||
+                (cleanEmail === 'nightggpp@gmail.com' && u.email.toLowerCase() === 'ksu.smart.maintain@gmail.com') ||
+                (cleanEmail === 'ksu.smart.maintain@gmail.com' && u.email.toLowerCase() === 'nightggpp@gmail.com')
+            );
         }
 
         if (!foundUser) {

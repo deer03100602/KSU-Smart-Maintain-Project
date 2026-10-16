@@ -12,12 +12,12 @@ const usersPath = path.join(__dirname, 'data', 'users.json');
 
 function getSettings() {
     let settings = {
-        notify_emails: 'ksu.smart.maintain@gmail.com, nightggpp@gmail.com',
+        notify_emails: 'ksu.smart.maintain@gmail.com',
         smtp_enabled: true,
         smtp_host: 'smtp.gmail.com',
         smtp_port: 465,
         smtp_secure: true,
-        smtp_user: 'nightggpp@gmail.com',
+        smtp_user: 'ksu.smart.maintain@gmail.com',
         smtp_pass: 'gklj mjbd xbqy unte',
         sender_name: 'KSU Smart Maintain (แจ้งซ่อม)',
         sender_email: 'ksu.smart.maintain@gmail.com',

@@ -17,7 +17,7 @@ export default function AdminSettingsPage() {
     const { role, toast } = useApp();
 
     // Notification Email Recipients
-    const [notifyEmails, setNotifyEmails] = useState('nightggpp@gmail.com');
+    const [notifyEmails, setNotifyEmails] = useState('ksu.smart.maintain@gmail.com');
 
     // SMTP / Gmail Settings
     const [smtpEnabled, setSmtpEnabled] = useState(true);
@@ -60,12 +60,12 @@ export default function AdminSettingsPage() {
                 const res = await fetch('/api/settings');
                 if (res.ok) {
                     const data = await res.json();
-                    setNotifyEmails(data.notify_emails || 'nightggpp@gmail.com');
+                    setNotifyEmails(data.notify_emails || 'ksu.smart.maintain@gmail.com');
                     setSmtpEnabled(data.smtp_enabled !== false);
                     setSmtpHost(data.smtp_host || 'smtp.gmail.com');
                     setSmtpPort(data.smtp_port || 465);
                     setSmtpSecure(data.smtp_secure !== false);
-                    setSmtpUser(data.smtp_user || '');
+                    setSmtpUser(data.smtp_user || 'ksu.smart.maintain@gmail.com');
                     setSmtpPass(data.smtp_pass || '');
                     setSenderName(data.sender_name || 'KSU Smart Maintain (แจ้งซ่อม)');
                     
@@ -75,7 +75,7 @@ export default function AdminSettingsPage() {
                     setPublicKey(data.emailjs_public_key || '');
                     setPrivateKey(data.emailjs_private_key || '');
                     setTechnicians(Array.isArray(data.technicians) ? data.technicians : []);
-                    setTestEmailTarget(data.notify_emails ? data.notify_emails.split(',')[0].trim() : 'nightggpp@gmail.com');
+                    setTestEmailTarget(data.notify_emails ? data.notify_emails.split(',')[0].trim() : 'ksu.smart.maintain@gmail.com');
                 }
             } catch (e) {
                 console.error(e);
@@ -180,7 +180,7 @@ export default function AdminSettingsPage() {
     };
 
     const handleTestNotification = async () => {
-        const target = testEmailTarget.trim() || notifyEmails.split(',')[0].trim() || 'nightggpp@gmail.com';
+        const target = testEmailTarget.trim() || notifyEmails.split(',')[0].trim() || 'ksu.smart.maintain@gmail.com';
         if (!target) {
             toast.error('กรุณาระบุอีเมลเป้าหมายที่จะส่งทดสอบ');
             return;
@@ -250,7 +250,7 @@ export default function AdminSettingsPage() {
                         <input 
                             type="text" 
                             className="form-input" 
-                            placeholder="เช่น nightggpp@gmail.com, admin@ksu.ac.th, staff@gmail.com" 
+                            placeholder="เช่น ksu.smart.maintain@gmail.com, admin@ksu.ac.th, staff@gmail.com" 
                             value={notifyEmails}
                             onChange={(e) => setNotifyEmails(e.target.value)}
                             style={{ fontSize: '0.95rem' }}

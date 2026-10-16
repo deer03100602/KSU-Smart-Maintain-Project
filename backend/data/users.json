@@ -11,10 +11,10 @@
   },
   {
     "id": "usr-admin-deer",
-    "email": "nightggpp@gmail.com",
+    "email": "ksu.smart.maintain@gmail.com",
     "password": "$2b$10$52NR.7JTFXd5lWxLgK/Rfet/EB8zWV1pmGh88H5yODavy0E8ZZUPa",
     "plainPasswordFallback": "254903",
-    "name": "deer (ผู้ดูแลระบบ)",
+    "name": "Deer (ผู้ดูแลระบบ)",
     "group": "ผู้ดูแลระบบ",
     "role": "admin",
     "created_at": "2026-10-02T07:22:45.337Z"
