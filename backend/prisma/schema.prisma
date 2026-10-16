@@ -107,3 +107,16 @@ model AuditLog {
   created_at  DateTime @default(now())
 }
 
+model Evidence {
+  id               String   @id
+  ticket_id        String
+  ticket_no        String
+  stage            String   // BEFORE, DURING, AFTER, RECEIPT, DOCUMENT
+  url              String
+  name             String
+  description      String?
+  created_by       String
+  created_by_email String?
+  created_at       DateTime @default(now())
+}
+

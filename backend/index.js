@@ -40,17 +40,34 @@ function getLocalDb() {
             } catch (e) {}
         }
         if (db) {
-            // Guarantee bundled sample tickets are present if db.tickets is empty
-            if ((!db.tickets || db.tickets.length === 0) && fs.existsSync(bundledDbPath)) {
+            // Guarantee bundled sample tickets, timelines, expenses and evidences are merged if missing
+            if (fs.existsSync(bundledDbPath)) {
                 try {
                     const bundled = JSON.parse(fs.readFileSync(bundledDbPath, 'utf8'));
-                    if (bundled.tickets && bundled.tickets.length > 0) {
-                        db.tickets = bundled.tickets;
-                        if (bundled.expenses) db.expenses = bundled.expenses;
-                        if (bundled.timelines) db.timelines = bundled.timelines;
-                        if (bundled.evidences) db.evidences = bundled.evidences;
-                        fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2), 'utf8');
+                    if (!db.tickets || db.tickets.length === 0) {
+                        db.tickets = bundled.tickets || [];
                     }
+                    const existingExpIds = new Set((db.expenses || []).map(e => e.id));
+                    (bundled.expenses || []).forEach(e => {
+                        if (!existingExpIds.has(e.id)) {
+                            db.expenses = db.expenses || [];
+                            db.expenses.push(e);
+                        }
+                    });
+                    const existingTmlIds = new Set((db.timelines || []).map(t => t.id));
+                    (bundled.timelines || []).forEach(t => {
+                        if (!existingTmlIds.has(t.id)) {
+                            db.timelines = db.timelines || [];
+                            db.timelines.push(t);
+                        }
+                    });
+                    const existingEviIds = new Set((db.evidences || []).map(ev => ev.id));
+                    (bundled.evidences || []).forEach(ev => {
+                        if (!existingEviIds.has(ev.id)) {
+                            db.evidences = db.evidences || [];
+                            db.evidences.push(ev);
+                        }
+                    });
                 } catch (e) {}
             }
             return db;
@@ -440,6 +457,38 @@ const prisma = {
             db.auditLogs.unshift(data);
             saveLocalDb(db);
             return data;
+        }
+    },
+    evidence: {
+        findMany: async ({ where } = {}) => {
+            if (realPrisma && realPrisma.evidence) {
+                try { return await realPrisma.evidence.findMany({ where, orderBy: { created_at: 'desc' } }); } catch (e) {}
+            }
+            const db = getLocalDb();
+            let list = [...(db.evidences || [])];
+            if (where?.ticket_id) list = list.filter(e => e.ticket_id === where.ticket_id || e.ticket_no === where.ticket_id);
+            if (where?.ticket_no) list = list.filter(e => e.ticket_no === where.ticket_no);
+            list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+            return list;
+        },
+        create: async ({ data }) => {
+            if (realPrisma && realPrisma.evidence) {
+                try { return await realPrisma.evidence.create({ data }); } catch (e) {}
+            }
+            const db = getLocalDb();
+            db.evidences = db.evidences || [];
+            db.evidences.unshift(data);
+            saveLocalDb(db);
+            return data;
+        },
+        delete: async ({ where }) => {
+            if (realPrisma && realPrisma.evidence) {
+                try { return await realPrisma.evidence.delete({ where }); } catch (e) {}
+            }
+            const db = getLocalDb();
+            db.evidences = (db.evidences || []).filter(e => e.id !== where.id);
+            saveLocalDb(db);
+            return { id: where.id };
         }
     }
 };
@@ -1673,9 +1722,9 @@ app.get('/api/tickets/:id/evidence', async (req, res) => {
         });
         if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
-        const db = getLocalDb();
-        const allEvidences = db.evidences || [];
-        const ticketEvidences = allEvidences.filter(e => e.ticket_id === ticket.id || e.ticket_no === ticket.ticket_no);
+        const ticketEvidences = await prisma.evidence.findMany({
+            where: { ticket_id: ticket.id }
+        });
         res.json(ticketEvidences);
     } catch (error) {
         console.error('Error fetching evidence:', error);
@@ -1704,13 +1753,10 @@ app.post('/api/tickets/:id/evidence', async (req, res) => {
             description: description || '',
             created_by: actor.name || 'ผู้ใช้งาน',
             created_by_email: actor.email || '',
-            created_at: new Date().toISOString()
+            created_at: new Date()
         };
 
-        const db = getLocalDb();
-        db.evidences = db.evidences || [];
-        db.evidences.unshift(evidenceItem);
-        saveLocalDb(db);
+        await prisma.evidence.create({ data: evidenceItem });
 
         const stageThai = stage === 'BEFORE' ? 'ก่อนซ่อม' : (stage === 'DURING' ? 'ระหว่างซ่อม' : (stage === 'AFTER' ? 'หลังซ่อม' : 'ใบเสร็จ/เอกสาร'));
 
@@ -1761,6 +1807,22 @@ app.post('/api/tickets/:id/evidence', async (req, res) => {
         res.status(201).json(evidenceItem);
     } catch (error) {
         console.error('Error saving evidence:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+app.delete('/api/tickets/:id/evidence/:evidenceId', async (req, res) => {
+    try {
+        const { id, evidenceId } = req.params;
+        const ticket = await prisma.ticket.findFirst({
+            where: { OR: [{ id }, { ticket_no: id }] }
+        });
+        if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+        await prisma.evidence.delete({ where: { id: evidenceId } });
+        res.json({ success: true, message: 'ลบหลักฐานเรียบร้อยแล้ว' });
+    } catch (error) {
+        console.error('Error deleting evidence:', error);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });
