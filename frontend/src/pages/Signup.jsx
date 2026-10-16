@@ -31,26 +31,9 @@ export default function SignupPage() {
             .catch(() => {});
     }, []);
 
-    const handleGoogleSignUp = async () => {
+    const handleGoogleSignUp = () => {
         setGoogleLoading(true);
-        try {
-            if (googleConfig.isConfigured) {
-                loginWithGoogleRedirect();
-                return;
-            }
-            const mockUser = {
-                email: 'new.student@ksu.ac.th',
-                name: 'นักศึกษา ใหม่ (Google SSO)',
-                picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80'
-            };
-            const user = await loginWithGoogleCredential(null, mockUser);
-            toast.success(`สมัครและเข้าสู่ระบบด้วย Google สำเร็จ ยินดีต้อนรับคุณ ${user?.name}`);
-            router.push('/');
-        } catch (err) {
-            toast.error(err.message || 'ไม่สามารถสมัครด้วย Google ได้');
-        } finally {
-            setGoogleLoading(false);
-        }
+        window.location.href = '/api/auth/google';
     };
 
     const handleSubmit = async (e) => {

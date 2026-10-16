@@ -69,32 +69,10 @@ export default function LoginPage() {
         }
     };
 
-    // Google Sign-In Handler
-    const handleGoogleLogin = async () => {
+    // Google Sign-In Handler (Real Google OAuth 2.0)
+    const handleGoogleLogin = () => {
         setGoogleLoading(true);
-        try {
-            // If Client ID is configured in backend, redirect to server-side Google OAuth
-            if (googleConfig.isConfigured) {
-                loginWithGoogleRedirect();
-                return;
-            }
-
-            // If not yet configured on Google Cloud Console, offer simulated test login for developer
-            const mockUser = {
-                email: 'user.ksu@gmail.com',
-                name: 'ผู้ใช้งาน Google (ทดสอบ SSO)',
-                picture: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80'
-            };
-
-            const user = await loginWithGoogleCredential(null, mockUser);
-            toast.success(`เข้าสู่ระบบด้วย Google สำเร็จ (โหมดทดสอบ) ยินดีต้อนรับคุณ ${user?.name}`);
-            router.push('/');
-        } catch (err) {
-            console.error('Google login error:', err);
-            toast.error(err.message || 'ไม่สามารถเข้าสู่ระบบด้วย Google ได้');
-        } finally {
-            setGoogleLoading(false);
-        }
+        window.location.href = '/api/auth/google';
     };
 
     return (
@@ -180,11 +158,6 @@ export default function LoginPage() {
                             </>
                         )}
                     </button>
-                    {!googleConfig.isConfigured && (
-                        <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', textAlign: 'center', marginTop: '0.4rem' }}>
-                            💡 โหมดพัฒนา: สามารถคลิกเพื่อทดสอบ Single Sign-On ได้ทันที
-                        </div>
-                    )}
                 </div>
 
                 {/* ── Divider ── */}

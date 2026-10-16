@@ -3055,38 +3055,6 @@ app.post('/api/auth/google', async (req, res) => {
             });
         }
 
-        // Demo simulation fallback if Client ID is not yet configured on Google Cloud
-        if (mockUser && (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID.trim() === '')) {
-            const demoProfile = {
-                sub: 'demo-google-' + Date.now().toString(36),
-                email: mockUser.email || 'ksu.student@ksu.ac.th',
-                name: mockUser.name || 'ผู้ใช้งาน Google (โหมดจำลอง)',
-                picture: mockUser.picture || 'https://lh3.googleusercontent.com/a/default-user'
-            };
-            const appUser = await upsertGoogleUser(demoProfile);
-            const token = jwt.sign(
-                {
-                    id: appUser.id,
-                    email: appUser.email,
-                    name: appUser.name,
-                    role: appUser.role,
-                    group: appUser.group,
-                    phone: appUser.phone || '',
-                    avatar_url: appUser.avatar_url || ''
-                },
-                JWT_SECRET,
-                { expiresIn: '7d' }
-            );
-
-            return res.json({
-                success: true,
-                message: 'เข้าสู่ระบบด้วย Google (โหมดทดสอบ) สำเร็จ',
-                token,
-                user: appUser,
-                isDemo: true
-            });
-        }
-
         return res.status(400).json({ error: 'กรุณาระบุ Google Credential Token' });
     } catch (err) {
         console.error('Google token verify error:', err);
