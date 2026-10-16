@@ -131,12 +131,6 @@ export default function LoginPage() {
                         สมัครสมาชิกที่นี่
                     </Link>
                 </div>
-
-                <div style={{ marginTop: '1.25rem', padding: '0.75rem', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', border: '1px dashed var(--border-color)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    <div style={{ fontWeight: 600, marginBottom: '0.35rem', color: 'var(--text-secondary)' }}>🔑 บัญชีทดสอบเริ่มต้น:</div>
-                    <div>• <strong>Admin:</strong> admin@ksu.ac.th (รหัส: admin1234)</div>
-                    <div>• <strong>User:</strong> student@example.com (รหัส: password1234)</div>
-                </div>
             </div>
         </div>
     );
