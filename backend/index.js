@@ -2849,16 +2849,11 @@ app.put('/api/user/profile', requireAuth, async (req, res) => {
 
         const cleanName = name.trim();
         const cleanPhone = phone ? phone.trim() : '';
-        const cleanGroup = group ? group.trim() : (req.user.group || 'นักศึกษา');
         const cleanAvatar = avatar_url !== undefined ? avatar_url : null;
 
-        // Auto calculate role if user group changed to admin
-        let newRole = req.user.role;
-        if (cleanGroup === 'ผู้ดูแลระบบ' || cleanGroup === 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์' || userEmail.includes('admin')) {
-            newRole = 'admin';
-        } else if (cleanGroup === 'เจ้าหน้าที่' || cleanGroup === 'ฝ่ายซ่อมบำรุง') {
-            newRole = req.user.role === 'admin' ? 'admin' : 'staff';
-        }
+        // Security: Lock group and role. Users cannot modify or elevate their own role/group.
+        const cleanGroup = req.user.group || 'นักศึกษา';
+        const newRole = req.user.role || 'user';
 
         // Update in Prisma
         let updatedUser = null;

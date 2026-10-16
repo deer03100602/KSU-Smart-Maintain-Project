@@ -423,25 +423,66 @@ export default function ProfilePage() {
                             />
                         </div>
 
-                        {/* Group Selection */}
+                        {/* Group Selection (Locked for Security) */}
                         <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                            <label className="form-label" style={{ display: 'block', marginBottom: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-                                กลุ่มผู้ใช้งานและบทบาท
-                            </label>
-                            <select
-                                className="form-input form-select"
-                                value={group}
-                                onChange={(e) => setGroup(e.target.value)}
-                                style={{ width: '100%', padding: '0.65rem 0.85rem', fontSize: '0.9rem' }}
-                            >
-                                {USER_GROUPS.map((g) => (
-                                    <option key={g.value} value={g.value}>
-                                        {g.label}
-                                    </option>
-                                ))}
-                            </select>
-                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>
-                                {USER_GROUPS.find(g => g.value === group)?.desc}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <label className="form-label" style={{ margin: 0, fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Shield style={{ width: 14, height: 14, color: 'var(--primary-color)' }} />
+                                    กลุ่มผู้ใช้งานและบทบาท
+                                </label>
+                                <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    fontSize: '0.75rem',
+                                    color: '#d97706',
+                                    background: 'rgba(245, 158, 11, 0.1)',
+                                    padding: '2px 8px',
+                                    borderRadius: 9999,
+                                    fontWeight: 500
+                                }}>
+                                    <Lock style={{ width: 11, height: 11 }} />
+                                    ล็อกโดยระบบ (ไม่สามารถแก้ไขได้)
+                                </span>
+                            </div>
+                            <div style={{ position: 'relative' }}>
+                                <select
+                                    disabled
+                                    className="form-input form-select"
+                                    value={group}
+                                    style={{
+                                        width: '100%',
+                                        padding: '0.65rem 2.4rem 0.65rem 0.85rem',
+                                        fontSize: '0.9rem',
+                                        backgroundColor: 'var(--bg-muted, rgba(0, 0, 0, 0.04))',
+                                        color: 'var(--text-primary)',
+                                        cursor: 'not-allowed',
+                                        opacity: 0.85,
+                                        borderColor: 'var(--border-color)',
+                                        fontWeight: 500,
+                                        userSelect: 'none'
+                                    }}
+                                >
+                                    {USER_GROUPS.map((g) => (
+                                        <option key={g.value} value={g.value}>
+                                            {g.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                <Lock style={{
+                                    position: 'absolute',
+                                    right: '2.2rem',
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    width: 14,
+                                    height: 14,
+                                    color: 'var(--text-muted)',
+                                    pointerEvents: 'none'
+                                }} />
+                            </div>
+                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <ShieldCheck style={{ width: 13, height: 13, color: 'var(--primary-color)', flexShrink: 0 }} />
+                                สิทธิ์และบทบาทถูกกำหนดโดยระบบ เพื่อความปลอดภัยป้องกันการเข้าถึงระบบเจ้าหน้าที่/ผู้ดูแลระบบโดยไม่ได้รับอนุญาต
                             </p>
                         </div>
 
