@@ -4,6 +4,7 @@ import {
     Clock, CheckCircle, Play, Pause, RotateCcw, AlertTriangle, 
     CheckCircle2, User, FileText, ArrowRight, CornerDownRight, X 
 } from 'lucide-react';
+import { useApp } from '@/context/AppContext';
 
 export default function TicketWorkflowTimeline({ 
     ticket, 
@@ -12,6 +13,13 @@ export default function TicketWorkflowTimeline({
     currentUser = {},
     onActionCompleted 
 }) {
+    const appContext = useApp();
+    const ctxGroupA = appContext?.isGroupA;
+    const ctxGroupB = appContext?.isGroupB;
+    const appUser = appContext?.user;
+    const isStudentOrTeacher = ['นักศึกษา', 'อาจารย์'].includes(currentUser?.group || appUser?.group);
+    const canManageWorkflow = !ctxGroupA && !isStudentOrTeacher && (isAdmin || ctxGroupB);
+
     const [actionLoading, setActionLoading] = useState(false);
     const [actionNote, setActionNote] = useState('');
     const [activeActionModal, setActiveActionModal] = useState(null); // 'START' | 'WAITING_PARTS' | 'SUBMIT_INSPECTION' | 'RETURN_REVISE' | 'COMPLETE'
@@ -104,7 +112,7 @@ export default function TicketWorkflowTimeline({
             </div>
 
             {/* Workflow Quick Action Buttons (Exclusively visible to Group B / Staff / Admin) */}
-            {isAdmin && (
+            {canManageWorkflow && (
                 <div style={{
                     background: 'rgba(255, 255, 255, 0.03)',
                     border: '1px solid var(--border-color)',

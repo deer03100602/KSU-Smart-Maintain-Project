@@ -62,13 +62,16 @@ export function AppProvider({ children }) {
     const [theme, setTheme] = useState('dark');
 
     const loadSimulatedUser = () => {
-        const storedRole = localStorage.getItem('helpdesk_current_role') || 'user';
-        setRoleState(storedRole);
-
+        let storedRole = localStorage.getItem('helpdesk_current_role') || 'user';
         const storedUser = localStorage.getItem('helpdesk_current_user');
         if (storedUser) {
             try {
-                setUserState(JSON.parse(storedUser));
+                const parsed = JSON.parse(storedUser);
+                setUserState(parsed);
+                if (['นักศึกษา', 'อาจารย์'].includes(parsed?.group)) {
+                    storedRole = 'user';
+                    localStorage.setItem('helpdesk_current_role', 'user');
+                }
             } catch (e) {
                 console.error(e);
                 setUserState({ name: '', email: '', group: 'นักศึกษา' });
@@ -76,6 +79,7 @@ export function AppProvider({ children }) {
         } else {
             setUserState({ name: '', email: '', group: 'นักศึกษา' });
         }
+        setRoleState(storedRole);
     };
 
     // Initial auth load from persistent storage
@@ -116,13 +120,14 @@ export function AppProvider({ children }) {
         setUserState(loggedInUser);
         localStorage.setItem('helpdesk_current_user', JSON.stringify(loggedInUser));
 
-        const userRole = loggedInUser.role || (
+        const isGroupAMember = ['นักศึกษา', 'อาจารย์'].includes(loggedInUser.group);
+        const userRole = isGroupAMember ? 'user' : (loggedInUser.role || (
             loggedInUser.email.toLowerCase().includes('admin') ||
             loggedInUser.group === 'ผู้ดูแลระบบ' ||
             loggedInUser.group === 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์'
                 ? 'admin'
                 : 'user'
-        );
+        ));
         setRoleState(userRole);
         localStorage.setItem('helpdesk_current_role', userRole);
         if (result.token) {
@@ -169,13 +174,14 @@ export function AppProvider({ children }) {
         setUserState(loggedInUser);
         localStorage.setItem('helpdesk_current_user', JSON.stringify(loggedInUser));
 
-        const userRole = loggedInUser.role || (
+        const isGroupAMember = ['นักศึกษา', 'อาจารย์'].includes(loggedInUser.group);
+        const userRole = isGroupAMember ? 'user' : (loggedInUser.role || (
             loggedInUser.email.toLowerCase().includes('admin') ||
             loggedInUser.group === 'ผู้ดูแลระบบ' ||
             loggedInUser.group === 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์'
                 ? 'admin'
                 : 'user'
-        );
+        ));
         setRoleState(userRole);
         localStorage.setItem('helpdesk_current_role', userRole);
 
@@ -273,6 +279,10 @@ export function AppProvider({ children }) {
         const updated = { name, email, group };
         setUserState(updated);
         localStorage.setItem('helpdesk_current_user', JSON.stringify(updated));
+        if (['นักศึกษา', 'อาจารย์'].includes(group)) {
+            setRoleState('user');
+            localStorage.setItem('helpdesk_current_role', 'user');
+        }
     };
 
     const switchMockProfile = (profileIndex) => {
@@ -332,14 +342,22 @@ export function AppProvider({ children }) {
     };
 
     const isGuest = !user?.email || user.email.trim() === '';
-    const isGroupB = !isGuest && (
-        role === 'admin' ||
+    
+    // Group A: explicitly students or teachers (General Users)
+    const isGroupA = !isGuest && (
+        ['นักศึกษา', 'อาจารย์'].includes(user?.group) ||
+        user?.role === 'student' ||
+        user?.role === 'teacher'
+    );
+    
+    // Group B: strictly staff, technicians, and admins (and NEVER Group A students/teachers)
+    const isGroupB = !isGuest && !isGroupA && (
+        ['ผู้ดูแลระบบ', 'เจ้าหน้าที่', 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์', 'ฝ่ายซ่อมบำรุง'].includes(user?.group) ||
         user?.role === 'admin' ||
         user?.role === 'staff' ||
         user?.role === 'technician' ||
-        ['ผู้ดูแลระบบ', 'เจ้าหน้าที่', 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์', 'ฝ่ายซ่อมบำรุง'].includes(user?.group)
+        role === 'admin'
     );
-    const isGroupA = !isGuest && !isGroupB;
 
     const updateUserProfile = async ({ name, phone, group, avatar_url }) => {
         const token = localStorage.getItem('helpdesk_token');

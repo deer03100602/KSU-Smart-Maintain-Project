@@ -129,7 +129,9 @@ export default function TicketDetailPage(props) {
         return null;
     };
 
-    const isAdmin = role === 'admin';
+    const isActuallyGroupA = isGroupA || ['นักศึกษา', 'อาจารย์'].includes(currentUser?.group);
+    const isActuallyGroupB = !isActuallyGroupA && (isGroupB || role === 'admin' || currentUser?.role === 'admin');
+    const isAdmin = isActuallyGroupB;
 
     const handleDirectFileUpload = async (files) => {
         if (!files || files.length === 0) return;
@@ -1212,7 +1214,7 @@ export default function TicketDetailPage(props) {
                             <TicketWorkflowTimeline 
                                 ticket={ticket} 
                                 timelines={timelines} 
-                                isAdmin={isGroupB} 
+                                isAdmin={isActuallyGroupB} 
                                 currentUser={currentUser} 
                                 onActionCompleted={fetchTicketData} 
                             />
@@ -1231,7 +1233,7 @@ export default function TicketDetailPage(props) {
                                         ticket={ticket} 
                                         evidences={evidences} 
                                         currentUser={currentUser} 
-                                        isAdmin={isGroupB}
+                                        isAdmin={isActuallyGroupB}
                                         onEvidenceAdded={fetchTicketData} 
                                     />
                                 </div>
@@ -1242,7 +1244,7 @@ export default function TicketDetailPage(props) {
                                         ticket={ticket} 
                                         expenses={expenses} 
                                         summary={expenseSummary} 
-                                        isAdmin={isGroupB} 
+                                        isAdmin={isActuallyGroupB} 
                                         currentUser={currentUser} 
                                         onExpenseUpdated={fetchTicketData} 
                                     />

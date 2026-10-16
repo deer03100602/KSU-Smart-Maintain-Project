@@ -4,13 +4,21 @@ import {
     Camera, Image as ImageIcon, Plus, Upload, X, Maximize2, 
     FileText, Calendar, User, Check 
 } from 'lucide-react';
+import { useApp } from '@/context/AppContext';
 
 export default function TicketEvidenceManager({
     ticket,
     evidences = [],
     currentUser = {},
+    isAdmin = false,
     onEvidenceAdded
 }) {
+    const appContext = useApp();
+    const ctxGroupA = appContext?.isGroupA;
+    const ctxGroupB = appContext?.isGroupB;
+    const appUser = appContext?.user;
+    const isStudentOrTeacher = ['นักศึกษา', 'อาจารย์'].includes(currentUser?.group || appUser?.group);
+    const canManageEvidence = !ctxGroupA && !isStudentOrTeacher && (isAdmin || ctxGroupB);
     const [selectedTab, setSelectedTab] = useState('ALL'); // 'ALL' | 'BEFORE' | 'DURING' | 'AFTER' | 'RECEIPT'
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -152,7 +160,7 @@ export default function TicketEvidenceManager({
                     <Camera style={{ width: 20, height: 20, color: '#3b82f6' }} />
                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>รูปภาพและหลักฐานงานซ่อม (Before / During / After / Evidence Gallery)</h3>
                 </div>
-                {isAdmin && (
+                {canManageEvidence && (
                     <button 
                         className="btn btn-primary btn-sm"
                         onClick={() => setShowUploadModal(true)}

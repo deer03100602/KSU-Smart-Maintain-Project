@@ -5,6 +5,7 @@ import {
     Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw 
 } from 'lucide-react';
 import { saveStoredExpenses } from '@/lib/ticketStore';
+import { useApp } from '@/context/AppContext';
 
 export default function TicketExpenseManager({ 
     ticket, 
@@ -14,6 +15,12 @@ export default function TicketExpenseManager({
     currentUser = {},
     onExpenseUpdated 
 }) {
+    const appContext = useApp();
+    const ctxGroupA = appContext?.isGroupA;
+    const ctxGroupB = appContext?.isGroupB;
+    const appUser = appContext?.user;
+    const isStudentOrTeacher = ['นักศึกษา', 'อาจารย์'].includes(currentUser?.group || appUser?.group);
+    const canManageExpense = !ctxGroupA && !isStudentOrTeacher && (isAdmin || ctxGroupB);
     const [showAddModal, setShowAddModal] = useState(false);
     const [ocrLoading, setOcrLoading] = useState(false);
     const [ocrResult, setOcrResult] = useState(null);
@@ -277,7 +284,7 @@ export default function TicketExpenseManager({
                     <DollarSign style={{ width: 20, height: 20, color: '#3b82f6' }} />
                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>ระบบบริหารงบประมาณและบันทึกค่าใช้จ่าย (Budget & Expenses)</h3>
                 </div>
-                {isAdmin && (
+                {canManageExpense && (
                     <button 
                         className="btn btn-primary btn-sm"
                         onClick={() => { resetForm(); setShowAddModal(true); }}
@@ -329,7 +336,7 @@ export default function TicketExpenseManager({
                                 <th style={{ padding: '8px 10px', textAlign: 'right' }}>ยอดสุทธิ</th>
                                 <th style={{ padding: '8px 10px' }}>เลขที่ใบเสร็จ</th>
                                 <th style={{ padding: '8px 10px' }}>สถานะ</th>
-                                {isAdmin && <th style={{ padding: '8px 10px', textAlign: 'center' }}>จัดการ</th>}
+                                {canManageExpense && <th style={{ padding: '8px 10px', textAlign: 'center' }}>จัดการ</th>}
                             </tr>
                         </thead>
                         <tbody>
@@ -366,7 +373,7 @@ export default function TicketExpenseManager({
                                     <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
                                         {getStatusBadge(exp.status)}
                                     </td>
-                                    {isAdmin && (
+                                    {canManageExpense && (
                                         <td style={{ padding: '8px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                                             <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
                                                 {exp.status === 'PENDING' && (
