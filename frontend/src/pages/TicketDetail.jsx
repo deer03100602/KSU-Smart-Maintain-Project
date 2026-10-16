@@ -13,7 +13,7 @@ import {
     ArrowLeft, Edit, XCircle, Trash2, ClipboardCheck, Settings, 
     Save, Hash, Tag, MapPin, User, Mail, UserCheck, Calendar, Clock,
     Paperclip, FileText, QrCode, Printer, Eye, X, Maximize2, Image as ImageIcon,
-    UploadCloud, Plus, Loader
+    UploadCloud, Plus, Loader, Lock
 } from 'lucide-react';
 import { Link } from "react-router-dom";
 import QRCode from 'qrcode';
@@ -76,7 +76,7 @@ export default function TicketDetailPage(props) {
     const navigate = useNavigate();
     const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
     const { id } = params;
-    const { role, user: currentUser, toast, confirm } = useApp();
+    const { role, user: currentUser, toast, confirm, isGuest, isGroupA, isGroupB } = useApp();
 
     const [ticket, setTicket] = useState(null);
     const [issueTypes, setIssueTypes] = useState([]);
@@ -1163,45 +1163,93 @@ export default function TicketDetailPage(props) {
                         </div>
                     )}
 
-                    {/* Integrated Workflow Timeline */}
-                    <TicketWorkflowTimeline 
-                        ticket={ticket} 
-                        timelines={timelines} 
-                        isAdmin={isAdmin} 
-                        currentUser={currentUser} 
-                        onActionCompleted={fetchTicketData} 
-                    />
-
-                    {/* Side-by-side Split Grid for Evidence Gallery & Budget/Expenses */}
-                    <div className="ticket-split-grid" style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-                        gap: '1.25rem',
-                        marginTop: '1.5rem',
-                        alignItems: 'start'
-                    }}>
-                        {/* Integrated Evidence & Photo Manager (Left Column) */}
-                        <div style={{ minWidth: 0 }}>
-                            <TicketEvidenceManager 
-                                ticket={ticket} 
-                                evidences={evidences} 
-                                currentUser={currentUser} 
-                                onEvidenceAdded={fetchTicketData} 
-                            />
+                    {/* Access Control: Guests cannot view/interact with Workflow Timeline, Evidence Gallery, or Budget & Expenses */}
+                    {isGuest ? (
+                        <div className="glass-card" style={{
+                            marginTop: '1.5rem',
+                            padding: '2rem 1.5rem',
+                            borderRadius: '16px',
+                            textAlign: 'center',
+                            background: 'rgba(30, 41, 59, 0.45)',
+                            border: '1px dashed var(--border-color)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '0.85rem'
+                        }}>
+                            <div style={{
+                                width: 52,
+                                height: 52,
+                                borderRadius: '50%',
+                                background: 'rgba(239, 68, 68, 0.12)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                color: '#f87171'
+                            }}>
+                                <Lock style={{ width: 26, height: 26 }} />
+                            </div>
+                            <div style={{ maxWidth: 520 }}>
+                                <h4 style={{ margin: '0 0 6px 0', fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                    ข้อมูลส่วนนี้สงวนสิทธิ์เฉพาะผู้เข้าสู่ระบบและเจ้าหน้าที่เท่านั้น
+                                </h4>
+                                <p style={{ margin: 0, fontSize: '0.86rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                                    ผู้ใช้งานทั่วไป (Guest) ดูได้เฉพาะข้อมูลสรุปงานซ่อมเบื้องต้นเท่านั้น ไม่สามารถเข้าถึงหรือคลิก: <strong>ขั้นตอนดำเนินงาน (Workflow Timeline)</strong>, <strong>รูปภาพหลักฐานงานซ่อม (Before / During / After)</strong> และ <strong>ระบบบริหารงบประมาณ (Budget & Expenses)</strong> ได้จนกว่าจะเข้าสู่ระบบ
+                                </p>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+                                <Link to={`/login?redirect=/tickets/${id}`} className="btn btn-primary" style={{ textDecoration: 'none', padding: '0.55rem 1.25rem', fontSize: '0.88rem' }}>
+                                    เข้าสู่ระบบเพื่อดูข้อมูลเต็มรูปแบบ
+                                </Link>
+                                <Link to="/signup" className="btn btn-ghost" style={{ textDecoration: 'none', padding: '0.55rem 1rem', fontSize: '0.88rem' }}>
+                                    สมัครสมาชิก
+                                </Link>
+                            </div>
                         </div>
-
-                        {/* Integrated Budget & Expenses with OCR (Right Column) */}
-                        <div style={{ minWidth: 0 }}>
-                            <TicketExpenseManager 
+                    ) : (
+                        <>
+                            {/* Integrated Workflow Timeline */}
+                            <TicketWorkflowTimeline 
                                 ticket={ticket} 
-                                expenses={expenses} 
-                                summary={expenseSummary} 
-                                isAdmin={isAdmin} 
+                                timelines={timelines} 
+                                isAdmin={isGroupB} 
                                 currentUser={currentUser} 
-                                onExpenseUpdated={fetchTicketData} 
+                                onActionCompleted={fetchTicketData} 
                             />
-                        </div>
-                    </div>
+
+                            {/* Side-by-side Split Grid for Evidence Gallery & Budget/Expenses */}
+                            <div className="ticket-split-grid" style={{
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
+                                gap: '1.25rem',
+                                marginTop: '1.5rem',
+                                alignItems: 'start'
+                            }}>
+                                {/* Integrated Evidence & Photo Manager (Left Column) */}
+                                <div style={{ minWidth: 0 }}>
+                                    <TicketEvidenceManager 
+                                        ticket={ticket} 
+                                        evidences={evidences} 
+                                        currentUser={currentUser} 
+                                        isAdmin={isGroupB}
+                                        onEvidenceAdded={fetchTicketData} 
+                                    />
+                                </div>
+
+                                {/* Integrated Budget & Expenses with OCR (Right Column) */}
+                                <div style={{ minWidth: 0 }}>
+                                    <TicketExpenseManager 
+                                        ticket={ticket} 
+                                        expenses={expenses} 
+                                        summary={expenseSummary} 
+                                        isAdmin={isGroupB} 
+                                        currentUser={currentUser} 
+                                        onExpenseUpdated={fetchTicketData} 
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Sidebar Info */}

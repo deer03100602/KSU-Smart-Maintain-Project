@@ -22,8 +22,16 @@ CREATE TABLE IF NOT EXISTS "User" (
     "name" TEXT NOT NULL,
     "group" TEXT NOT NULL DEFAULT 'นักศึกษา',
     "role" TEXT NOT NULL DEFAULT 'user',
-    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "phone" TEXT,
+    "avatar_url" TEXT,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- เพิ่มคอลัมน์อัตโนมัติหากตารางมีอยู่แล้ว
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "phone" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "avatar_url" TEXT;
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;
 
 -- 3. ตารางรายการแจ้งซ่อม (Tickets)
 CREATE TABLE IF NOT EXISTS "Ticket" (

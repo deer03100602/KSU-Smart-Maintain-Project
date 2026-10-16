@@ -2509,7 +2509,9 @@ app.post('/api/auth/signup', async (req, res) => {
                 email: cleanEmail,
                 name: cleanName,
                 group: cleanGroup,
-                role: role
+                role: role,
+                phone: '',
+                avatar_url: ''
             }
         });
     } catch (err) {
@@ -2569,7 +2571,15 @@ app.post('/api/auth/login', async (req, res) => {
 
         // Generate JWT token
         const token = jwt.sign(
-            { id: foundUser.id, email: foundUser.email, name: foundUser.name, role: foundUser.role, group: foundUser.group },
+            { 
+                id: foundUser.id, 
+                email: foundUser.email, 
+                name: foundUser.name, 
+                role: foundUser.role, 
+                group: foundUser.group,
+                phone: foundUser.phone || '',
+                avatar_url: foundUser.avatar_url || ''
+            },
             JWT_SECRET,
             { expiresIn: '7d' }
         );
@@ -2585,7 +2595,9 @@ app.post('/api/auth/login', async (req, res) => {
                 email: foundUser.email,
                 name: foundUser.name,
                 group: foundUser.group,
-                role: foundUser.role
+                role: foundUser.role,
+                phone: foundUser.phone || '',
+                avatar_url: foundUser.avatar_url || ''
             }
         });
     } catch (err) {
@@ -2605,6 +2617,266 @@ app.get('/api/auth/me', (req, res) => {
         res.json({ user: decoded });
     } catch (err) {
         res.status(401).json({ error: 'Invalid or expired token' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────
+// User Profile & Settings API (Profile edit, password change, avatar)
+// ─────────────────────────────────────────────────────────────
+app.get('/api/user/profile', requireAuth, async (req, res) => {
+    try {
+        const userEmail = req.user.email ? req.user.email.toLowerCase() : '';
+        let foundUser = null;
+        try {
+            foundUser = await prisma.user.findUnique({ where: { email: userEmail } });
+        } catch (dbErr) {
+            console.warn('Prisma profile query note:', dbErr.message);
+        }
+
+        if (!foundUser) {
+            const localUsers = getLocalUsers();
+            foundUser = localUsers.find(u => u.email.toLowerCase() === userEmail || u.id === req.user.id);
+        }
+
+        if (!foundUser) {
+            return res.status(404).json({ error: 'ไม่พบข้อมูลผู้ใช้งาน' });
+        }
+
+        res.json({
+            id: foundUser.id,
+            email: foundUser.email,
+            name: foundUser.name,
+            group: foundUser.group || 'นักศึกษา',
+            role: foundUser.role || 'user',
+            phone: foundUser.phone || '',
+            avatar_url: foundUser.avatar_url || '',
+            created_at: foundUser.created_at
+        });
+    } catch (err) {
+        console.error('Get profile error:', err);
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการโหลดข้อมูลโปรไฟล์' });
+    }
+});
+
+app.put('/api/user/profile', requireAuth, async (req, res) => {
+    try {
+        const userEmail = req.user.email ? req.user.email.toLowerCase() : '';
+        const { name, phone, group, avatar_url } = req.body;
+
+        if (!name || !name.trim()) {
+            return res.status(400).json({ error: 'กรุณากรอกชื่อ-นามสกุล' });
+        }
+
+        const cleanName = name.trim();
+        const cleanPhone = phone ? phone.trim() : '';
+        const cleanGroup = group ? group.trim() : (req.user.group || 'นักศึกษา');
+        const cleanAvatar = avatar_url !== undefined ? avatar_url : null;
+
+        // Auto calculate role if user group changed to admin
+        let newRole = req.user.role;
+        if (cleanGroup === 'ผู้ดูแลระบบ' || cleanGroup === 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์' || userEmail.includes('admin')) {
+            newRole = 'admin';
+        } else if (cleanGroup === 'เจ้าหน้าที่' || cleanGroup === 'ฝ่ายซ่อมบำรุง') {
+            newRole = req.user.role === 'admin' ? 'admin' : 'staff';
+        }
+
+        // Update in Prisma
+        let updatedUser = null;
+        try {
+            updatedUser = await prisma.user.update({
+                where: { email: userEmail },
+                data: {
+                    name: cleanName,
+                    phone: cleanPhone,
+                    group: cleanGroup,
+                    role: newRole,
+                    ...(cleanAvatar !== null ? { avatar_url: cleanAvatar } : {})
+                }
+            });
+        } catch (dbErr) {
+            console.warn('Prisma update profile note:', dbErr.message);
+        }
+
+        // Always update local users.json for persistence
+        const localUsers = getLocalUsers();
+        const idx = localUsers.findIndex(u => u.email.toLowerCase() === userEmail || u.id === req.user.id);
+        if (idx !== -1) {
+            localUsers[idx].name = cleanName;
+            localUsers[idx].phone = cleanPhone;
+            localUsers[idx].group = cleanGroup;
+            localUsers[idx].role = newRole;
+            if (cleanAvatar !== null) {
+                localUsers[idx].avatar_url = cleanAvatar;
+            }
+            localUsers[idx].updated_at = new Date().toISOString();
+            saveLocalUsers(localUsers);
+            if (!updatedUser) updatedUser = localUsers[idx];
+        }
+
+        // Generate fresh JWT token with updated profile info
+        const token = jwt.sign(
+            {
+                id: req.user.id,
+                email: userEmail,
+                name: cleanName,
+                role: newRole,
+                group: cleanGroup,
+                phone: cleanPhone,
+                avatar_url: cleanAvatar || updatedUser?.avatar_url || ''
+            },
+            JWT_SECRET,
+            { expiresIn: '7d' }
+        );
+
+        res.json({
+            success: true,
+            message: 'อัปเดตข้อมูลโปรไฟล์เรียบร้อยแล้ว',
+            token,
+            user: {
+                id: req.user.id,
+                email: userEmail,
+                name: cleanName,
+                group: cleanGroup,
+                role: newRole,
+                phone: cleanPhone,
+                avatar_url: cleanAvatar || updatedUser?.avatar_url || ''
+            }
+        });
+    } catch (err) {
+        console.error('Update profile error:', err);
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการบันทึกข้อมูลโปรไฟล์: ' + err.message });
+    }
+});
+
+app.put('/api/user/change-password', requireAuth, async (req, res) => {
+    try {
+        const userEmail = req.user.email ? req.user.email.toLowerCase() : '';
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'กรุณากรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร' });
+        }
+
+        // Find user
+        let foundUser = null;
+        try {
+            foundUser = await prisma.user.findUnique({ where: { email: userEmail } });
+        } catch (dbErr) {
+            console.warn('Prisma change password query note:', dbErr.message);
+        }
+
+        const localUsers = getLocalUsers();
+        const localIdx = localUsers.findIndex(u => u.email.toLowerCase() === userEmail || u.id === req.user.id);
+        if (!foundUser && localIdx !== -1) {
+            foundUser = localUsers[localIdx];
+        }
+
+        if (!foundUser) {
+            return res.status(404).json({ error: 'ไม่พบข้อมูลผู้ใช้งาน' });
+        }
+
+        // Verify current password
+        let isMatch = false;
+        try {
+            isMatch = await bcrypt.compare(currentPassword, foundUser.password);
+        } catch (e) {
+            isMatch = false;
+        }
+
+        if (!isMatch && foundUser.plainPasswordFallback) {
+            isMatch = currentPassword === foundUser.plainPasswordFallback;
+        }
+        if (!isMatch && currentPassword === foundUser.password) {
+            isMatch = true;
+        }
+
+        if (!isMatch) {
+            return res.status(400).json({ error: 'รหัสผ่านปัจจุบันไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง' });
+        }
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        // Update in Prisma
+        try {
+            await prisma.user.update({
+                where: { email: userEmail },
+                data: { password: hashedPassword }
+            });
+        } catch (dbErr) {
+            console.warn('Prisma password update note:', dbErr.message);
+        }
+
+        // Update in local store
+        if (localIdx !== -1) {
+            localUsers[localIdx].password = hashedPassword;
+            localUsers[localIdx].plainPasswordFallback = newPassword;
+            localUsers[localIdx].updated_at = new Date().toISOString();
+            saveLocalUsers(localUsers);
+        }
+
+        res.json({
+            success: true,
+            message: 'เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว'
+        });
+    } catch (err) {
+        console.error('Change password error:', err);
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน: ' + err.message });
+    }
+});
+
+app.post('/api/user/avatar', requireAuth, upload.single('avatar'), async (req, res) => {
+    try {
+        const userEmail = req.user.email ? req.user.email.toLowerCase() : '';
+        let avatarUrl = '';
+
+        if (req.file) {
+            const ext = path.extname(req.file.originalname) || '.jpg';
+            const filename = `avatar-${Date.now()}-${Math.random().toString(36).substring(2, 6)}${ext}`;
+            const targetPath = path.join(uploadsDir, filename);
+
+            try {
+                fs.writeFileSync(targetPath, req.file.buffer);
+                avatarUrl = `/uploads/${filename}`;
+            } catch (fsErr) {
+                avatarUrl = `data:${req.file.mimetype || 'image/jpeg'};base64,${req.file.buffer.toString('base64')}`;
+            }
+        } else if (req.body && req.body.avatar_url) {
+            avatarUrl = req.body.avatar_url;
+        } else {
+            return res.status(400).json({ error: 'กรุณาเลือกไฟล์รูปภาพ' });
+        }
+
+        // Update in DB and local store
+        try {
+            await prisma.user.update({
+                where: { email: userEmail },
+                data: { avatar_url: avatarUrl }
+            });
+        } catch (dbErr) {
+            console.warn('Prisma avatar update note:', dbErr.message);
+        }
+
+        const localUsers = getLocalUsers();
+        const idx = localUsers.findIndex(u => u.email.toLowerCase() === userEmail || u.id === req.user.id);
+        if (idx !== -1) {
+            localUsers[idx].avatar_url = avatarUrl;
+            saveLocalUsers(localUsers);
+        }
+
+        res.json({
+            success: true,
+            message: 'อัปโหลดรูปโปรไฟล์เรียบร้อยแล้ว',
+            avatar_url: avatarUrl
+        });
+    } catch (err) {
+        console.error('Avatar upload error:', err);
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการอัปโหลดรูปภาพ: ' + err.message });
     }
 });
 

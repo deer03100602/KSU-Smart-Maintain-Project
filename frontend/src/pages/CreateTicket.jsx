@@ -6,9 +6,9 @@
 
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
-import { PlusCircle, Info, User, Send, Loader, UploadCloud, FileText, X, Image as ImageIcon, Eye, ExternalLink, Download } from 'lucide-react';
+import { PlusCircle, Info, User, Send, Loader, UploadCloud, FileText, X, Image as ImageIcon, Eye, ExternalLink, Download, Lock } from 'lucide-react';
 import { saveStoredTicket } from '@/lib/ticketStore';
 
 const formatFileSize = (bytes) => {
@@ -28,7 +28,7 @@ const checkIsImage = (file) => {
 export default function CreateTicketPage() {
     const navigate = useNavigate();
     const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
-    const { user, setUser, toast, confirm } = useApp();
+    const { user, setUser, toast, confirm, isGuest } = useApp();
     const [issueTypes, setIssueTypes] = useState([]);
 
     // File upload ref and state
@@ -287,6 +287,42 @@ export default function CreateTicketPage() {
             setSubmitting(false);
         }
     };
+
+    if (isGuest) {
+        return (
+            <div style={{ maxWidth: 540, margin: '3rem auto', padding: '1rem', textAlign: 'center' }} className="fade-in">
+                <div className="glass-card" style={{ padding: '2.5rem 1.5rem', borderRadius: '16px' }}>
+                    <div style={{
+                        width: 60,
+                        height: 60,
+                        borderRadius: '50%',
+                        background: 'rgba(59, 130, 246, 0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 1.25rem',
+                        color: 'var(--primary-color)'
+                    }}>
+                        <Lock style={{ width: 30, height: 30 }} />
+                    </div>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>
+                        กรุณาเข้าสู่ระบบก่อนแจ้งปัญหา
+                    </h2>
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+                        ผู้ใช้งานทั่วไป (Guest) ดูได้เฉพาะหน้าหลัก รายการ Ticket และ Dashboard เท่านั้น หากต้องการแจ้งปัญหาใหม่ กรุณาสมัครสมาชิกหรือเข้าสู่ระบบบัญชีของคุณ
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <Link to="/login?redirect=/create" className="btn btn-primary" style={{ padding: '0.65rem 1.5rem', textDecoration: 'none', fontSize: '0.88rem' }}>
+                            เข้าสู่ระบบ
+                        </Link>
+                        <Link to="/signup" className="btn btn-ghost" style={{ padding: '0.65rem 1.25rem', textDecoration: 'none', fontSize: '0.88rem' }}>
+                            สมัครสมาชิกใหม่
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div style={{ maxWidth: 740, margin: '0 auto', padding: '1.5rem 1rem 3rem 1rem' }} className="fade-in">

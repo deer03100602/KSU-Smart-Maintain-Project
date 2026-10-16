@@ -698,31 +698,71 @@ async function notifyTicketEvent(ticket, eventType = 'CREATED') {
     // 1. Extract attachments and inline images
     const parsedAttachments = extractAttachments(ticket.description);
 
-    // 2. Gather all recipient emails
+    // 2. Gather recipient emails: STRICTLY Group B only (Staff, Admins, Technicians)
+    // CRITICAL: Group A (นักศึกษา, อาจารย์) MUST NEVER receive email notifications
     const recipients = new Set();
+    const groupAEmails = new Set();
 
-    // Central maintenance email must ALWAYS receive notifications
-    recipients.add('ksu.smart.maintain@gmail.com');
+    // Check all registered users in users.json to classify Group A and Group B
+    if (fs.existsSync(usersPath)) {
+        try {
+            const users = JSON.parse(fs.readFileSync(usersPath, 'utf8'));
+            if (Array.isArray(users)) {
+                users.forEach(u => {
+                    const email = (u.email || '').trim().toLowerCase();
+                    if (!email || !email.includes('@')) return;
 
-    // Also include requester's email so they get a confirmation copy
-    if (ticket.requester_email && ticket.requester_email.includes('@')) {
-        recipients.add(ticket.requester_email.trim().toLowerCase());
+                    const grp = u.group || '';
+                    const role = u.role || '';
+                    const isGroupA = (grp === 'นักศึกษา' || grp === 'อาจารย์') && role !== 'admin';
+                    const isGroupB = role === 'admin' || role === 'staff' || role === 'technician' ||
+                        grp === 'ผู้ดูแลระบบ' || grp.includes('เจ้าหน้าที่') || grp.includes('IT') || grp.includes('ซ่อมบำรุง');
+
+                    if (isGroupA) {
+                        groupAEmails.add(email);
+                    } else if (isGroupB) {
+                        recipients.add(email);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('Error classifying users for notification:', e);
+        }
     }
 
-    // From settings notify_emails (comma separated)
+    // Central maintenance email must ALWAYS receive notifications (Group B)
+    recipients.add('ksu.smart.maintain@gmail.com');
+
+    // From settings notify_emails (Group B staff and admins)
     if (settings.notify_emails) {
         settings.notify_emails.split(',').forEach(e => {
             const clean = e.trim().toLowerCase();
-            if (clean && clean.includes('@')) recipients.add(clean);
+            if (clean && clean.includes('@') && !groupAEmails.has(clean)) {
+                recipients.add(clean);
+            }
         });
     }
 
-    // From all registered admins in system
-    const adminEmails = getAllAdminEmails();
-    adminEmails.forEach(e => recipients.add(e));
+    // Check requester: DO NOT add if requester belongs to Group A
+    if (ticket.requester_email && ticket.requester_email.includes('@')) {
+        const reqEmail = ticket.requester_email.trim().toLowerCase();
+        const reqName = ticket.requester_name || '';
+        const isGroupARequester = groupAEmails.has(reqEmail) || 
+                                  reqName.includes('(นักศึกษา)') || 
+                                  reqName.includes('(อาจารย์)');
+
+        if (isGroupARequester) {
+            console.log(`🔒 Email alert suppressed for requester ${reqEmail}: Group A (นักศึกษา / อาจารย์) is excluded from receiving system email alerts.`);
+        } else if (recipients.has(reqEmail)) {
+            // Already in Group B
+        }
+    }
+
+    // Safety purge: ensure absolutely no Group A emails exist in recipients
+    groupAEmails.forEach(aEmail => recipients.delete(aEmail));
 
     const emailList = Array.from(recipients);
-    console.log(`📬 Preparing to send notification for ${ticket.ticket_no} [${eventType}] to ${emailList.length} recipient(s):`, emailList);
+    console.log(`📬 [Group B Only] Prepared notification for ${ticket.ticket_no} [${eventType}] to ${emailList.length} recipient(s):`, emailList);
 
     // 3. Prepare Subject & Content
     let subject;

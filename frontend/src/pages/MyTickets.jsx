@@ -8,12 +8,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
-import { User, Plus, UserCircle, Save } from 'lucide-react';
+import { User, Plus, UserCircle, Save, Lock } from 'lucide-react';
 import { TicketGrid } from '@/components/TicketCard';
 import { mergeTicketsWithStorage, getStoredTickets } from '@/lib/ticketStore';
 
 export default function MyTicketsPage() {
-    const { user, setUser, toast, isRealAuth } = useApp();
+    const { user, setUser, toast, isRealAuth, isGuest } = useApp();
     
     const [tickets, setTickets] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -85,6 +85,42 @@ export default function MyTicketsPage() {
         setUser(profileName.trim(), profileEmail.trim(), profileGroup);
         toast.success('อัปเดตข้อมูลผู้ใช้งานจำลองแล้ว');
     };
+
+    if (isGuest) {
+        return (
+            <div style={{ maxWidth: 540, margin: '3rem auto', padding: '1rem', textAlign: 'center' }} className="fade-in">
+                <div className="glass-card" style={{ padding: '2.5rem 1.5rem', borderRadius: '16px' }}>
+                    <div style={{
+                        width: 60,
+                        height: 60,
+                        borderRadius: '50%',
+                        background: 'rgba(59, 130, 246, 0.12)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 1.25rem',
+                        color: 'var(--primary-color)'
+                    }}>
+                        <Lock style={{ width: 30, height: 30 }} />
+                    </div>
+                    <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>
+                        กรุณาเข้าสู่ระบบเพื่อดูปัญหาของคุณ
+                    </h2>
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+                        ผู้ใช้งานทั่วไป (Guest) สามารถค้นหาและดูรายการแจ้งซ่อมสาธารณะได้ แต่ต้องเข้าสู่ระบบเพื่อดูประวัติและติดตามงานแจ้งซ่อมของตนเอง
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        <Link to="/login?redirect=/my-tickets" className="btn btn-primary" style={{ padding: '0.65rem 1.5rem', textDecoration: 'none', fontSize: '0.88rem' }}>
+                            เข้าสู่ระบบ
+                        </Link>
+                        <Link to="/signup" className="btn btn-ghost" style={{ padding: '0.65rem 1.25rem', textDecoration: 'none', fontSize: '0.88rem' }}>
+                            สมัครสมาชิกใหม่
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="page-my-tickets fade-in">

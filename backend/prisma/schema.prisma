@@ -48,7 +48,10 @@ model User {
   name       String
   group      String   @default("นักศึกษา")
   role       String   @default("user")
+  phone      String?
+  avatar_url String?  @db.Text
   created_at DateTime @default(now())
+  updated_at DateTime @default(now()) @updatedAt
 }
 
 model Expense {

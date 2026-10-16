@@ -14,6 +14,7 @@ import AdminSettingsPage from '@/pages/AdminSettings'
 import IssueTypesPage from '@/pages/IssueTypes'
 import LoginPage from '@/pages/Login'
 import SignupPage from '@/pages/Signup'
+import ProfilePage from '@/pages/Profile'
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
               <Route path="/settings" element={<AdminSettingsPage />} />
               <Route path="/issue-types" element={<IssueTypesPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

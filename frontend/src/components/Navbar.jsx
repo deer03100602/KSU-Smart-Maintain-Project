@@ -16,30 +16,38 @@ import {
 
 export default function Navbar() {
     const { pathname } = useLocation();
-    const { role, setRole, user, signOutUser, isRealAuth, MOCK_PROFILES, switchMockProfile, theme, toggleTheme } = useApp();
+    const { role, setRole, user, signOutUser, isRealAuth, isGuest, isGroupA, isGroupB, MOCK_PROFILES, switchMockProfile, theme, toggleTheme } = useApp();
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
-    const isAdmin = role === 'admin';
+    const isAdmin = role === 'admin' || isGroupB;
 
-    const userMenuItems = [
+    const guestMenuItems = [
+        { href: '/', icon: <Home style={{ width: 17, height: 17 }} />, label: 'หน้าหลัก', id: 'home' },
+        { href: '/tickets', icon: <List style={{ width: 17, height: 17 }} />, label: 'รายการ Ticket ทั้งหมด', id: 'tickets' },
+        { href: '/dashboard', icon: <BarChart3 style={{ width: 17, height: 17 }} />, label: 'Dashboard สถิติ', id: 'dashboard' }
+    ];
+
+    const groupAMenuItems = [
         { href: '/', icon: <Home style={{ width: 17, height: 17 }} />, label: 'หน้าหลัก', id: 'home' },
         { href: '/create', icon: <PlusCircle style={{ width: 17, height: 17 }} />, label: 'แจ้งปัญหาใหม่', id: 'create' },
         { href: '/tickets', icon: <List style={{ width: 17, height: 17 }} />, label: 'รายการ Ticket', id: 'tickets' },
         { href: '/my-tickets', icon: <User style={{ width: 17, height: 17 }} />, label: 'ปัญหาของฉัน', id: 'my-tickets' },
-        { href: '/dashboard', icon: <BarChart3 style={{ width: 17, height: 17 }} />, label: 'Dashboard', id: 'dashboard' }
+        { href: '/dashboard', icon: <BarChart3 style={{ width: 17, height: 17 }} />, label: 'Dashboard', id: 'dashboard' },
+        { href: '/profile', icon: <UserCircle style={{ width: 17, height: 17 }} />, label: 'จัดการโปรไฟล์', id: 'profile' }
     ];
 
-    const adminMenuItems = [
+    const groupBMenuItems = [
         { href: '/', icon: <Home style={{ width: 17, height: 17 }} />, label: 'หน้าหลัก', id: 'home' },
         { href: '/create', icon: <PlusCircle style={{ width: 17, height: 17 }} />, label: 'แจ้งปัญหาใหม่', id: 'create' },
         { href: '/tickets', icon: <List style={{ width: 17, height: 17 }} />, label: 'รายการ Ticket', id: 'tickets' },
         { href: '/admin', icon: <Shield style={{ width: 17, height: 17 }} />, label: 'จัดการ Ticket', id: 'admin' },
         { href: '/dashboard', icon: <BarChart3 style={{ width: 17, height: 17 }} />, label: 'Dashboard', id: 'dashboard' },
         { href: '/issue-types', icon: <Settings style={{ width: 17, height: 17 }} />, label: 'จัดการประเภท', id: 'issue-types' },
-        { href: '/settings', icon: <UserCheck style={{ width: 17, height: 17 }} />, label: 'ตั้งค่า & ช่าง', id: 'settings' }
+        { href: '/settings', icon: <UserCheck style={{ width: 17, height: 17 }} />, label: 'ตั้งค่า & ช่าง', id: 'settings' },
+        { href: '/profile', icon: <UserCircle style={{ width: 17, height: 17 }} />, label: 'จัดการโปรไฟล์', id: 'profile' }
     ];
 
-    const menuItems = isAdmin ? adminMenuItems : userMenuItems;
+    const menuItems = isGuest ? guestMenuItems : (isGroupB ? groupBMenuItems : groupAMenuItems);
 
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
@@ -92,26 +100,45 @@ export default function Navbar() {
                             {theme === 'dark' ? <Sun style={{ width: 17, height: 17 }} /> : <Moon style={{ width: 17, height: 17 }} />}
                         </button>
 
-
-                        {/* User Profile Pill */}
-                        <div className="top-user-profile">
-                            <div className="user-avatar" style={{ width: 28, height: 28, fontSize: '0.8rem' }}>
-                                {isAdmin ? (
-                                    <ShieldCheck style={{ width: 16, height: 16, color: 'var(--primary-color)' }} />
-                                ) : (
-                                    <UserCircle style={{ width: 16, height: 16 }} />
-                                )}
+                        {/* User Profile Pill or Guest Indicator */}
+                        {!isGuest ? (
+                            <Link
+                                to="/profile"
+                                className="top-user-profile"
+                                title="คลิกเพื่อจัดการโปรไฟล์"
+                                style={{ textDecoration: 'none', cursor: 'pointer' }}
+                            >
+                                <div className="user-avatar" style={{ width: 28, height: 28, fontSize: '0.8rem', overflow: 'hidden', borderRadius: '50%' }}>
+                                    {user?.avatar_url ? (
+                                        <img src={user.avatar_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : isGroupB ? (
+                                        <ShieldCheck style={{ width: 16, height: 16, color: 'var(--primary-color)' }} />
+                                    ) : (
+                                        <UserCircle style={{ width: 16, height: 16 }} />
+                                    )}
+                                </div>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {user?.name || 'ผู้ใช้งาน'}
+                                </span>
+                                <span className={`user-role-badge ${isGroupB ? 'admin-badge' : 'user-badge'}`} style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+                                    {isGroupB ? 'Group B' : 'Group A'}
+                                </span>
+                            </Link>
+                        ) : (
+                            <div style={{
+                                padding: '3px 8px',
+                                borderRadius: '6px',
+                                background: 'rgba(255,255,255,0.05)',
+                                border: '1px solid var(--border-color)',
+                                fontSize: '0.78rem',
+                                color: 'var(--text-muted)'
+                            }}>
+                                ผู้เยี่ยมชม (Guest)
                             </div>
-                            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', maxWidth: 95, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {user?.name || (isAdmin ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน')}
-                            </span>
-                            <span className={`user-role-badge ${isAdmin ? 'admin-badge' : 'user-badge'}`} style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
-                                {isAdmin ? 'Admin' : 'User'}
-                            </span>
-                        </div>
+                        )}
 
                         {/* Login / Logout Button */}
-                        {isRealAuth ? (
+                        {!isGuest ? (
                             <button
                                 onClick={signOutUser}
                                 className="btn btn-ghost btn-sm"
@@ -122,14 +149,23 @@ export default function Navbar() {
                                 <span>ออก</span>
                             </button>
                         ) : (
-                            <Link
-                                to="/login"
-                                className="btn btn-primary btn-sm"
-                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none', flexShrink: 0, whiteSpace: 'nowrap' }}
-                            >
-                                <LogIn style={{ width: 15, height: 15 }} />
-                                <span>เข้าสู่ระบบ</span>
-                            </Link>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Link
+                                    to="/login"
+                                    className="btn btn-primary btn-sm"
+                                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none', flexShrink: 0, whiteSpace: 'nowrap' }}
+                                >
+                                    <LogIn style={{ width: 15, height: 15 }} />
+                                    <span>เข้าสู่ระบบ</span>
+                                </Link>
+                                <Link
+                                    to="/signup"
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ padding: '0.4rem 0.7rem', fontSize: '0.8rem', display: 'none', mdDisplay: 'flex', textDecoration: 'none', flexShrink: 0 }}
+                                >
+                                    สมัคร
+                                </Link>
+                            </div>
                         )}
                     </div>
 
@@ -268,53 +304,87 @@ export default function Navbar() {
 
                 <div className="sidebar-footer">
                     <div className="sidebar-user-info" style={{ flexDirection: 'column', gap: '0.75rem', alignItems: 'stretch', width: '100%' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <div className="user-avatar">
-                                {isAdmin ? (
-                                    <ShieldCheck style={{ width: 20, height: 20, color: 'var(--primary-color)' }} />
-                                ) : (
-                                    <UserCircle style={{ width: 20, height: 20 }} />
-                                )}
-                            </div>
-                            <div className="user-details" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                <span className="user-name" style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', fontWeight: 600 }}>
-                                    {user?.name || (isAdmin ? 'ผู้ดูแลระบบ' : 'ผู้ใช้งาน')}
-                                </span>
-                                <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                    <span className={`user-role-badge ${isAdmin ? 'admin-badge' : 'user-badge'}`} style={{ fontSize: '0.65rem', padding: '1px 4px' }}>
-                                        {isAdmin ? 'Admin' : 'User'} {isRealAuth ? '(Auth)' : ''}
-                                    </span>
-                                    <span className="user-role-badge" style={{
-                                        fontSize: '0.65rem',
-                                        padding: '1px 4px',
-                                        background: 'rgba(59, 130, 246, 0.15)',
-                                        color: '#60a5fa',
-                                        border: '1px solid rgba(59, 130, 246, 0.3)'
-                                    }}>
-                                        {user?.group || 'นักศึกษา'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                        {isRealAuth ? (
-                            <button
-                                onClick={signOutUser}
-                                className="btn btn-ghost btn-sm"
-                                style={{ width: '100%', justifyContent: 'center', padding: '0.4rem', fontSize: '0.85rem', color: '#f87171', display: 'flex', alignItems: 'center' }}
-                            >
-                                <LogOut style={{ width: 14, height: 14, marginRight: 6 }} />
-                                ออกจากระบบ
-                            </button>
-                        ) : (
+                        {!isGuest ? (
                             <Link
-                                to="/login"
-                                className="btn btn-primary btn-sm"
-                                style={{ width: '100%', justifyContent: 'center', padding: '0.4rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', textDecoration: 'none' }}
+                                to="/profile"
                                 onClick={() => setSidebarOpen(false)}
+                                style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none', color: 'inherit' }}
                             >
-                                <LogIn style={{ width: 14, height: 14, marginRight: 6 }} />
-                                เข้าสู่ระบบ
+                                <div className="user-avatar" style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden' }}>
+                                    {user?.avatar_url ? (
+                                        <img src={user.avatar_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : isGroupB ? (
+                                        <ShieldCheck style={{ width: 20, height: 20, color: 'var(--primary-color)' }} />
+                                    ) : (
+                                        <UserCircle style={{ width: 20, height: 20 }} />
+                                    )}
+                                </div>
+                                <div className="user-details" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                    <span className="user-name" style={{ textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', fontWeight: 600 }}>
+                                        {user?.name || 'ผู้ใช้งาน'}
+                                    </span>
+                                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <span className={`user-role-badge ${isGroupB ? 'admin-badge' : 'user-badge'}`} style={{ fontSize: '0.65rem', padding: '1px 4px' }}>
+                                            {isGroupB ? 'Group B' : 'Group A'}
+                                        </span>
+                                        <span className="user-role-badge" style={{
+                                            fontSize: '0.65rem',
+                                            padding: '1px 4px',
+                                            background: 'rgba(59, 130, 246, 0.15)',
+                                            color: '#60a5fa',
+                                            border: '1px solid rgba(59, 130, 246, 0.3)'
+                                        }}>
+                                            {user?.group || 'นักศึกษา'}
+                                        </span>
+                                    </div>
+                                </div>
                             </Link>
+                        ) : (
+                            <div style={{ padding: '4px 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                เข้าใช้งานในฐานะ: <strong>ผู้เยี่ยมชม (Guest)</strong>
+                            </div>
+                        )}
+
+                        {!isGuest ? (
+                            <div style={{ display: 'flex', gap: 6 }}>
+                                <Link
+                                    to="/profile"
+                                    onClick={() => setSidebarOpen(false)}
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ flex: 1, justifyContent: 'center', padding: '0.4rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center' }}
+                                >
+                                    <UserCircle style={{ width: 14, height: 14, marginRight: 4 }} />
+                                    โปรไฟล์
+                                </Link>
+                                <button
+                                    onClick={signOutUser}
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ flex: 1, justifyContent: 'center', padding: '0.4rem', fontSize: '0.82rem', color: '#f87171', display: 'flex', alignItems: 'center' }}
+                                >
+                                    <LogOut style={{ width: 14, height: 14, marginRight: 4 }} />
+                                    ออก
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                <Link
+                                    to="/login"
+                                    className="btn btn-primary btn-sm"
+                                    style={{ width: '100%', justifyContent: 'center', padding: '0.5rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', textDecoration: 'none' }}
+                                    onClick={() => setSidebarOpen(false)}
+                                >
+                                    <LogIn style={{ width: 14, height: 14, marginRight: 6 }} />
+                                    เข้าสู่ระบบ
+                                </Link>
+                                <Link
+                                    to="/signup"
+                                    className="btn btn-ghost btn-sm"
+                                    style={{ width: '100%', justifyContent: 'center', padding: '0.4rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', textDecoration: 'none' }}
+                                    onClick={() => setSidebarOpen(false)}
+                                >
+                                    สมัครสมาชิก
+                                </Link>
+                            </div>
                         )}
                     </div>
                 </div>

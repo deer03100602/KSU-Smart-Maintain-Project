@@ -240,6 +240,92 @@ export function AppProvider({ children }) {
         });
     };
 
+    const isGuest = !user?.email || user.email.trim() === '';
+    const isGroupB = !isGuest && (
+        role === 'admin' ||
+        user?.role === 'admin' ||
+        user?.role === 'staff' ||
+        user?.role === 'technician' ||
+        ['ผู้ดูแลระบบ', 'เจ้าหน้าที่', 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์', 'ฝ่ายซ่อมบำรุง'].includes(user?.group)
+    );
+    const isGroupA = !isGuest && !isGroupB;
+
+    const updateUserProfile = async ({ name, phone, group, avatar_url }) => {
+        const token = localStorage.getItem('helpdesk_token');
+        const res = await fetch('/api/user/profile', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ name, phone, group, avatar_url })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            throw new Error(result.error || 'ไม่สามารถอัปเดตข้อมูลโปรไฟล์ได้');
+        }
+        setUserState(result.user);
+        localStorage.setItem('helpdesk_current_user', JSON.stringify(result.user));
+        if (result.token) {
+            localStorage.setItem('helpdesk_token', result.token);
+        }
+        if (result.user.role) {
+            setRoleState(result.user.role);
+            localStorage.setItem('helpdesk_current_role', result.user.role);
+        }
+        return result.user;
+    };
+
+    const changeUserPassword = async (currentPassword, newPassword) => {
+        const token = localStorage.getItem('helpdesk_token');
+        const res = await fetch('/api/user/change-password', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            throw new Error(result.error || 'ไม่สามารถเปลี่ยนรหัสผ่านได้');
+        }
+        return result;
+    };
+
+    const uploadUserAvatar = async (fileOrFormData) => {
+        const token = localStorage.getItem('helpdesk_token');
+        let body;
+        let headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        if (fileOrFormData instanceof FormData) {
+            body = fileOrFormData;
+        } else if (fileOrFormData instanceof File) {
+            body = new FormData();
+            body.append('avatar', fileOrFormData);
+        } else {
+            headers['Content-Type'] = 'application/json';
+            body = JSON.stringify({ avatar_url: fileOrFormData });
+        }
+
+        const res = await fetch('/api/user/avatar', {
+            method: 'POST',
+            headers,
+            body
+        });
+        const result = await res.json();
+        if (!res.ok) {
+            throw new Error(result.error || 'ไม่สามารถอัปโหลดรูปภาพได้');
+        }
+        setUserState(prev => {
+            const updated = { ...prev, avatar_url: result.avatar_url };
+            localStorage.setItem('helpdesk_current_user', JSON.stringify(updated));
+            return updated;
+        });
+        return result.avatar_url;
+    };
+
     const closeModal = () => setModal(null);
 
     return (
@@ -255,7 +341,13 @@ export function AppProvider({ children }) {
             loginWithEmail,
             signUpWithEmail,
             signOutUser,
-            isRealAuth: !!(user && (user.id || user.email)),
+            isRealAuth: !isGuest,
+            isGuest,
+            isGroupA,
+            isGroupB,
+            updateUserProfile,
+            changeUserPassword,
+            uploadUserAvatar,
             MOCK_PROFILES,
             switchMockProfile,
             theme,
