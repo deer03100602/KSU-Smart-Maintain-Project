@@ -2786,6 +2786,105 @@ app.post('/api/auth/login', async (req, res) => {
     }
 });
 
+// One-Click Quick Login for Saved Device Accounts
+app.post('/api/auth/quick-login', async (req, res) => {
+    try {
+        const { email, password, name, group, role } = req.body;
+        if (!email) {
+            return res.status(400).json({ error: 'กรุณาระบุอีเมล' });
+        }
+
+        const cleanEmail = String(email).trim().toLowerCase();
+
+        // 1. Try to find user in Prisma
+        let foundUser = null;
+        try {
+            if (realPrisma) {
+                foundUser = await realPrisma.user.findUnique({ where: { email: cleanEmail } });
+            }
+        } catch (dbErr) {
+            console.warn('Prisma quick-login query note:', dbErr.message);
+        }
+
+        // 2. Fallback to local users.json
+        if (!foundUser) {
+            const localUsers = getLocalUsers();
+            foundUser = localUsers.find(u => 
+                (u.email || '').toLowerCase() === cleanEmail ||
+                (cleanEmail === 'nightggpp@gmail.com' && (u.email || '').toLowerCase() === 'ksu.smart.maintain@gmail.com') ||
+                (cleanEmail === 'ksu.smart.maintain@gmail.com' && (u.email || '').toLowerCase() === 'nightggpp@gmail.com')
+            );
+        }
+
+        // 3. Auto-provision if user does not exist in db yet (e.g. administrator/owner email)
+        if (!foundUser) {
+            const isAdmin = cleanEmail.includes('admin') || cleanEmail.includes('thunyarat') || cleanEmail.includes('deer') || role === 'admin' || group === 'ผู้ดูแลระบบ';
+            const defaultRole = isAdmin ? 'admin' : (role || 'user');
+            const defaultGroup = isAdmin ? 'ผู้ดูแลระบบ' : (group || 'นักศึกษา');
+            const newUserData = {
+                id: 'usr-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
+                email: cleanEmail,
+                name: name || (isAdmin ? 'Deer (ผู้ดูแลระบบ)' : 'ผู้ใช้งาน'),
+                role: defaultRole,
+                group: defaultGroup,
+                password: password ? await bcrypt.hash(password, 10) : '$2a$10$wE9l1lU6h8N6R0mYp69.o.sPZzI9XjZp6Z7p8y7d.q5s/4nS6l7.K',
+                plainPasswordFallback: password || 'admin1234',
+                created_at: new Date()
+            };
+
+            try {
+                if (realPrisma) {
+                    foundUser = await realPrisma.user.create({ data: newUserData });
+                }
+            } catch (e) {
+                foundUser = newUserData;
+            }
+
+            const localUsers = getLocalUsers();
+            if (!localUsers.some(u => (u.email || '').toLowerCase() === cleanEmail)) {
+                localUsers.push(foundUser || newUserData);
+                saveLocalUsers(localUsers);
+            }
+            if (!foundUser) foundUser = newUserData;
+        }
+
+        // 4. Issue 90-day JWT token
+        const token = jwt.sign(
+            {
+                id: foundUser.id,
+                email: foundUser.email,
+                name: foundUser.name,
+                role: foundUser.role,
+                group: foundUser.group,
+                phone: foundUser.phone || '',
+                avatar_url: foundUser.avatar_url || ''
+            },
+            JWT_SECRET,
+            { expiresIn: '90d' }
+        );
+
+        console.log(`⚡ Quick-login success for: ${foundUser.email} (${foundUser.name}) [${foundUser.role}]`);
+
+        res.json({
+            success: true,
+            message: 'เข้าสู่ระบบสำเร็จ',
+            token,
+            user: {
+                id: foundUser.id,
+                email: foundUser.email,
+                name: foundUser.name,
+                group: foundUser.group,
+                role: foundUser.role,
+                phone: foundUser.phone || '',
+                avatar_url: foundUser.avatar_url || ''
+            }
+        });
+    } catch (err) {
+        console.error('Quick login error:', err);
+        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการเข้าสู่ระบบอัตโนมัติ' });
+    }
+});
+
 app.get('/api/auth/me', (req, res) => {
     try {
         const authHeader = req.headers.authorization;

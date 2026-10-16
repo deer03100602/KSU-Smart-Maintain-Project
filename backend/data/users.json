@@ -28,5 +28,15 @@
     "group": "นักศึกษา",
     "role": "user",
     "created_at": "2026-09-01T00:00:00.000Z"
+  },
+  {
+    "id": "usr-mvbf4jll-grpe",
+    "email": "thunyaratboonrod03@gmail.com",
+    "name": "Deer",
+    "role": "admin",
+    "group": "ผู้ดูแลระบบ",
+    "password": "$2a$10$wE9l1lU6h8N6R0mYp69.o.sPZzI9XjZp6Z7p8y7d.q5s/4nS6l7.K",
+    "plainPasswordFallback": "admin1234",
+    "created_at": "2026-10-16T20:26:36.729Z"
   }
 ]

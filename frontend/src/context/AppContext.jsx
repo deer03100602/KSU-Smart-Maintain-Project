@@ -145,6 +145,65 @@ export function AppProvider({ children }) {
         return loggedInUser;
     };
 
+    const quickLoginUser = async (acc) => {
+        const response = await fetch('/api/auth/quick-login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                email: acc.email, 
+                password: acc.password,
+                name: acc.name,
+                group: acc.group,
+                role: acc.role
+            }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error || 'ไม่สามารถเข้าสู่ระบบอัตโนมัติได้');
+        }
+
+        const loggedInUser = result.user;
+        setUserState(loggedInUser);
+        localStorage.setItem('helpdesk_current_user', JSON.stringify(loggedInUser));
+
+        const userRole = loggedInUser.role || (
+            loggedInUser.email.toLowerCase().includes('admin') ||
+            loggedInUser.group === 'ผู้ดูแลระบบ' ||
+            loggedInUser.group === 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์'
+                ? 'admin'
+                : 'user'
+        );
+        setRoleState(userRole);
+        localStorage.setItem('helpdesk_current_role', userRole);
+
+        if (result.token) {
+            localStorage.setItem('helpdesk_token', result.token);
+        }
+
+        // Keep saved accounts list updated
+        try {
+            const existingSaved = JSON.parse(localStorage.getItem('helpdesk_saved_accounts') || '[]');
+            const updated = [
+                { 
+                    email: loggedInUser.email, 
+                    name: loggedInUser.name, 
+                    group: loggedInUser.group, 
+                    role: userRole, 
+                    password: acc.password || localStorage.getItem('helpdesk_remembered_password') || '' 
+                },
+                ...existingSaved.filter(a => a.email.toLowerCase() !== loggedInUser.email.toLowerCase())
+            ].slice(0, 8);
+            localStorage.setItem('helpdesk_saved_accounts', JSON.stringify(updated));
+            localStorage.setItem('helpdesk_remember_login', 'true');
+            localStorage.setItem('helpdesk_remembered_email', loggedInUser.email);
+        } catch (e) {}
+
+        return loggedInUser;
+    };
+
     const signUpWithEmail = async (email, password, fullName, userGroup = 'นักศึกษา') => {
         const response = await fetch('/api/auth/signup', {
             method: 'POST',
@@ -371,6 +430,7 @@ export function AppProvider({ children }) {
             closeModal,
             modal,
             loginWithEmail,
+            quickLoginUser,
             signUpWithEmail,
             signOutUser,
             isRealAuth: !isGuest,

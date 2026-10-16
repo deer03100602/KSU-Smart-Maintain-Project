@@ -15,13 +15,14 @@ export default function LoginPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
-    const { loginWithEmail, user, isGuest, signOutUser, toast } = useApp();
+    const { loginWithEmail, quickLoginUser, user, isGuest, signOutUser, toast } = useApp();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [rememberMe, setRememberMe] = useState(true);
     const [savedAccounts, setSavedAccounts] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [quickLoggingInEmail, setQuickLoggingInEmail] = useState('');
 
     // Load saved / remembered account on initial mount
     useEffect(() => {
@@ -55,12 +56,24 @@ export default function LoginPage() {
         }
     }, [searchParams]);
 
-    const handleSelectAccount = (acc) => {
+    const handleSelectAccount = async (acc) => {
+        if (quickLoggingInEmail || loading) return;
+        setQuickLoggingInEmail(acc.email || '');
         setEmail(acc.email || '');
         if (acc.password) {
             setPassword(acc.password);
         }
-        toast.info(`เลือกบัญชี: ${acc.name || acc.email}`);
+
+        try {
+            toast.info(`กำลังเข้าสู่ระบบในชื่อ ${acc.name || acc.email}...`);
+            const loggedInUser = await quickLoginUser(acc);
+            toast.success(`ยินดีต้อนรับคุณ ${loggedInUser?.name || acc.name || 'ผู้ดูแลระบบ'}`);
+            router.push('/');
+        } catch (err) {
+            console.error('Quick login error:', err);
+            setQuickLoggingInEmail('');
+            toast.warning('กรุณากรอกรหัสผ่านเพื่อเข้าสู่ระบบ');
+        }
     };
 
     const handleRemoveSavedAccount = (e, accEmail) => {
@@ -195,45 +208,77 @@ export default function LoginPage() {
                             ⚡ บัญชีที่จำไว้ในเครื่องนี้ (คลิกเพื่อเข้าสู่ระบบ):
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                            {savedAccounts.map((acc, idx) => (
-                                <div
-                                    key={idx}
-                                    onClick={() => handleSelectAccount(acc)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        padding: '7px 10px',
-                                        borderRadius: '8px',
-                                        background: email.toLowerCase() === (acc.email || '').toLowerCase() ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.04)',
-                                        border: email.toLowerCase() === (acc.email || '').toLowerCase() ? '1px solid var(--primary-color)' : '1px solid transparent',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease'
-                                    }}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-                                        <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--primary-color)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0 }}>
-                                            {(acc.name || acc.email || 'U').charAt(0).toUpperCase()}
+                            {savedAccounts.map((acc, idx) => {
+                                const isLoggingInThis = quickLoggingInEmail && quickLoggingInEmail.toLowerCase() === (acc.email || '').toLowerCase();
+                                return (
+                                    <div
+                                        key={idx}
+                                        onClick={() => handleSelectAccount(acc)}
+                                        title="คลิกเพื่อเข้าสู่ระบบบัญชีนี้ทันที"
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '8px 12px',
+                                            borderRadius: '8px',
+                                            background: isLoggingInThis 
+                                                ? 'rgba(59, 130, 246, 0.25)' 
+                                                : (email.toLowerCase() === (acc.email || '').toLowerCase() ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255, 255, 255, 0.04)'),
+                                            border: isLoggingInThis || email.toLowerCase() === (acc.email || '').toLowerCase() 
+                                                ? '1px solid var(--primary-color)' 
+                                                : '1px solid rgba(255, 255, 255, 0.08)',
+                                            cursor: quickLoggingInEmail ? 'wait' : 'pointer',
+                                            transition: 'all 0.15s ease',
+                                            boxShadow: isLoggingInThis ? '0 0 12px rgba(59, 130, 246, 0.3)' : 'none'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
+                                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-color), var(--primary-hover))', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0 }}>
+                                                {(acc.name || acc.email || 'U').charAt(0).toUpperCase()}
+                                            </div>
+                                            <div style={{ textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    {acc.name || acc.email}
+                                                    {isLoggingInThis && (
+                                                        <span style={{ fontSize: '0.72rem', color: 'var(--primary-color)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                            <Loader className="spin" style={{ width: 12, height: 12 }} />
+                                                            กำลังเข้าสู่ระบบ...
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                                                    {acc.email} • {acc.group || acc.role}
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div style={{ textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                            <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                                                {acc.name || acc.email}
-                                            </div>
-                                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                                                {acc.email} • {acc.group || acc.role}
-                                            </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            {!isLoggingInThis && (
+                                                <span style={{
+                                                    fontSize: '0.74rem',
+                                                    color: 'var(--primary-color)',
+                                                    background: 'rgba(59, 130, 246, 0.1)',
+                                                    padding: '3px 8px',
+                                                    borderRadius: '6px',
+                                                    fontWeight: 500,
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: 3
+                                                }}>
+                                                    เข้าสู่ระบบ ➜
+                                                </span>
+                                            )}
+                                            <button
+                                                type="button"
+                                                title="ลบบัญชีนี้ออกจากเครื่อง"
+                                                onClick={(e) => handleRemoveSavedAccount(e, acc.email)}
+                                                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
+                                            >
+                                                <X style={{ width: 14, height: 14 }} />
+                                            </button>
                                         </div>
                                     </div>
-                                    <button
-                                        type="button"
-                                        title="ลบบัญชีนี้ออกจากเครื่อง"
-                                        onClick={(e) => handleRemoveSavedAccount(e, acc.email)}
-                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'flex', alignItems: 'center' }}
-                                    >
-                                        <X style={{ width: 14, height: 14 }} />
-                                    </button>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 )}
