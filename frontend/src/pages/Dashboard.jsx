@@ -63,7 +63,7 @@ const DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 
 export default function DashboardPage() {
-    const { toast, theme, role } = useApp();
+    const { toast, theme, role, isGroupB } = useApp();
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [period, setPeriod] = useState('all');
@@ -939,17 +939,19 @@ export default function DashboardPage() {
                             </h2>
                             <p className="page-subtitle" style={{ margin: '0.25rem 0 0 0' }}>แสดงข้อมูลการกระจายงาน อัตราการปิดงาน และสถานะงานค้างของเจ้าหน้าที่แต่ละราย</p>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                            <button
-                                type="button"
-                                onClick={() => setShowTechModal(true)}
-                                className="btn btn-primary"
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', padding: '0.45rem 0.9rem', cursor: 'pointer' }}
-                            >
-                                <UserPlus style={{ width: 16, height: 16 }} />
-                                จัดการ / เพิ่มเจ้าหน้าที่
-                            </button>
-                        </div>
+                        {isGroupB && (
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTechModal(true)}
+                                    className="btn btn-primary"
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', padding: '0.45rem 0.9rem', cursor: 'pointer' }}
+                                >
+                                    <UserPlus style={{ width: 16, height: 16 }} />
+                                    จัดการ / เพิ่มเจ้าหน้าที่
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="charts-row" style={{ alignItems: 'stretch' }}>
@@ -966,7 +968,11 @@ export default function DashboardPage() {
                                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', padding: '2rem', textAlign: 'center' }}>
                                     <Users style={{ width: 48, height: 48, strokeWidth: 1.5, opacity: 0.35, marginBottom: '0.75rem' }} />
                                     <p style={{ margin: 0, fontWeight: 500, color: 'var(--text-primary)' }}>ยังไม่มีข้อมูลกราฟภาระงาน</p>
-                                    <span style={{ fontSize: '0.8rem', opacity: 0.75, marginTop: '0.25rem' }}>เพิ่มรายชื่อเจ้าหน้าที่ด้านขวา หรือคลิกปุ่ม "จัดการ / เพิ่มเจ้าหน้าที่" เพื่อเริ่มต้นแสดงกราฟ</span>
+                                    <span style={{ fontSize: '0.8rem', opacity: 0.75, marginTop: '0.25rem' }}>
+                                        {isGroupB
+                                            ? 'เพิ่มรายชื่อเจ้าหน้าที่ด้านขวา หรือคลิกปุ่ม "จัดการ / เพิ่มเจ้าหน้าที่" เพื่อเริ่มต้นแสดงกราฟ'
+                                            : 'ระบบยังไม่มีข้อมูลกราฟภาระงานของเจ้าหน้าที่ในขณะนี้'}
+                                    </span>
                                 </div>
                             )}
                         </div>
@@ -993,36 +999,38 @@ export default function DashboardPage() {
                                 </div>
                             </div>
 
-                            {/* Inline Quick Add Input */}
-                            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.6rem', background: 'rgba(255,255,255,0.03)', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-                                <input
-                                    type="text"
-                                    className="form-input"
-                                    placeholder="พิมพ์ชื่อเจ้าหน้าที่ หรือตำแหน่งช่าง เช่น ช่างสมใจ..."
-                                    value={newTechInput}
-                                    onChange={(e) => setNewTechInput(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleAddTechDirect();
-                                        }
-                                    }}
-                                    style={{ fontSize: '0.85rem', padding: '6px 10px', height: '34px', flex: 1 }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => handleAddTechDirect()}
-                                    disabled={isAddingTech}
-                                    className="btn btn-primary"
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', padding: '0 12px', height: '34px', whiteSpace: 'nowrap' }}
-                                >
-                                    <Plus style={{ width: 14, height: 14 }} />
-                                    เพิ่ม
-                                </button>
-                            </div>
+                            {/* Inline Quick Add Input (Group B only) */}
+                            {isGroupB && (
+                                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.6rem', background: 'rgba(255,255,255,0.03)', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                                    <input
+                                        type="text"
+                                        className="form-input"
+                                        placeholder="พิมพ์ชื่อเจ้าหน้าที่ หรือตำแหน่งช่าง เช่น ช่างสมใจ..."
+                                        value={newTechInput}
+                                        onChange={(e) => setNewTechInput(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleAddTechDirect();
+                                            }
+                                        }}
+                                        style={{ fontSize: '0.85rem', padding: '6px 10px', height: '34px', flex: 1 }}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleAddTechDirect()}
+                                        disabled={isAddingTech}
+                                        className="btn btn-primary"
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', padding: '0 12px', height: '34px', whiteSpace: 'nowrap' }}
+                                    >
+                                        <Plus style={{ width: 14, height: 14 }} />
+                                        เพิ่ม
+                                    </button>
+                                </div>
+                            )}
 
-                            {/* Suggestion Chips */}
-                            {(!stats?.workloads || Object.keys(stats.workloads).length < 5) && (
+                            {/* Suggestion Chips (Group B only) */}
+                            {isGroupB && (!stats?.workloads || Object.keys(stats.workloads).length < 5) && (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.75rem', alignItems: 'center' }}>
                                     <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ตำแหน่งแนะนำ:</span>
                                     {SUGGESTED_ROLES.filter(r => !Object.keys(stats?.workloads || {}).includes(r)).map(roleName => (
@@ -1058,16 +1066,20 @@ export default function DashboardPage() {
                                             <th style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)', textAlign: 'center' }}>งานค้าง</th>
                                             <th style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)', textAlign: 'center' }}>เสร็จสิ้น</th>
                                             <th style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)', textAlign: 'center' }}>ทั้งหมด</th>
-                                            <th style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)', width: '25%' }}>อัตราสำเร็จ</th>
-                                            <th style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)', textAlign: 'center', width: '32px' }}></th>
+                                            <th style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)', width: isGroupB ? '25%' : '30%' }}>อัตราสำเร็จ</th>
+                                            {isGroupB && <th style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)', textAlign: 'center', width: '32px' }}></th>}
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {!stats?.workloads || Object.keys(stats.workloads).length === 0 ? (
                                             <tr>
-                                                <td colSpan={6} style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-secondary)' }}>
+                                                <td colSpan={isGroupB ? 6 : 5} style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-secondary)' }}>
                                                     <p style={{ margin: '0 0 0.5rem 0', fontWeight: 500, color: 'var(--text-primary)' }}>ยังไม่มีรายชื่อเจ้าหน้าที่ในระบบ</p>
-                                                    <span style={{ fontSize: '0.8rem' }}>พิมพ์ชื่อเจ้าหน้าที่ในช่องด้านบน หรือคลิกตำแหน่งแนะนำเพื่อเพิ่มรายชื่อลงในระบบได้ทันที</span>
+                                                    <span style={{ fontSize: '0.8rem' }}>
+                                                        {isGroupB
+                                                            ? 'พิมพ์ชื่อเจ้าหน้าที่ในช่องด้านบน หรือคลิกตำแหน่งแนะนำเพื่อเพิ่มรายชื่อลงในระบบได้ทันที'
+                                                            : 'ขณะนี้ยังไม่มีการบันทึกรายชื่อเจ้าหน้าที่ในระบบ'}
+                                                    </span>
                                                 </td>
                                             </tr>
                                         ) : (
@@ -1114,27 +1126,29 @@ export default function DashboardPage() {
                                                                 </span>
                                                             </div>
                                                         </td>
-                                                        <td style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
-                                                            {!isUnassigned && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleRemoveTechDirect(name)}
-                                                                    style={{
-                                                                        background: 'transparent',
-                                                                        border: 'none',
-                                                                        color: 'var(--text-secondary)',
-                                                                        cursor: 'pointer',
-                                                                        padding: 2,
-                                                                        opacity: 0.6
-                                                                    }}
-                                                                    onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.opacity = '1'; }}
-                                                                    onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.opacity = '0.6'; }}
-                                                                    title={`ลบ ${name}`}
-                                                                >
-                                                                    <Trash2 style={{ width: 14, height: 14 }} />
-                                                                </button>
-                                                            )}
-                                                        </td>
+                                                        {isGroupB && (
+                                                            <td style={{ padding: '0.65rem 0.5rem', textAlign: 'center' }}>
+                                                                {!isUnassigned && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleRemoveTechDirect(name)}
+                                                                        style={{
+                                                                            background: 'transparent',
+                                                                            border: 'none',
+                                                                            color: 'var(--text-secondary)',
+                                                                            cursor: 'pointer',
+                                                                            padding: 2,
+                                                                            opacity: 0.6
+                                                                        }}
+                                                                        onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.opacity = '1'; }}
+                                                                        onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.opacity = '0.6'; }}
+                                                                        title={`ลบ ${name}`}
+                                                                    >
+                                                                        <Trash2 style={{ width: 14, height: 14 }} />
+                                                                    </button>
+                                                                )}
+                                                            </td>
+                                                        )}
                                                     </tr>
                                                 );
                                             })
@@ -1145,8 +1159,8 @@ export default function DashboardPage() {
                         </div>
                     </div>
 
-                    {/* Manage Staff Modal */}
-                    {showTechModal && (
+                    {/* Manage Staff Modal (Group B only) */}
+                    {isGroupB && showTechModal && (
                         <div style={{
                             position: 'fixed',
                             inset: 0,
