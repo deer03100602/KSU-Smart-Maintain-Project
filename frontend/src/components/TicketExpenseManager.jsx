@@ -89,18 +89,32 @@ export default function TicketExpenseManager({
                 }
                 if (parsed.file_url) setReceiptUrl(parsed.file_url);
 
+                if (!description && parsed.vendor_name) {
+                    setDescription(`ค่าวัสดุ/อุปกรณ์ (${parsed.vendor_name})`);
+                }
+
+                if (parsed.ocr_note) {
+                    setOcrWarning(parsed.ocr_note);
+                }
+
+                if (appContext?.toast?.success) {
+                    appContext.toast.success('สแกนและดึงข้อมูลใบเสร็จอัตโนมัติสำเร็จ');
+                }
+
                 // Validation alert: check duplicate receipt
                 const isDuplicate = expenses.some(exp => exp.receipt_no && exp.receipt_no.trim() === (parsed.receipt_no || '').trim());
                 if (isDuplicate) {
                     setOcrWarning(`⚠️ ตรวจพบว่าเลขที่ใบเสร็จ "${parsed.receipt_no}" ถูกบันทึกในระบบแล้ว กรุณาตรวจสอบก่อนบันทึก`);
                 }
             } else {
-                setOcrWarning(data.error || 'ไม่สามารถอ่านข้อความจากไฟล์ได้');
+                setOcrWarning(data.error || 'ไม่สามารถอ่านข้อความจากไฟล์ได้ กรุณากรอกข้อมูลด้วยตนเอง');
             }
         } catch (err) {
-            setOcrWarning('เกิดข้อผิดพลาดในการเชื่อมต่อ OCR');
+            console.error('OCR scan fetch error:', err);
+            setOcrWarning('เกิดข้อผิดพลาดในการเชื่อมต่อ OCR: ' + (err.message || 'เครือข่ายขัดข้อง'));
         } finally {
             setOcrLoading(false);
+            if (e.target) e.target.value = '';
         }
     };
 

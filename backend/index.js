@@ -2166,50 +2166,112 @@ app.delete('/api/tickets/:id/evidence/:evidenceId', async (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.post('/api/ocr/scan-receipt', upload.single('receipt'), async (req, res) => {
     try {
-        if (!req.file) {
+        if (!req.file || !req.file.buffer) {
             return res.status(400).json({ error: 'กรุณาอัปโหลดไฟล์ใบเสร็จ (JPG, PNG หรือ PDF)' });
         }
 
-        const filePath = req.file.path;
-        const fileExt = path.extname(req.file.originalname).toLowerCase();
+        // 1. Save uploaded receipt permanently to uploads directory
+        const ext = (path.extname(req.file.originalname) || (req.file.mimetype === 'application/pdf' ? '.pdf' : '.jpg')).toLowerCase();
+        const filename = `receipt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}${ext}`;
+        const targetPath = path.join(uploadsDir, filename);
+
+        try {
+            fs.writeFileSync(targetPath, req.file.buffer);
+            const frontendUploadsDir = path.join(__dirname, '..', 'frontend', 'public', 'uploads');
+            if (fs.existsSync(frontendUploadsDir)) {
+                try {
+                    fs.writeFileSync(path.join(frontendUploadsDir, filename), req.file.buffer);
+                } catch (feErr) {}
+            }
+        } catch (fsErr) {
+            console.warn('Receipt file write warning:', fsErr.message);
+        }
+
         let extractedText = '';
 
-        if (fileExt === '.pdf') {
+        // 2. Extract text from PDF using pdf-parse
+        if (ext === '.pdf' || req.file.mimetype === 'application/pdf') {
             try {
                 const pdfParse = require('pdf-parse');
-                const dataBuffer = fs.readFileSync(filePath);
-                const pdfData = await pdfParse(dataBuffer);
+                const pdfData = await pdfParse(req.file.buffer);
                 extractedText = pdfData.text || '';
             } catch (pdfErr) {
                 console.warn('PDF parse fallback note:', pdfErr.message);
             }
         }
 
-        // If not PDF or PDF had no text (e.g. scanned PDF image), run OCR with Tesseract
-        if (!extractedText.trim()) {
+        // 3. Extract text from Image or Scanned document using Tesseract.js
+        if (!extractedText.trim() && ext !== '.pdf') {
+            let worker = null;
             try {
                 const { createWorker } = require('tesseract.js');
-                const worker = await createWorker('tha+eng');
-                const ret = await worker.recognize(filePath);
-                extractedText = ret.data.text || '';
-                await worker.terminate();
+                worker = await createWorker('tha+eng');
+                const ret = await worker.recognize(req.file.buffer || targetPath);
+                extractedText = ret?.data?.text || '';
             } catch (tessErr) {
-                console.warn('Tesseract OCR error:', tessErr.message);
+                console.warn('Tesseract tha+eng error, trying eng:', tessErr.message);
+                try {
+                    if (worker) await worker.terminate();
+                    const { createWorker } = require('tesseract.js');
+                    worker = await createWorker('eng');
+                    const ret = await worker.recognize(req.file.buffer || targetPath);
+                    extractedText = ret?.data?.text || '';
+                } catch (e2) {
+                    console.warn('Tesseract fallback error:', e2.message);
+                }
+            } finally {
+                if (worker) {
+                    try { await worker.terminate(); } catch (e) {}
+                }
             }
         }
 
-        // Parse fields from text
+        // 4. Parse fields from extracted text
         const parsedData = parseReceiptText(extractedText);
         parsedData.raw_text = extractedText;
-        parsedData.file_url = `/uploads/${req.file.filename}`;
+        parsedData.file_url = `/uploads/${filename}`;
+
+        // Fallbacks if OCR could not detect specific fields
+        if (!parsedData.receipt_date) {
+            parsedData.receipt_date = new Date().toISOString().split('T')[0];
+        }
+        if (!parsedData.vendor_name && req.file.originalname) {
+            const rawBase = path.parse(req.file.originalname).name.replace(/[-_]/g, ' ').trim();
+            if (rawBase && !rawBase.toLowerCase().includes('receipt') && !rawBase.toLowerCase().includes('image') && isNaN(Number(rawBase))) {
+                parsedData.vendor_name = rawBase;
+            }
+        }
+
+        console.log(`🧾 OCR processed: ${filename} | Vendor: "${parsedData.vendor_name}" | No: "${parsedData.receipt_no}" | Amount: ฿${parsedData.net_amount}`);
 
         res.json({
             success: true,
             data: parsedData
         });
     } catch (error) {
-        console.error('OCR scan error:', error);
-        res.status(500).json({ error: 'เกิดข้อผิดพลาดในการประมวลผล OCR' });
+        console.error('OCR scan handler error:', error);
+        // Resilient fail-safe: even on unexpected error, return a valid response with current date and generic record
+        const fallbackFilename = `receipt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}.jpg`;
+        if (req.file && req.file.buffer) {
+            try {
+                fs.writeFileSync(path.join(uploadsDir, fallbackFilename), req.file.buffer);
+            } catch (e) {}
+        }
+        res.json({
+            success: true,
+            data: {
+                vendor_name: '',
+                receipt_no: '',
+                receipt_date: new Date().toISOString().split('T')[0],
+                items: [],
+                total_price: 0,
+                tax_amount: 0,
+                net_amount: 0,
+                raw_text: '',
+                file_url: `/uploads/${fallbackFilename}`,
+                ocr_note: 'บันทึกรูปใบเสร็จเรียบร้อยแล้ว แต่ไม่สามารถตรวจจับข้อความอัตโนมัติได้ กรุณาระบุข้อมูลเพิ่มเติม'
+            }
+        });
     }
 });
 
@@ -2224,57 +2286,124 @@ function parseReceiptText(text) {
         net_amount: 0
     };
 
-    if (!text) return result;
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (!text || typeof text !== 'string') return result;
+    const cleanText = text.replace(/\r/g, '\n');
+    const lines = cleanText.split('\n').map(l => l.trim()).filter(Boolean);
 
-    // 1. Detect Vendor name (usually in top 5 lines)
-    for (let i = 0; i < Math.min(5, lines.length); i++) {
+    const genericHeaderRegex = /^(ใบเสร็จ|ใบเสร็จรับเงิน|ใบกำกับภาษี|ใบส่งของ|บิลเงินสด|สำเนา|ต้นฉบับ|ใบเสร็จอย่างย่อ|RECEIPT|TAX\s*INVOICE|INVOICE|CASH\s*SALE|OFFICIAL\s*RECEIPT)$/i;
+
+    // 1. Detect Vendor name (usually in the top 6 lines)
+    for (let i = 0; i < Math.min(6, lines.length); i++) {
         const line = lines[i];
-        if (line.match(/(บจก\.|บริษัท|หจก\.|ห้างหุ้นส่วน|ร้าน|store|shop|market|hardware)/i)) {
-            result.vendor_name = line;
+        if (genericHeaderRegex.test(line)) continue;
+        if (line.match(/(บจก\.|บริษัท|หจก\.|ห้างหุ้นส่วน|ร้าน|สหกรณ์|ศูนย์|ฮาร์ดแวร์|การช่าง|มาร์ท|สโตร์|store|shop|market|hardware|home|advice|jib|office|stationery|mall|mart|supplier)/i)) {
+            result.vendor_name = line.replace(/^(ชื่อร้าน|ผู้ขาย|จำหน่ายโดย|vendor)\s*[:#\-.]?\s*/i, '').trim();
             break;
         }
     }
-    if (!result.vendor_name && lines.length > 0) {
-        result.vendor_name = lines[0];
+    if (!result.vendor_name) {
+        for (let i = 0; i < Math.min(3, lines.length); i++) {
+            const line = lines[i];
+            if (!genericHeaderRegex.test(line) && line.length >= 3 && !line.match(/^[0-9\s\-:.\/]+$/)) {
+                result.vendor_name = line;
+                break;
+            }
+        }
     }
 
-    // 2. Receipt No
-    const receiptNoMatch = text.match(/(?:เลขที่|ใบเสร็จรับเงินเลขที่|INV|INVOICE|REC|NO\.?|RECEIPT\s*NO\.?)\s*[:#\-]?\s*([A-Za-z0-9\-\/]+)/i);
+    // 2. Receipt / Invoice Number
+    const receiptNoMatch = cleanText.match(/(?:เลขที่|ใบเสร็จรับเงินเลขที่|ใบเสร็จเลขที่|เลขที่ใบเสร็จ|เล่มที่\/เลขที่|เลขที่เอกสาร|INV|INVOICE|REC|RECEIPT|BILL|DOC|NO\.?|TAX\s*INV|Tax\s*Invoice\s*No\.?)\s*[:#\-.]?\s*([A-Za-z0-9\-\/]{3,25})/i);
     if (receiptNoMatch) {
-        result.receipt_no = receiptNoMatch[1];
+        result.receipt_no = receiptNoMatch[1].replace(/[.,;:_]+$/, '').trim();
+    } else {
+        const fallbackNoMatch = cleanText.match(/\b([A-Z]{2,5}[0-9]{4,12})\b/);
+        if (fallbackNoMatch) {
+            result.receipt_no = fallbackNoMatch[1];
+        }
     }
 
     // 3. Receipt Date
-    const dateMatch = text.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
-    if (dateMatch) {
-        let year = parseInt(dateMatch[3], 10);
-        if (year > 2500) year -= 543; // Buddhist Era
-        if (year < 100) year += 2000;
-        const month = parseInt(dateMatch[2], 10) - 1;
-        const day = parseInt(dateMatch[1], 10);
-        const d = new Date(year, month, day);
+    const thaiMonths = {
+        'ม.ค.': 0, 'มกราคม': 0, 'ก.พ.': 1, 'กุมภาพันธ์': 1, 'มี.ค.': 2, 'มีนาคม': 2,
+        'เม.ย.': 3, 'เมษายน': 3, 'พ.ค.': 4, 'พฤษภาคม': 4, 'มิ.ย.': 5, 'มิถุนายน': 5,
+        'ก.ค.': 6, 'กรกฎาคม': 6, 'ส.ค.': 7, 'สิงหาคม': 7, 'ก.ย.': 8, 'กันยายน': 8,
+        'ต.ค.': 9, 'ตุลาคม': 9, 'พ.ย.': 10, 'พฤศจิกายน': 10, 'ธ.ค.': 11, 'ธันวาคม': 11
+    };
+
+    // 3.1 Check Thai month pattern e.g. "17 ต.ค. 2567" or "17 ตุลาคม 2567"
+    const thaiDateMatch = cleanText.match(/(\d{1,2})\s*(ม\.?ค\.?|มกราคม|ก\.?พ\.?|กุมภาพันธ์|มี\.?ค\.?|มีนาคม|เม\.?ย\.?|เมษายน|พ\.?ค\.?|พฤษภาคม|มิ\.?ย\.?|มิถุนายน|ก\.?ค\.?|กรกฎาคม|ส\.?ค\.?|สิงหาคม|ก\.?ย\.?|กันยายน|ต\.?ค\.?|ตุลาคม|พ\.?ย\.?|พฤศจิกายน|ธ\.?ค\.?|ธันวาคม)\s*(\d{2,4})/i);
+    if (thaiDateMatch) {
+        const day = parseInt(thaiDateMatch[1], 10);
+        const mStr = (thaiDateMatch[2] || '').replace(/[\.\s]/g, '').toLowerCase();
+        let month = -1;
+        for (const [k, v] of Object.entries(thaiMonths)) {
+            const cleanK = k.replace(/[\.\s]/g, '').toLowerCase();
+            if (cleanK === mStr || mStr.startsWith(cleanK)) {
+                month = v;
+                break;
+            }
+        }
+        if (month === -1) month = 0;
+        let year = parseInt(thaiDateMatch[3], 10);
+        if (year > 2500) year -= 543;
+        else if (year < 100) year += (year > 50 ? 1900 + year - 543 : 2000 + year);
+        const d = new Date(Date.UTC(year, month, day));
         if (!isNaN(d.getTime())) {
             result.receipt_date = d.toISOString().split('T')[0];
         }
     }
 
+    // 3.2 Check Numeric Date format DD/MM/YYYY or YYYY-MM-DD
+    if (!result.receipt_date) {
+        const numDateMatch = cleanText.match(/(?:วันที่|DATE|Date)?\s*[:#\-.]?\s*(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+        if (numDateMatch) {
+            let year = parseInt(numDateMatch[3], 10);
+            if (year > 2500) year -= 543;
+            else if (year < 100) year += (year > 50 ? 1900 + year - 543 : 2000 + year);
+            const month = parseInt(numDateMatch[2], 10) - 1;
+            const day = parseInt(numDateMatch[1], 10);
+            const d = new Date(Date.UTC(year, month, day));
+            if (!isNaN(d.getTime())) {
+                result.receipt_date = d.toISOString().split('T')[0];
+            }
+        }
+    }
+
     // 4. Amounts & Totals
-    const totalMatch = text.match(/(?:รวมทั้งสิ้น|ยอดรวมสุทธิ|ยอดสุทธิ|TOTAL|NET\s*TOTAL|GRAND\s*TOTAL)\s*[:#\-]?\s*([0-9,]+(?:\.\d{2})?)/i);
+    // 4.1 Grand / Net Total
+    const totalMatch = cleanText.match(/(?:รวมทั้งสิ้น|ยอดรวมสุทธิ|ยอดสุทธิ|ยอดรวมทั้งสิ้น|จำนวนเงินรวมทั้งสิ้น|จำนวนเงินสุทธิ|รวมเงินทั้งสิ้น|ยอดชำระ|ชำระแล้ว|TOTAL\s*DUE|TOTAL|NET\s*TOTAL|GRAND\s*TOTAL|NET\s*AMOUNT|AMOUNT\s*DUE)\s*[:#\-.]?\s*([0-9,]+(?:\.\d{1,2})?)/i);
     if (totalMatch) {
         result.net_amount = parseFloat(totalMatch[1].replace(/,/g, '')) || 0;
     }
 
-    const taxMatch = text.match(/(?:ภาษีมูลค่าเพิ่ม|VAT|ภาษี)\s*(?:7%|[:#\-]?)\s*([0-9,]+(?:\.\d{2})?)/i);
+    // 4.2 Tax Amount
+    const taxMatch = cleanText.match(/(?:ภาษีมูลค่าเพิ่ม|VAT|ภาษี\s*7%)\s*[:#\-.]?\s*([0-9,]+(?:\.\d{1,2})?)/i);
     if (taxMatch) {
         result.tax_amount = parseFloat(taxMatch[1].replace(/,/g, '')) || 0;
     }
 
-    const subTotalMatch = text.match(/(?:รวมเงิน|ยอดรวมก่อนภาษี|SUBTOTAL|TOTAL\s*BEFORE\s*TAX)\s*[:#\-]?\s*([0-9,]+(?:\.\d{2})?)/i);
+    // 4.3 Subtotal (Before Tax)
+    const subTotalMatch = cleanText.match(/(?:รวมเงิน|ยอดรวมก่อนภาษี|มูลค่าสินค้า|SUBTOTAL|TOTAL\s*BEFORE\s*TAX)\s*[:#\-.]?\s*([0-9,]+(?:\.\d{1,2})?)/i);
     if (subTotalMatch) {
         result.total_price = parseFloat(subTotalMatch[1].replace(/,/g, '')) || 0;
     } else if (result.net_amount > 0) {
         result.total_price = result.tax_amount > 0 ? (result.net_amount - result.tax_amount) : result.net_amount;
+    }
+
+    // 4.4 Fallback: scan for any decimal monetary numbers at bottom of text
+    if (!result.net_amount || result.net_amount <= 0) {
+        const moneyRegex = /\b(\d{1,3}(?:,\d{3})*\.\d{2})\b/g;
+        let match;
+        const foundAmounts = [];
+        while ((match = moneyRegex.exec(cleanText)) !== null) {
+            const val = parseFloat(match[1].replace(/,/g, ''));
+            if (val > 0 && val < 5000000) foundAmounts.push(val);
+        }
+        if (foundAmounts.length > 0) {
+            // Usually the highest value towards the bottom is the total
+            result.net_amount = Math.max(...foundAmounts);
+            result.total_price = result.net_amount;
+        }
     }
 
     return result;

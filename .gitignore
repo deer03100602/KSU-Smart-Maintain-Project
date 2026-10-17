@@ -37,6 +37,7 @@ backend/data/line_contacts.json
 
 # Local zip packages
 *.zip
+*.traineddata
 
 # Operating System Files
 .DS_Store
