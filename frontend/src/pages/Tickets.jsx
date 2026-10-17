@@ -160,15 +160,17 @@ export default function TicketListPage() {
                     const data = await res.json();
                     const merged = mergeTicketsWithStorage(data);
                     setTickets(merged);
-                    syncTicketsWithServer(merged).catch(() => {});
+                    if (merged.length > 0) {
+                        syncTicketsWithServer(merged).catch(() => {});
+                    }
                 } else {
                     const stored = getStoredTickets();
-                    if (stored.length > 0) setTickets(stored);
+                    setTickets(stored);
                 }
             } catch (e) {
                 console.error('Error fetching tickets:', e);
                 const stored = getStoredTickets();
-                if (stored.length > 0) setTickets(stored);
+                setTickets(stored);
             } finally {
                 setLoading(false);
             }

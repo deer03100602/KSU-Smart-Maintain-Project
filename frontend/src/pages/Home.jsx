@@ -19,7 +19,7 @@ import { useApp } from '@/context/AppContext';
 export default function HomePage() {
     const { isGuest } = useApp();
     const buildInitialStats = (stored) => {
-        if (!Array.isArray(stored) || stored.length === 0) return null;
+        const list = Array.isArray(stored) ? stored : [];
         const byStatus = {
             'Open': 0,
             'In Progress': 0,
@@ -28,32 +28,30 @@ export default function HomePage() {
             'Closed': 0,
             'Cancelled': 0
         };
-        stored.forEach(t => {
-            if (byStatus[t.status] !== undefined) byStatus[t.status]++;
+        list.forEach(t => {
+            if (t && byStatus[t.status] !== undefined) byStatus[t.status]++;
         });
         return {
-            total: stored.length,
+            total: list.length,
             byStatus,
-            recentTickets: stored.slice(0, 5)
+            recentTickets: list.slice(0, 5)
         };
     };
 
     const [stats, setStats] = useState(() => buildInitialStats(getStoredTickets()));
-    const [loading, setLoading] = useState(() => !getStoredTickets().length);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         const refreshFromLocal = () => {
             const stored = getStoredTickets();
             const localStats = buildInitialStats(stored);
-            if (localStats) {
-                setStats(prev => ({
-                    ...(prev || {}),
-                    ...localStats,
-                    byStatus: { ...((prev && prev.byStatus) || {}), ...localStats.byStatus },
-                    recentTickets: localStats.recentTickets
-                }));
-                setLoading(false);
-            }
+            setStats(prev => ({
+                ...(prev || {}),
+                total: localStats.total,
+                byStatus: localStats.byStatus,
+                recentTickets: localStats.recentTickets
+            }));
+            setLoading(false);
         };
 
         window.addEventListener('ksu_ticket_updated', refreshFromLocal);
@@ -69,19 +67,18 @@ export default function HomePage() {
                     const allStored = getStoredTickets();
                     const localStats = buildInitialStats(allStored);
 
-                    if (localStats) {
-                        setStats({
-                            ...data,
-                            total: Math.max(data.total || 0, allStored.length),
-                            byStatus: {
-                                ...(data.byStatus || {}),
-                                ...localStats.byStatus
-                            },
-                            recentTickets: mergedRecent.slice(0, 5)
-                        });
+                    setStats({
+                        ...data,
+                        total: (allStored.length === 0 && (!data.total || data.total === 0)) 
+                            ? 0 
+                            : (allStored.length > 0 ? allStored.length : (data.total || 0)),
+                        byStatus: (allStored.length === 0 && (!data.total || data.total === 0))
+                            ? localStats.byStatus
+                            : { ...(data.byStatus || {}), ...localStats.byStatus },
+                        recentTickets: mergedRecent.slice(0, 5)
+                    });
+                    if (allStored.length > 0) {
                         syncTicketsWithServer(allStored).catch(() => {});
-                    } else {
-                        setStats(data);
                     }
                 }
             } catch (e) {

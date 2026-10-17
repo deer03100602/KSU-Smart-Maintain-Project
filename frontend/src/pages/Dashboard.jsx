@@ -480,14 +480,14 @@ export default function DashboardPage() {
     }, [stats, theme]);
 
     // Use allTimeStats for summary cards so they always show real totals
-    const allTime = stats?.allTimeStats || {};
+    const allTime = stats?.allTimeStats || stats?.allTime || {};
 
     // Determine current display values: for custom period show stats for the selected range (if valid),
     // otherwise fall back to all-time summary values.
-    const totalCount = loading ? '...' : (period === 'custom' ? (isCustomSelectionValid() && stats ? stats.total : '-') : (allTime.total || 0));
-    const inProgressCount = loading ? '...' : (period === 'custom' ? (isCustomSelectionValid() && stats ? (stats.byStatus?.['In Progress'] || 0) : '-') : (allTime.byStatus?.['In Progress'] || 0));
-    const resolvedAndClosed = loading ? '...' : (period === 'custom' ? (isCustomSelectionValid() && stats ? ((stats.byStatus?.['Resolved'] || 0) + (stats.byStatus?.['Closed'] || 0)) : '-') : ((allTime.byStatus?.['Resolved'] || 0) + (allTime.byStatus?.['Closed'] || 0)));
-    const urgentCount = loading ? '...' : (period === 'custom' ? (isCustomSelectionValid() && stats ? (stats.byPriority?.['Urgent'] || 0) : '-') : (allTime.byPriority?.['Urgent'] || 0));
+    const totalCount = loading ? '...' : (period === 'custom' ? (isCustomSelectionValid() && stats ? stats.total : '-') : (allTime.total !== undefined ? allTime.total : (stats?.total ?? 0)));
+    const inProgressCount = loading ? '...' : (period === 'custom' ? (isCustomSelectionValid() && stats ? (stats.byStatus?.['In Progress'] || 0) : '-') : (allTime.byStatus?.['In Progress'] ?? stats?.byStatus?.['In Progress'] ?? 0));
+    const resolvedAndClosed = loading ? '...' : (period === 'custom' ? (isCustomSelectionValid() && stats ? ((stats.byStatus?.['Resolved'] || 0) + (stats.byStatus?.['Closed'] || 0)) : '-') : (((allTime.byStatus?.['Resolved'] || 0) + (allTime.byStatus?.['Closed'] || 0))));
+    const urgentCount = loading ? '...' : (period === 'custom' ? (isCustomSelectionValid() && stats ? (stats.byPriority?.['Urgent'] || 0) : '-') : (allTime.byPriority?.['Urgent'] ?? stats?.byPriority?.['Urgent'] ?? 0));
 
     // Workloads summary (aggregated from stats.workloads for the current range)
     const workloadsData = stats?.workloads || {};

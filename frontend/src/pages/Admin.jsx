@@ -171,7 +171,9 @@ export default function AdminManagementPage() {
                 const data = await ticketsRes.json();
                 const merged = mergeTicketsWithStorage(data);
                 setTickets(merged);
-                syncTicketsWithServer(merged).catch(() => {});
+                if (merged.length > 0) {
+                    syncTicketsWithServer(merged).catch(() => {});
+                }
                 
                 // If currently viewing a ticket, sync it
                 if (viewingTicket) {
@@ -183,7 +185,7 @@ export default function AdminManagementPage() {
                 }
             } else {
                 const stored = getStoredTickets();
-                if (stored.length > 0) setTickets(stored);
+                setTickets(stored);
             }
             if (typesRes.ok) {
                 const typesData = await typesRes.json();
@@ -584,10 +586,11 @@ export default function AdminManagementPage() {
                     setTickets(prev => prev.filter(t => !idsToDelete.includes(t.id) && !idsToDelete.includes(t.ticket_no)));
                     setSelectedIds([]);
 
-                    const promises = idsToDelete.map(id => 
-                        fetch(`/api/tickets/${id}`, { method: 'DELETE' })
-                    );
-                    await Promise.all(promises);
+                    await fetch('/api/tickets', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids: idsToDelete })
+                    });
                     toast.success(`ลบสำเร็จ ${idsToDelete.length} รายการ`);
                     fetchData();
                 } catch (e) {

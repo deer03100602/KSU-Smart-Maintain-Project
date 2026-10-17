@@ -89,8 +89,8 @@ function getLocalDb() {
             db.deletedTicketIds = db.deletedTicketIds || [];
             const deletedSet = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
 
-            // Auto-seed with master university dataset if tickets list is empty
-            if (db.tickets.length === 0 && Array.isArray(SEED_TICKETS) && SEED_TICKETS.length > 0) {
+            // Auto-seed with master university dataset ONLY IF DB IS UNINITIALIZED (first boot ever)
+            if (!db.initialized && db.tickets.length === 0 && Array.isArray(SEED_TICKETS) && SEED_TICKETS.length > 0) {
                 const seedIds = new Set(SEED_TICKETS.map(t => String(t.id).toLowerCase()));
                 const seedNos = new Set(SEED_TICKETS.map(t => String(t.ticket_no).toLowerCase()));
                 // Clean deletedTicketIds from seed IDs
@@ -245,13 +245,15 @@ const prisma = {
     },
     ticket: {
         findMany: async ({ select, orderBy } = {}) => {
-            let list = [];
+            let list = null;
             if (realPrisma) {
                 try { 
                     list = await realPrisma.ticket.findMany({ select, orderBy }); 
-                } catch (e) {}
+                } catch (e) {
+                    list = null;
+                }
             }
-            if (!list || list.length === 0) {
+            if (list === null) {
                 const db = getLocalDb();
                 list = [...(db.tickets || [])];
                 list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
@@ -929,8 +931,7 @@ async function initDatabase() {
 async function ensureDatabaseSeeded(force = false) {
     try {
         const db = getLocalDb();
-        const activeTickets = Array.isArray(db.tickets) ? db.tickets : [];
-        const needsSeed = force || activeTickets.length === 0;
+        const needsSeed = force || (!db.initialized);
 
         if (needsSeed) {
             console.log('🌱 Seeding JSON store with master KSU demo dataset (6 tickets)...');
@@ -952,7 +953,7 @@ async function ensureDatabaseSeeded(force = false) {
         if (realPrisma) {
             try {
                 const count = await realPrisma.ticket.count().catch(() => 0);
-                if (count === 0 || force) {
+                if ((count === 0 && !db.initialized) || force) {
                     console.log('🌱 Upserting 6 master tickets into PostgreSQL database...');
                     for (const t of SEED_TICKETS) {
                         await realPrisma.ticket.upsert({
@@ -1488,7 +1489,10 @@ app.post('/api/tickets', async (req, res) => {
         while (existingNums.has(nextNum)) {
             nextNum++;
         }
-        const ticketNo = body.ticket_no || ('TKT-' + String(nextNum).padStart(2, '0'));
+        // If there are no existing tickets, strictly start with TKT-01
+        const ticketNo = (existingNums.size === 0) 
+            ? 'TKT-01' 
+            : (body.ticket_no && !existingNums.has(parseInt((body.ticket_no.match(/TKT-(\d+)/i) || [])[1], 10)) ? body.ticket_no : ('TKT-' + String(nextNum).padStart(2, '0')));
 
         const now = new Date();
         const id = body.id || ('id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 9));
@@ -1892,6 +1896,18 @@ app.delete('/api/tickets/:id', async (req, res) => {
         db.timelines = (db.timelines || []).filter(t => t.ticket_id !== targetId && t.ticket_no !== targetNo && t.ticket_id !== id && t.ticket_no !== id);
         db.evidences = (db.evidences || []).filter(ev => ev.ticket_id !== targetId && ev.ticket_no !== targetNo && ev.ticket_id !== id && ev.ticket_no !== id);
 
+        if ((db.tickets || []).length === 0) {
+            db.counter = 0;
+            if (realPrisma) {
+                try {
+                    await realPrisma.expense.deleteMany({});
+                    await realPrisma.ticketTimeline.deleteMany({});
+                    if (realPrisma.evidence) await realPrisma.evidence.deleteMany({});
+                    await realPrisma.ticket.deleteMany({});
+                } catch (e) {}
+            }
+        }
+
         // 3. Record in deletedTicketIds to prevent re-merging from bundled templates
         db.deletedTicketIds = db.deletedTicketIds || [];
         [targetId, targetNo, id].forEach(val => {
@@ -1914,11 +1930,87 @@ app.delete('/api/tickets/:id', async (req, res) => {
             message: 'ลบ Ticket และจัดเรียงเลขคิวใหม่เรียบร้อยแล้ว', 
             id: targetId, 
             ticket_no: targetNo,
+            remainingCount: resequenced.length,
             resequenced 
         });
     } catch (error) {
         console.error('Error deleting ticket:', error);
         res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Endpoint: Bulk Delete Tickets / Clear All Tickets & Reset Queue Counter
+app.delete('/api/tickets', async (req, res) => {
+    try {
+        const { ids } = req.body || {};
+        const db = getLocalDb();
+        db.deletedTicketIds = db.deletedTicketIds || [];
+
+        if (Array.isArray(ids) && ids.length > 0) {
+            const targetSet = new Set(ids.map(id => String(id).toLowerCase().trim()));
+            if (realPrisma) {
+                try {
+                    await realPrisma.expense.deleteMany({
+                        where: { OR: [{ ticket_id: { in: ids } }, { ticket_no: { in: ids } }] }
+                    });
+                    await realPrisma.ticketTimeline.deleteMany({
+                        where: { OR: [{ ticket_id: { in: ids } }, { ticket_no: { in: ids } }] }
+                    });
+                    if (realPrisma.evidence) {
+                        await realPrisma.evidence.deleteMany({
+                            where: { OR: [{ ticket_id: { in: ids } }, { ticket_no: { in: ids } }] }
+                        });
+                    }
+                    await realPrisma.ticket.deleteMany({
+                        where: { OR: [{ id: { in: ids } }, { ticket_no: { in: ids } }] }
+                    });
+                } catch (e) {}
+            }
+            db.tickets = (db.tickets || []).filter(t => {
+                const tid = String(t.id || '').toLowerCase().trim();
+                const tno = String(t.ticket_no || '').toLowerCase().trim();
+                return !targetSet.has(tid) && !targetSet.has(tno);
+            });
+            ids.forEach(id => {
+                const low = String(id).toLowerCase().trim();
+                if (!db.deletedTicketIds.includes(low)) db.deletedTicketIds.push(low);
+            });
+        } else {
+            // Delete ALL tickets and reset counter to 0
+            if (realPrisma) {
+                try {
+                    await realPrisma.expense.deleteMany({});
+                    await realPrisma.ticketTimeline.deleteMany({});
+                    if (realPrisma.evidence) await realPrisma.evidence.deleteMany({});
+                    await realPrisma.ticket.deleteMany({});
+                } catch (e) {}
+            }
+            (db.tickets || []).forEach(t => {
+                if (t.id && !db.deletedTicketIds.includes(t.id)) db.deletedTicketIds.push(t.id);
+                if (t.ticket_no && !db.deletedTicketIds.includes(t.ticket_no)) db.deletedTicketIds.push(t.ticket_no);
+            });
+            db.tickets = [];
+            db.expenses = [];
+            db.timelines = [];
+            db.evidences = [];
+            db.counter = 0;
+        }
+
+        if ((db.tickets || []).length === 0) {
+            db.counter = 0;
+        }
+        saveLocalDb(db);
+
+        const resequenced = await resequenceAllTickets();
+        res.json({
+            success: true,
+            message: 'ลบ Ticket และจัดเรียงเลขคิวใหม่เรียบร้อยแล้ว',
+            remainingCount: resequenced.length,
+            tickets: resequenced
+        });
+    } catch (e) {
+        console.error('Error in DELETE /api/tickets:', e);
+        res.status(500).json({ error: e.message });
     }
 });
 

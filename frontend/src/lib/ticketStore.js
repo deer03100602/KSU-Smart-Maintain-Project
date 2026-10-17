@@ -213,22 +213,24 @@ export function resetClientStorageToDemo() {
 }
 
 export function getStoredTickets() {
-    if (typeof window === 'undefined') return INITIAL_DEMO_TICKETS;
+    if (typeof window === 'undefined') return [];
     try {
         const raw = localStorage.getItem(TICKETS_KEY);
         if (!raw) {
-            // First time load on client: auto-seed initial demo dataset
-            try {
-                localStorage.setItem(TICKETS_KEY, JSON.stringify(INITIAL_DEMO_TICKETS));
-            } catch (e) {}
-            return INITIAL_DEMO_TICKETS;
+            // First time load: only seed if storage key has never been initialized
+            const hasInit = localStorage.getItem('ksu_client_storage_initialized');
+            if (!hasInit) {
+                try {
+                    localStorage.setItem('ksu_client_storage_initialized', 'true');
+                    localStorage.setItem(TICKETS_KEY, JSON.stringify(INITIAL_DEMO_TICKETS));
+                } catch (e) {}
+                return INITIAL_DEMO_TICKETS;
+            }
+            return [];
         }
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed) || parsed.length === 0) {
-            try {
-                localStorage.setItem(TICKETS_KEY, JSON.stringify(INITIAL_DEMO_TICKETS));
-            } catch (e) {}
-            return INITIAL_DEMO_TICKETS;
+            return [];
         }
         const deleted = new Set(getDeletedTicketIds());
         const filtered = parsed.filter(t => {
@@ -236,14 +238,10 @@ export function getStoredTickets() {
             const no = String(t.ticket_no || '').trim().toLowerCase();
             return !deleted.has(id) && !deleted.has(no);
         });
-        if (filtered.length === 0) {
-            // If all were somehow deleted, gracefully restore demo dataset
-            return INITIAL_DEMO_TICKETS;
-        }
         return filtered;
     } catch (e) {
         console.warn('Error reading stored tickets:', e);
-        return INITIAL_DEMO_TICKETS;
+        return [];
     }
 }
 
@@ -270,6 +268,19 @@ export function saveStoredTicket(ticket) {
         window.dispatchEvent(new CustomEvent('ksu_ticket_updated', { detail: { ticket } }));
     } catch (e) {
         console.warn('Error saving stored ticket:', e);
+    }
+}
+
+export function clearAllStoredTickets() {
+    if (typeof window === 'undefined') return [];
+    try {
+        localStorage.setItem(TICKETS_KEY, JSON.stringify([]));
+        localStorage.setItem('ksu_client_storage_initialized', 'true');
+        window.dispatchEvent(new CustomEvent('ksu_ticket_deleted', { detail: { id: '__ALL__' } }));
+        window.dispatchEvent(new CustomEvent('ksu_tickets_resequenced', { detail: { tickets: [] } }));
+        return [];
+    } catch (e) {
+        return [];
     }
 }
 
@@ -308,6 +319,9 @@ export function removeStoredTicket(idOrNo) {
 
         // Broadcast deletion event to all components and tabs
         window.dispatchEvent(new CustomEvent('ksu_ticket_deleted', { detail: { id: idOrNo } }));
+
+        // Immediately resequence remaining tickets
+        resequenceStoredTickets(filtered);
     } catch (e) {
         console.warn('Error removing stored ticket:', e);
     }
@@ -336,6 +350,12 @@ export function resequenceStoredTickets(providedList = null) {
             const no = String(t.ticket_no || '').trim().toLowerCase();
             return !deleted.has(id) && !deleted.has(no);
         });
+
+        if (list.length === 0) {
+            localStorage.setItem(TICKETS_KEY, JSON.stringify([]));
+            window.dispatchEvent(new CustomEvent('ksu_tickets_resequenced', { detail: { tickets: [] } }));
+            return [];
+        }
 
         // Sort chronologically ascending
         list.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
