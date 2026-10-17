@@ -10,6 +10,7 @@ import { Link } from "react-router-dom";
 import { List, Plus, Search, X, FileText, Printer } from 'lucide-react';
 import { TicketGrid } from '@/components/TicketCard';
 import { mergeTicketsWithStorage, syncTicketsWithServer, getStoredTickets, resequenceStoredTickets } from '@/lib/ticketStore';
+import { useApp } from '@/context/AppContext';
 const THAI_MONTHS = [
     { value: 1, label: 'มกราคม' },
     { value: 2, label: 'กุมภาพันธ์' },
@@ -26,6 +27,7 @@ const THAI_MONTHS = [
 ];
 
 export default function TicketListPage() {
+    const { isGuest } = useApp();
     const [issueTypes, setIssueTypes] = useState([]);
     const [tickets, setTickets] = useState(() => getStoredTickets());
     const [loading, setLoading] = useState(() => !getStoredTickets().length);
@@ -307,10 +309,12 @@ export default function TicketListPage() {
                     </h1>
                     <p className="page-subtitle">ค้นหา ตรวจสอบ และติดตามความคืบหน้าของปัญหาไอทีทั้งหมดในระบบ</p>
                 </div>
-                <Link to="/create" className="btn btn-primary">
-                    <Plus style={{ width: 16, height: 16 }} />
-                    แจ้งปัญหาใหม่
-                </Link>
+                {!isGuest && (
+                    <Link to="/create" className="btn btn-primary">
+                        <Plus style={{ width: 16, height: 16 }} />
+                        แจ้งปัญหาใหม่
+                    </Link>
+                )}
             </div>
 
             {/* Search & Filter Bar */}

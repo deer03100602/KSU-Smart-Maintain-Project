@@ -14,8 +14,10 @@ import {
 } from 'lucide-react';
 import TicketCard from '@/components/TicketCard';
 import { getStoredTickets, mergeTicketsWithStorage, syncTicketsWithServer } from '@/lib/ticketStore';
+import { useApp } from '@/context/AppContext';
 
 export default function HomePage() {
+    const { isGuest } = useApp();
     const buildInitialStats = (stored) => {
         if (!Array.isArray(stored) || stored.length === 0) return null;
         const byStatus = {
@@ -119,13 +121,15 @@ export default function HomePage() {
                         พร้อมระบบติดตามสถานะการแก้ไขแบบ Real-time
                     </p>
                     <div className="hero-actions">
-                        <Link to="/create" className="btn btn-primary btn-lg">
-                            <PlusCircle style={{ width: 18, height: 18 }} />
-                            แจ้งปัญหาใหม่
-                        </Link>
-                        <Link to="/tickets" className="btn btn-ghost btn-lg">
+                        {!isGuest && (
+                            <Link to="/create" className="btn btn-primary btn-lg">
+                                <PlusCircle style={{ width: 18, height: 18 }} />
+                                แจ้งปัญหาใหม่
+                            </Link>
+                        )}
+                        <Link to="/tickets" className={`btn ${isGuest ? 'btn-primary' : 'btn-ghost'} btn-lg`}>
                             <List style={{ width: 18, height: 18 }} />
-                            ดูรายการ Ticket
+                            ดูรายการ Ticket ทั้งหมด
                         </Link>
                     </div>
                 </div>

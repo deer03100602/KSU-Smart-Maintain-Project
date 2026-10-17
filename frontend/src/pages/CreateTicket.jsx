@@ -316,11 +316,11 @@ export default function CreateTicketPage() {
                         ผู้ใช้งานทั่วไป (Guest) ดูได้เฉพาะหน้าหลัก รายการ Ticket และ Dashboard เท่านั้น หากต้องการแจ้งปัญหาใหม่ กรุณาสมัครสมาชิกหรือเข้าสู่ระบบบัญชีของคุณ
                     </p>
                     <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-                        <Link to="/login?redirect=/create" className="btn btn-primary" style={{ padding: '0.65rem 1.5rem', textDecoration: 'none', fontSize: '0.88rem' }}>
-                            เข้าสู่ระบบ
+                        <Link to="/tickets" className="btn btn-primary" style={{ padding: '0.65rem 1.5rem', textDecoration: 'none', fontSize: '0.88rem' }}>
+                            ดูรายการ Ticket ทั้งหมด
                         </Link>
-                        <Link to="/signup" className="btn btn-ghost" style={{ padding: '0.65rem 1.25rem', textDecoration: 'none', fontSize: '0.88rem' }}>
-                            สมัครสมาชิกใหม่
+                        <Link to="/login?redirect=/create" className="btn btn-ghost" style={{ padding: '0.65rem 1.25rem', textDecoration: 'none', fontSize: '0.88rem' }}>
+                            เข้าสู่ระบบเพื่อแจ้งปัญหา
                         </Link>
                     </div>
                 </div>

@@ -132,10 +132,12 @@ export default function MyTicketsPage() {
                     </h1>
                     <p className="page-subtitle">ติดตามสถานะปัญหาที่คุณแจ้งไว้เข้าระบบทั้งหมด</p>
                 </div>
-                <Link to="/create" className="btn btn-primary">
-                    <Plus style={{ width: 16, height: 16 }} />
-                    แจ้งปัญหาใหม่
-                </Link>
+                {!isGuest && (
+                    <Link to="/create" className="btn btn-primary">
+                        <Plus style={{ width: 16, height: 16 }} />
+                        แจ้งปัญหาใหม่
+                    </Link>
+                )}
             </div>
 
             {/* Profile / Filter settings */}
