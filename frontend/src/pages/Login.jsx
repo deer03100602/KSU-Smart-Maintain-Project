@@ -93,7 +93,11 @@ export default function LoginPage() {
             router.push('/');
         } catch (error) {
             console.error('Login error:', error);
-            toast.error(error.message || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+            const rawMsg = String(error?.message || '');
+            const safeMsg = (rawMsg.includes('JSON') || rawMsg.includes('token') || rawMsg.includes('<'))
+                ? 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง'
+                : (rawMsg || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+            toast.error(safeMsg);
         } finally {
             setLoading(false);
         }

@@ -48,7 +48,11 @@ export default function SignupPage() {
                 setExistingAccountEmail(email.trim());
                 toast.info('อีเมลนี้เคยลงทะเบียนไว้แล้ว ท่านสามารถเข้าสู่ระบบได้ทันที');
             } else {
-                toast.error(error.message || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
+                const rawMsg = String(error?.message || '');
+                const safeMsg = (rawMsg.includes('JSON') || rawMsg.includes('token') || rawMsg.includes('<'))
+                    ? 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้ง'
+                    : (rawMsg || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
+                toast.error(safeMsg);
             }
         } finally {
             setLoading(false);

@@ -23,6 +23,16 @@ export default defineConfig({
       '/uploads': {
         target: process.env.BACKEND_URL || 'http://localhost:5000',
         changeOrigin: true
+      },
+      '^/app/ksu-smart-maintain/api': {
+        target: process.env.BACKEND_URL || 'http://localhost:5000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/app\/ksu-smart-maintain/, '')
+      },
+      '^/app/ksu-smart-maintain/uploads': {
+        target: process.env.BACKEND_URL || 'http://localhost:5000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/app\/ksu-smart-maintain/, '')
       }
     }
   },
@@ -38,6 +48,16 @@ export default defineConfig({
       '/uploads': {
         target: process.env.BACKEND_URL || 'http://localhost:5000',
         changeOrigin: true
+      },
+      '^/app/ksu-smart-maintain/api': {
+        target: process.env.BACKEND_URL || 'http://localhost:5000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/app\/ksu-smart-maintain/, '')
+      },
+      '^/app/ksu-smart-maintain/uploads': {
+        target: process.env.BACKEND_URL || 'http://localhost:5000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/app\/ksu-smart-maintain/, '')
       }
     }
   }

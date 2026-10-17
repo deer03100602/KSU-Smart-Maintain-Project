@@ -125,7 +125,7 @@ export function AppProvider({ children }) {
             body: JSON.stringify({ email, password }),
         });
         const result = await response.json();
-        if (!response.ok) {
+        if (!response.ok || result._isHtmlResponse || result._isParseError || !result.user) {
             throw new Error(result.error || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง');
         }
         const loggedInUser = result.user;
@@ -188,7 +188,7 @@ export function AppProvider({ children }) {
         });
 
         const result = await response.json();
-        if (!response.ok) {
+        if (!response.ok || result._isHtmlResponse || result._isParseError || !result.user) {
             throw new Error(result.error || 'ไม่สามารถเข้าสู่ระบบอัตโนมัติได้');
         }
 
@@ -245,7 +245,7 @@ export function AppProvider({ children }) {
             body: JSON.stringify({ email, password, fullName, userGroup }),
         });
         const result = await response.json();
-        if (!response.ok) {
+        if (!response.ok || result._isHtmlResponse || result._isParseError || !result.user) {
             const error = new Error(result.error || 'เกิดข้อผิดพลาดในการสมัครสมาชิก');
             if (result.alreadyExists) {
                 error.alreadyExists = true;

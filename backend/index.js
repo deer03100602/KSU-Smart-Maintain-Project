@@ -548,6 +548,18 @@ const prisma = {
             list.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
             return list;
         },
+        findFirst: async ({ where } = {}) => {
+            if (realPrisma) {
+                try { return await realPrisma.ticketTimeline.findFirst({ where }); } catch (e) {}
+            }
+            const db = getLocalDb();
+            const list = db.timelines || [];
+            return list.find(t => {
+                if (where?.id && t.id === where.id) return true;
+                if (where?.ticket_id && (t.ticket_id === where.ticket_id || t.ticket_no === where.ticket_id)) return true;
+                return false;
+            }) || null;
+        },
         create: async ({ data }) => {
             if (realPrisma) {
                 try { return await realPrisma.ticketTimeline.create({ data }); } catch (e) {}
@@ -899,6 +911,7 @@ async function initDatabase() {
                 console.log('✅ Mock tickets (TKT-001, TKT-002) purged from PostgreSQL.');
             } catch (pErr) {
                 console.warn('Prisma mock ticket purge note:', pErr.message);
+            }
         }
     } catch (err) {
         console.warn('ℹ️ PostgreSQL not immediately ready, running in resilient mode:', err.message);
@@ -4990,12 +5003,30 @@ const candidateDistPaths = [
 ];
 const frontendDistPath = candidateDistPaths.find(p => fs.existsSync(path.join(p, 'index.html')));
 
+// Dedicated API 404 handler to guarantee ALL API requests ALWAYS return JSON and never HTML
+app.use(['/api', '/app/ksu-smart-maintain/api'], (req, res) => {
+    return res.status(404).json({
+        success: false,
+        error: `ไม่พบ API endpoint: ${req.method} ${req.originalUrl}`
+    });
+});
+
 if (frontendDistPath) {
     console.log(`📦 Serving frontend static build from: ${frontendDistPath}`);
     app.use(express.static(frontendDistPath));
     app.use('/app/ksu-smart-maintain', express.static(frontendDistPath));
     app.use((req, res, next) => {
-        if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+        const isApiOrUpload = req.path.startsWith('/api') || 
+                              req.originalUrl.includes('/api') || 
+                              req.path.startsWith('/uploads') || 
+                              req.originalUrl.includes('/uploads');
+        if (isApiOrUpload) {
+            return res.status(404).json({
+                success: false,
+                error: `ไม่พบ API endpoint: ${req.method} ${req.originalUrl}`
+            });
+        }
+        if (req.method === 'GET') {
             return res.sendFile(path.join(frontendDistPath, 'index.html'));
         }
         next();
