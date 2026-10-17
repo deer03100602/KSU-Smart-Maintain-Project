@@ -588,13 +588,58 @@ export default function TicketDetailPage(props) {
     const handleSaveNote = async () => {
         setUpdatingNote(true);
         try {
+            const clientTicketHeader = ticket ? encodeURIComponent(JSON.stringify(ticket)) : '';
             const res = await fetch(`/api/tickets/${id}`, {
                 method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'x-client-ticket': clientTicketHeader
+                },
                 body: JSON.stringify({ resolution_note: noteContent })
             });
             if (res.ok) {
                 toast.success('บันทึกหมายเหตุการดำเนินงานเรียบร้อย');
+                
+                // Immediately update local ticket state
+                const updatedTicket = { 
+                    ...ticket, 
+                    resolution_note: noteContent, 
+                    updated_at: new Date().toISOString() 
+                };
+                setTicket(updatedTicket);
+                saveStoredTicket(updatedTicket);
+
+                // Add timeline event immediately to state and localStorage so it displays instantly
+                const noteText = String(noteContent || '').trim();
+                let noteAction = 'NOTE_ADDED';
+                let noteTitle = 'บันทึกหมายเหตุการดำเนินงาน';
+                if (noteText.includes('[เริ่มงาน]')) {
+                    noteAction = 'STARTED';
+                    noteTitle = 'เริ่มดำเนินงานซ่อมบำรุง';
+                } else if (noteText.includes('[รออุปกรณ์]')) {
+                    noteAction = 'WAITING_PARTS';
+                    noteTitle = 'รออุปกรณ์ / อะไหล่ / งบประมาณ';
+                } else if (noteText.includes('[ส่งกลับแก้ไข]')) {
+                    noteAction = 'RETURNED_FOR_REVISE';
+                    noteTitle = 'ส่งกลับแก้ไขงาน';
+                }
+
+                const newTml = {
+                    id: `tml-${Date.now()}`,
+                    ticket_id: ticket.id,
+                    ticket_no: ticket.ticket_no,
+                    action: noteAction,
+                    title: noteTitle,
+                    description: noteContent,
+                    actor_name: currentUser?.name || ticket.assigned_to || 'เจ้าหน้าที่ผู้รับผิดชอบ',
+                    actor_role: currentUser?.role || 'staff',
+                    created_at: new Date().toISOString()
+                };
+
+                setTimelines(prev => [...(prev || []), newTml]);
+                const storedTml = getStoredTimelines(id) || [];
+                saveStoredTimelines(id, [...storedTml, newTml]);
+
                 fetchTicketData();
             } else {
                 toast.error('ไม่สามารถบันทึกหมายเหตุได้');

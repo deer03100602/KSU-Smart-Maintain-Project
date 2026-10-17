@@ -1486,6 +1486,48 @@ const handleUpdateTicket = async (req, res) => {
             notifyTicketEvent(updated, 'ASSIGNED').catch(() => {});
         }
 
+        // If resolution_note changed, record Timeline Event so it immediately appears in Workflow Timeline
+        if (updates.resolution_note !== undefined && updates.resolution_note !== null && updates.resolution_note !== prevTicket?.resolution_note) {
+            let noteAction = 'NOTE_ADDED';
+            let noteTitle = 'บันทึกหมายเหตุการดำเนินงาน';
+            const noteText = String(updates.resolution_note).trim();
+            if (noteText.includes('[เริ่มงาน]')) {
+                noteAction = 'STARTED';
+                noteTitle = 'เริ่มดำเนินงานซ่อมบำรุง';
+            } else if (noteText.includes('[รออุปกรณ์]')) {
+                noteAction = 'WAITING_PARTS';
+                noteTitle = 'รออุปกรณ์ / อะไหล่ / งบประมาณ';
+            } else if (noteText.includes('[ส่งกลับแก้ไข]')) {
+                noteAction = 'RETURNED_FOR_REVISE';
+                noteTitle = 'ส่งกลับแก้ไขงาน';
+            }
+
+            await addTimelineEvent({
+                ticket_id: updated.id,
+                ticket_no: updated.ticket_no,
+                action: noteAction,
+                title: noteTitle,
+                description: updates.resolution_note,
+                actor_name: req.user?.name || updated.assigned_to || 'เจ้าหน้าที่ผู้รับผิดชอบ',
+                actor_email: req.user?.email || null,
+                actor_role: req.user?.role || 'staff'
+            }).catch(() => {});
+        }
+
+        // If status changed, record Timeline Event
+        if (updates.status && updates.status !== prevTicket?.status) {
+            await addTimelineEvent({
+                ticket_id: updated.id,
+                ticket_no: updated.ticket_no,
+                action: 'STATUS_CHANGED',
+                title: `เปลี่ยนสถานะเป็น "${updates.status}"`,
+                description: `สถานะเดิม: ${prevTicket?.status || '-'} ➔ สถานะใหม่: ${updates.status}`,
+                actor_name: req.user?.name || 'ผู้ดูแลระบบ',
+                actor_email: req.user?.email || null,
+                actor_role: req.user?.role || 'admin'
+            }).catch(() => {});
+        }
+
         // Send email & webhook notification asynchronously on update
         notifyTicketEvent(updated, 'UPDATED').catch(err => {
             console.error('Ticket update notification error:', err.message);
@@ -1648,9 +1690,117 @@ app.get('/api/tickets/:id/timeline', async (req, res) => {
         }
         if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
-        const timelines = await prisma.ticketTimeline.findMany({
-            where: { ticket_id: ticket.id }
+        let timelines = await prisma.ticketTimeline.findMany({
+            where: {
+                OR: [
+                    { ticket_id: ticket.id },
+                    { ticket_no: ticket.ticket_no },
+                    { ticket_id: ticket.ticket_no }
+                ]
+            }
         });
+
+        // If timeline is empty, auto-synthesize from ticket history so it never shows empty when there is work
+        if (!timelines || timelines.length === 0) {
+            const defaultEvents = [];
+
+            // 1. Creation event
+            defaultEvents.push({
+                ticket_id: ticket.id,
+                ticket_no: ticket.ticket_no,
+                action: 'CREATED',
+                title: 'สร้างรายการแจ้งซ่อมใหม่ในระบบ',
+                description: `ผู้แจ้ง: ${ticket.requester_name || 'ผู้ใช้งาน'} | สถานที่: ${ticket.location || '-'} | ความเร่งด่วน: ${ticket.priority || 'Medium'}`,
+                actor_name: ticket.requester_name || 'ผู้แจ้งซ่อม',
+                actor_role: 'ผู้แจ้งซ่อม'
+            });
+
+            // 2. Assignment event
+            if (ticket.assigned_to) {
+                defaultEvents.push({
+                    ticket_id: ticket.id,
+                    ticket_no: ticket.ticket_no,
+                    action: 'ASSIGNED',
+                    title: `มอบหมายงานให้ ${ticket.assigned_to}`,
+                    description: `ผู้รับผิดชอบหลัก: ${ticket.assigned_to}${ticket.co_workers ? ` | ผู้ร่วมดำเนินงาน: ${ticket.co_workers}` : ''}`,
+                    actor_name: 'ผู้ดูแลระบบ',
+                    actor_role: 'admin'
+                });
+            }
+
+            // 3. Resolution note events (e.g. [เริ่มงาน]: แปอ, [รออุปกรณ์], etc.)
+            if (ticket.resolution_note) {
+                const lines = ticket.resolution_note.split('\n').map(l => l.trim()).filter(Boolean);
+                lines.forEach((line) => {
+                    let act = 'NOTE_ADDED';
+                    let tit = 'บันทึกหมายเหตุการดำเนินงาน';
+                    let clean = line;
+                    if (line.includes('[เริ่มงาน]')) {
+                        act = 'STARTED';
+                        tit = 'เริ่มดำเนินงานซ่อมบำรุง';
+                        clean = line.replace(/\[เริ่มงาน\]:?\s*/g, '');
+                    } else if (line.includes('[รออุปกรณ์]')) {
+                        act = 'WAITING_PARTS';
+                        tit = 'รออุปกรณ์ / อะไหล่ / งบประมาณ';
+                        clean = line.replace(/\[รออุปกรณ์\]:?\s*/g, '');
+                    } else if (line.includes('[ส่งกลับแก้ไข]')) {
+                        act = 'RETURNED_FOR_REVISE';
+                        tit = 'ส่งกลับแก้ไขงาน';
+                        clean = line.replace(/\[ส่งกลับแก้ไข\]:?\s*/g, '');
+                    }
+                    defaultEvents.push({
+                        ticket_id: ticket.id,
+                        ticket_no: ticket.ticket_no,
+                        action: act,
+                        title: tit,
+                        description: clean || line,
+                        actor_name: ticket.assigned_to || 'เจ้าหน้าที่ผู้รับผิดชอบ',
+                        actor_role: 'staff'
+                    });
+                });
+            }
+
+            // 4. Handover inspection
+            if (ticket.completion_summary) {
+                defaultEvents.push({
+                    ticket_id: ticket.id,
+                    ticket_no: ticket.ticket_no,
+                    action: 'SUBMITTED_INSPECTION',
+                    title: 'ส่งมอบงานเพื่อรอตรวจรับ (Handover Report)',
+                    description: 'เจ้าหน้าที่บันทึกรายงานสรุปผลการซ่อมแซมและส่งมอบงานเพื่อรอตรวจรับ',
+                    actor_name: ticket.assigned_to || 'เจ้าหน้าที่ผู้รับผิดชอบ',
+                    actor_role: 'staff'
+                });
+            }
+
+            // 5. Completion
+            if (ticket.status === 'Closed' || ticket.accepted_by) {
+                defaultEvents.push({
+                    ticket_id: ticket.id,
+                    ticket_no: ticket.ticket_no,
+                    action: 'COMPLETED',
+                    title: 'ยืนยันตรวจรับและปิดงานเสร็จสิ้นสมบูรณ์',
+                    description: ticket.accepted_by ? `ตรวจรับงานเรียบร้อยโดย ${ticket.accepted_by}` : 'งานซ่อมเสร็จสิ้นสมบูรณ์',
+                    actor_name: ticket.accepted_by || 'ผู้ดูแลระบบ',
+                    actor_role: 'admin'
+                });
+            }
+
+            for (const ev of defaultEvents) {
+                await addTimelineEvent(ev).catch(() => {});
+            }
+
+            timelines = await prisma.ticketTimeline.findMany({
+                where: {
+                    OR: [
+                        { ticket_id: ticket.id },
+                        { ticket_no: ticket.ticket_no },
+                        { ticket_id: ticket.ticket_no }
+                    ]
+                }
+            });
+        }
+
         res.json(timelines);
     } catch (error) {
         console.error('Error fetching timeline:', error);
@@ -1813,7 +1963,7 @@ app.post('/api/tickets/:id/action', requireAuth, async (req, res) => {
         }
 
         // Add Timeline
-        await addTimelineEvent({
+        const createdTimeline = await addTimelineEvent({
             ticket_id: ticket.id,
             ticket_no: ticket.ticket_no,
             action,
@@ -1858,7 +2008,7 @@ app.post('/api/tickets/:id/action', requireAuth, async (req, res) => {
             console.error('Discord activity notify error:', err.message);
         });
 
-        res.json({ success: true, ticket: updatedTicket, action });
+        res.json({ success: true, ticket: updatedTicket, action, timeline: createdTimeline });
     } catch (error) {
         console.error('Error processing ticket action:', error);
         res.status(500).json({ error: 'Internal Server Error' });
