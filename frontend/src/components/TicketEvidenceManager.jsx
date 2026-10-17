@@ -16,6 +16,19 @@ function isImgUrl(url) {
     return false;
 }
 
+export function normalizeStage(st) {
+    if (!st || typeof st !== 'string') return 'BEFORE';
+    const s = st.trim().toUpperCase();
+    if (s.includes('BEFORE') || s.includes('ก่อน')) return 'BEFORE';
+    if (s.includes('DURING') || s.includes('ระหว่าง')) return 'DURING';
+    if (s.includes('PART') || s.includes('MATERIAL') || s.includes('วัสดุ') || s.includes('อะไหล่')) return 'PARTS';
+    if (s.includes('RECEIPT') || s.includes('EXPENSE') || s.includes('ใบเสร็จ')) return 'RECEIPT';
+    if (s.includes('AFTER') || s.includes('หลัง')) return 'AFTER';
+    if (s.includes('TEST') || s.includes('ทดสอบ')) return 'TESTING';
+    if (s.includes('HANDOVER') || s.includes('INSPECT') || s.includes('ส่งมอบ') || s.includes('ตรวจรับ')) return 'HANDOVER';
+    return s;
+}
+
 export default function TicketEvidenceManager({
     ticket,
     evidences = [],
@@ -29,7 +42,7 @@ export default function TicketEvidenceManager({
     const appUser = appContext?.user;
     const isStudentOrTeacher = ['นักศึกษา', 'อาจารย์'].includes(currentUser?.group || appUser?.group);
     const canManageEvidence = !ctxGroupA && !isStudentOrTeacher && (isAdmin || ctxGroupB);
-    const [selectedTab, setSelectedTab] = useState('ALL'); // 'ALL' | 'BEFORE' | 'DURING' | 'AFTER' | 'RECEIPT'
+    const [selectedTab, setSelectedTab] = useState('ALL'); // 'ALL' | 'BEFORE' | 'DURING' | 'PARTS' | 'RECEIPT' | 'AFTER' | 'TESTING' | 'HANDOVER'
     const [showUploadModal, setShowUploadModal] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [stage, setStage] = useState('BEFORE');
@@ -39,6 +52,28 @@ export default function TicketEvidenceManager({
     const [selectedPreview, setSelectedPreview] = useState(null);
     const [autoSyncExpense, setAutoSyncExpense] = useState(true);
     const [deletingId, setDeletingId] = useState(null);
+
+    // Compute dynamic category counts
+    const counts = {
+        ALL: evidences.length,
+        BEFORE: 0,
+        DURING: 0,
+        PARTS: 0,
+        RECEIPT: 0,
+        AFTER: 0,
+        TESTING: 0,
+        HANDOVER: 0
+    };
+    evidences.forEach(e => {
+        const norm = normalizeStage(e.stage);
+        if (counts[norm] !== undefined) {
+            counts[norm]++;
+        }
+    });
+
+    const filteredEvidences = selectedTab === 'ALL' 
+        ? evidences 
+        : evidences.filter(e => normalizeStage(e.stage) === selectedTab);
 
     const handleDeleteEvidence = async (evidenceId) => {
         if (!window.confirm('คุณต้องการลบ / ยกเลิกรูปภาพหลักฐานนี้ใช่หรือไม่?')) return;
@@ -67,17 +102,17 @@ export default function TicketEvidenceManager({
         }
     };
 
-
     // Close on Escape key
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (e.key === 'Escape' && showUploadModal) {
-                closeModal();
+            if (e.key === 'Escape') {
+                if (showUploadModal) closeModal();
+                if (selectedPreview) setSelectedPreview(null);
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [showUploadModal]);
+    }, [showUploadModal, selectedPreview]);
 
     const closeModal = () => {
         setShowUploadModal(false);
@@ -88,10 +123,6 @@ export default function TicketEvidenceManager({
         setPreviewUrl(null);
         setDescription('');
     };
-
-    const filteredEvidences = selectedTab === 'ALL' 
-        ? evidences 
-        : evidences.filter(e => e.stage === selectedTab);
 
     const handleFileChange = (e) => {
         const file = e.target.files?.[0];
@@ -228,6 +259,10 @@ export default function TicketEvidenceManager({
                 }
 
                 closeModal();
+                setSelectedTab(stage);
+                if (appContext?.toast?.success) {
+                    appContext.toast.success('✨ บันทึกรูปภาพหลักฐานเข้าสู่ระบบเรียบร้อยแล้ว!');
+                }
                 if (onEvidenceAdded) onEvidenceAdded();
             } else {
                 alert('ไม่สามารถบันทึกข้อมูลหลักฐานได้');
@@ -241,7 +276,8 @@ export default function TicketEvidenceManager({
     };
 
     const getStageBadge = (st) => {
-        switch (st) {
+        const norm = normalizeStage(st);
+        switch (norm) {
             case 'BEFORE': return <span style={{ background: '#3b82f620', color: '#60a5fa', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>📷 ก่อนซ่อม</span>;
             case 'DURING': return <span style={{ background: '#f59e0b20', color: '#fbbf24', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>⚙️ ระหว่างซ่อม</span>;
             case 'PARTS': return <span style={{ background: '#06b6d420', color: '#22d3ee', padding: '2px 8px', borderRadius: 4, fontSize: '0.75rem', fontWeight: 600 }}>📦 อุปกรณ์/วัสดุที่ใช้</span>;
@@ -253,6 +289,17 @@ export default function TicketEvidenceManager({
         }
     };
 
+    const STAGE_TABS = [
+        { key: 'ALL', label: 'ทั้งหมด' },
+        { key: 'BEFORE', label: '📷 ก่อนซ่อม' },
+        { key: 'DURING', label: '⚙️ ระหว่างซ่อม' },
+        { key: 'PARTS', label: '📦 วัสดุ/อะไหล่' },
+        { key: 'RECEIPT', label: '🧾 ใบเสร็จ' },
+        { key: 'AFTER', label: '🎉 หลังซ่อม' },
+        { key: 'TESTING', label: '🔬 ผลทดสอบ' },
+        { key: 'HANDOVER', label: '📋 ส่งมอบงาน' }
+    ];
+
     return (
         <div className="glass-card" style={{ marginTop: 0, padding: '1.25rem', borderRadius: '12px', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -263,7 +310,14 @@ export default function TicketEvidenceManager({
                 {canManageEvidence && (
                     <button 
                         className="btn btn-primary btn-sm"
-                        onClick={() => setShowUploadModal(true)}
+                        onClick={() => {
+                            if (selectedTab !== 'ALL') {
+                                setStage(selectedTab);
+                            } else {
+                                setStage('BEFORE');
+                            }
+                            setShowUploadModal(true);
+                        }}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                     >
                         <Plus style={{ width: 15, height: 15 }} /> อัปโหลดรูปภาพหลักฐาน
@@ -271,25 +325,30 @@ export default function TicketEvidenceManager({
                 )}
             </div>
 
-            {/* Filter Tabs */}
+            {/* Filter Tabs with Dynamic Item Counters */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-                {[
-                    { key: 'ALL', label: 'ทั้งหมด' },
-                    { key: 'BEFORE', label: '📷 ก่อนซ่อม' },
-                    { key: 'DURING', label: '⚙️ ระหว่างซ่อม' },
-                    { key: 'PARTS', label: '📦 วัสดุ/อะไหล่' },
-                    { key: 'RECEIPT', label: '🧾 ใบเสร็จ' },
-                    { key: 'AFTER', label: '🎉 หลังซ่อม' },
-                    { key: 'TESTING', label: '🔬 ผลทดสอบ' },
-                    { key: 'HANDOVER', label: '📋 ส่งมอบงาน' }
-                ].map(tab => (
+                {STAGE_TABS.map(tab => (
                     <button
                         key={tab.key}
                         onClick={() => setSelectedTab(tab.key)}
                         className={`btn btn-sm ${selectedTab === tab.key ? 'btn-primary' : 'btn-ghost'}`}
-                        style={{ fontSize: '0.8rem' }}
+                        style={{ 
+                            fontSize: '0.8rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px'
+                        }}
                     >
-                        {tab.label}
+                        <span>{tab.label}</span>
+                        <span style={{
+                            background: selectedTab === tab.key ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
+                            padding: '1px 6px',
+                            borderRadius: '999px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700
+                        }}>
+                            {counts[tab.key] || 0}
+                        </span>
                     </button>
                 ))}
             </div>
@@ -627,24 +686,63 @@ export default function TicketEvidenceManager({
                 document.body
             )}
 
-            {/* Image Preview Modal */}
+            {/* Image Preview Modal (Ultra-sharp fullscreen view) */}
             {selectedPreview && typeof document !== 'undefined' && createPortal(
                 <div 
                     onClick={() => setSelectedPreview(null)}
                     style={{
                         position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                        backdropFilter: 'blur(8px)',
-                        zIndex: 999999,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        padding: '2rem'
+                        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                        zIndex: 9999999,
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        padding: '1.5rem'
                     }}
                 >
-                    <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            width: '100%',
+                            maxWidth: '90vw',
+                            marginBottom: '10px',
+                            color: '#fff'
+                        }}
+                    >
+                        <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#fff' }}>
+                            🔍 ดูรูปภาพหลักฐานความละเอียดสูง
+                        </span>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                            <a 
+                                href={selectedPreview} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="btn btn-secondary btn-sm"
+                                style={{ background: 'rgba(255,255,255,0.15)', color: '#fff', fontSize: '0.75rem', textDecoration: 'none' }}
+                            >
+                                เปิดในแท็บใหม่
+                            </a>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedPreview(null)}
+                                className="btn btn-secondary btn-sm"
+                                style={{ background: 'rgba(239, 68, 68, 0.8)', color: '#fff', fontSize: '0.75rem', border: 'none' }}
+                            >
+                                <X style={{ width: 14, height: 14 }} /> ปิด
+                            </button>
+                        </div>
+                    </div>
+                    <div 
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ position: 'relative', maxWidth: '90vw', maxHeight: '82vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
                         <img 
                             src={selectedPreview} 
                             alt="preview" 
-                            style={{ maxWidth: '90vw', maxHeight: '85vh', borderRadius: 8, objectFit: 'contain' }}
+                            style={{ maxWidth: '90vw', maxHeight: '80vh', borderRadius: 8, objectFit: 'contain', boxShadow: '0 10px 40px rgba(0,0,0,0.8)' }}
                         />
                     </div>
                 </div>,

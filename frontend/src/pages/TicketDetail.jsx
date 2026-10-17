@@ -303,22 +303,22 @@ export default function TicketDetailPage(props) {
 
                 setExpenses(expList);
                 setExpenseSummary(expSum);
-                saveStoredExpenses(id, expList, expSum);
+                saveStoredExpenses(id, expList, expSum, ticketData?.ticket_no || id);
             }
 
             if (tmlRes.ok) {
                 const tmlData = await tmlRes.json();
-                if (Array.isArray(tmlData) && tmlData.length > 0) {
+                if (Array.isArray(tmlData)) {
                     setTimelines(tmlData);
-                    saveStoredTimelines(id, tmlData);
+                    saveStoredTimelines(id, tmlData, ticketData?.ticket_no || id);
                 }
             }
 
             if (eviRes.ok) {
                 const eviData = await eviRes.json();
-                if (Array.isArray(eviData) && eviData.length > 0) {
+                if (Array.isArray(eviData)) {
                     setEvidences(eviData);
-                    saveStoredEvidences(id, eviData);
+                    saveStoredEvidences(id, eviData, ticketData?.ticket_no || id);
                 }
             }
         } catch (e) {

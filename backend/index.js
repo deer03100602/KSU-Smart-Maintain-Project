@@ -2701,12 +2701,10 @@ async function scanReceiptWithGeminiVision(buffer, mimeType, apiKey) {
 }`;
 
     const models = [
-        'gemini-3.8-flash',
-        'gemini-3.5-flash',
-        'gemini-flash-latest',
         'gemini-2.5-flash',
         'gemini-2.0-flash',
-        'gemini-1.5-flash'
+        'gemini-1.5-flash',
+        'gemini-1.5-pro'
     ];
 
     for (const model of models) {
@@ -2809,25 +2807,29 @@ app.post('/api/settings/gemini-test', async (req, res) => {
         return res.status(400).json({ success: false, error: 'ยังไม่ได้ระบุ Google Gemini API Key' });
     }
 
-    try {
-        const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: 'ตอบข้อความสั้นๆ: ระบบ AI เชื่อมต่อสำเร็จ' }] }]
-            })
-        });
-        if (testRes.ok) {
-            const data = await testRes.json();
-            const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'เชื่อมต่อสำเร็จ';
-            return res.json({ success: true, message: 'เชื่อมต่อ Google Gemini AI สำเร็จสมบูรณ์!', reply, model: 'gemini-3.8-flash' });
-        } else {
-            const errTxt = await testRes.text();
-            return res.status(testRes.status).json({ success: false, error: `Google API Error (${testRes.status}): ${errTxt.slice(0, 200)}` });
+    const testModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    let lastErr = '';
+    for (const model of testModels) {
+        try {
+            const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: 'ตอบข้อความสั้นๆ: ระบบ AI เชื่อมต่อสำเร็จ' }] }]
+                })
+            });
+            if (testRes.ok) {
+                const data = await testRes.json();
+                const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'เชื่อมต่อสำเร็จ';
+                return res.json({ success: true, message: 'เชื่อมต่อ Google Gemini AI สำเร็จสมบูรณ์!', reply, model });
+            } else {
+                lastErr = await testRes.text();
+            }
+        } catch (e) {
+            lastErr = e.message;
         }
-    } catch (e) {
-        return res.status(500).json({ success: false, error: e.message });
     }
+    return res.status(400).json({ success: false, error: `Google API Error: ${lastErr.slice(0, 200)}` });
 });
 
 app.post('/api/ocr/scan-receipt', upload.single('receipt'), async (req, res) => {

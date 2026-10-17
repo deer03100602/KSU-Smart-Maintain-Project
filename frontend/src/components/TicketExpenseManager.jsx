@@ -26,6 +26,10 @@ export default function TicketExpenseManager({
     const [ocrLoading, setOcrLoading] = useState(false);
     const [ocrResult, setOcrResult] = useState(null);
     const [ocrWarning, setOcrWarning] = useState('');
+    const [lastScannedExpenseIds, setLastScannedExpenseIds] = useState([]);
+    const [lastScannedEvidenceId, setLastScannedEvidenceId] = useState(null);
+    const [lastScannedReceiptUrl, setLastScannedReceiptUrl] = useState(null);
+    const [scanSuccessInfo, setScanSuccessInfo] = useState(null);
     const [geminiApiKey, setGeminiApiKey] = useState(() => {
         if (typeof window !== 'undefined') {
             return localStorage.getItem('ksu_gemini_api_key') || '';
@@ -123,6 +127,221 @@ export default function TicketExpenseManager({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [showAddModal]);
 
+    const autoSaveParsedReceipt = async (parsed) => {
+        const targetTicketId = ticket?.id || ticket?.ticket_no || 'general';
+        const token = localStorage.getItem('helpdesk_token');
+        const savedExpenses = [];
+
+        const itemsToSave = (Array.isArray(parsed.items) && parsed.items.length > 0)
+            ? parsed.items
+            : [{
+                name: parsed.description || (parsed.vendor_name ? `วัสดุและอุปกรณ์ (${parsed.vendor_name})` : 'วัสดุและอุปกรณ์ตามใบเสร็จ'),
+                quantity: parsed.quantity || 1,
+                unit: parsed.unit || 'ชิ้น',
+                unit_price: parsed.unit_price || (parsed.quantity ? parsed.net_amount / parsed.quantity : parsed.net_amount) || 0,
+                total_price: parsed.total_price || parsed.net_amount || 0,
+                discount: parsed.discount || 0,
+                tax_percent: parsed.tax_amount > 0 ? 7 : (parsed.tax_percent !== undefined ? parsed.tax_percent : 0),
+                category: parsed.category || 'ค่าวัสดุและอุปกรณ์'
+            }];
+
+        for (const it of itemsToSave) {
+            const itQty = parseFloat(it.quantity) || 1;
+            const itPrice = parseFloat(it.unit_price) || 0;
+            const itDisc = parseFloat(it.discount) || 0;
+            const itTaxPct = parseFloat(it.tax_percent) || (parsed.tax_amount > 0 ? 7 : 0);
+            const itTotal = itQty * itPrice;
+            const taxable = Math.max(0, itTotal - itDisc);
+            const itTaxAmt = taxable * (itTaxPct / 100);
+            const itNet = taxable + itTaxAmt;
+
+            const expPayload = {
+                category: it.category || parsed.category || 'ค่าวัสดุและอุปกรณ์',
+                description: String(it.name || it.description || parsed.description || 'รายการอุปกรณ์ตามใบเสร็จ').trim(),
+                quantity: itQty,
+                unit: String(it.unit || parsed.unit || 'ชิ้น').trim(),
+                unit_price: itPrice,
+                discount: itDisc,
+                tax_percent: itTaxPct,
+                receipt_no: parsed.receipt_no ? String(parsed.receipt_no).trim() : null,
+                vendor_name: parsed.vendor_name ? String(parsed.vendor_name).trim() : null,
+                receipt_date: parsed.receipt_date || null,
+                receipt_url: parsed.file_url || null,
+                status: 'APPROVED'
+            };
+
+            let itemResult = {
+                id: 'exp-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 7),
+                ticket_id: targetTicketId,
+                ticket_no: ticket?.ticket_no || targetTicketId,
+                ...expPayload,
+                total_price: itTotal,
+                tax_amount: itTaxAmt,
+                net_amount: itNet,
+                approved_by: currentUser?.name || 'ผู้ดูแลระบบ',
+                approved_at: new Date().toISOString(),
+                created_by: currentUser?.id || 'usr-local',
+                created_by_name: currentUser?.name || 'เจ้าหน้าที่',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            };
+
+            try {
+                const res = await fetch(`/api/tickets/${encodeURIComponent(targetTicketId)}/expenses`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify(expPayload)
+                });
+                if (res.ok) {
+                    const serverExp = await res.json();
+                    if (serverExp && serverExp.id) {
+                        itemResult = serverExp;
+                    }
+                }
+            } catch (e) {
+                console.warn('Network sync note on auto-save expense:', e);
+            }
+            savedExpenses.push(itemResult);
+        }
+
+        // Auto-save receipt image into Evidence Gallery under 'RECEIPT' stage
+        let savedEvidenceId = null;
+        if (parsed.file_url) {
+            try {
+                const eviRes = await fetch(`/api/tickets/${encodeURIComponent(targetTicketId)}/evidence`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({
+                        stage: 'RECEIPT',
+                        url: parsed.file_url,
+                        name: parsed.receipt_no ? (`ใบเสร็จเลขที่ ${parsed.receipt_no}`) : 'ใบเสร็จค่าใช้จ่าย',
+                        description: `${parsed.description || 'ค่าใช้จ่าย'} (฿${Number(parsed.net_amount || 0).toLocaleString()})`
+                    })
+                });
+                if (eviRes.ok) {
+                    const eviData = await eviRes.json();
+                    if (eviData && eviData.id) savedEvidenceId = eviData.id;
+                }
+            } catch (e) {
+                console.warn('Auto-save evidence note:', e);
+            }
+        }
+
+        // Update local storage and expenses summary
+        const existing = Array.isArray(expenses) ? expenses : [];
+        const updatedList = [...savedExpenses, ...existing.filter(e => !savedExpenses.some(s => s.id === e.id))];
+
+        let totalProp = 0, totalAppr = 0, totalDisb = 0, totalPend = 0;
+        updatedList.forEach(e => {
+            const amt = Number(e.net_amount || e.total_price || 0);
+            totalProp += amt;
+            if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
+                totalAppr += amt;
+                if (e.receipt_no || e.receipt_url) totalDisb += amt;
+            } else if (e.status === 'PENDING') {
+                totalPend += amt;
+            }
+        });
+        const updatedSummary = {
+            ...summary,
+            totalProposed: totalProp,
+            totalApproved: totalAppr,
+            totalDisbursed: totalDisb,
+            totalPending: totalPend,
+            remainingBudget: Math.max(0, totalAppr - totalDisb)
+        };
+
+        saveStoredExpenses(targetTicketId, updatedList, updatedSummary, ticket?.ticket_no || targetTicketId);
+
+        const newIds = savedExpenses.map(s => s.id);
+        setLastScannedExpenseIds(newIds);
+        setLastScannedEvidenceId(savedEvidenceId);
+        setLastScannedReceiptUrl(parsed.file_url);
+        setScanSuccessInfo({
+            count: savedExpenses.length,
+            total: parsed.net_amount || savedExpenses.reduce((acc, curr) => acc + (curr.net_amount || 0), 0),
+            receiptNo: parsed.receipt_no,
+            vendor: parsed.vendor_name
+        });
+
+        if (onExpenseUpdated) onExpenseUpdated();
+        return savedExpenses;
+    };
+
+    const handleCancelCurrentScan = async () => {
+        if (!lastScannedExpenseIds || lastScannedExpenseIds.length === 0) return;
+        if (!window.confirm('คุณต้องการยกเลิกการสแกนนี้ และลบรายการอุปกรณ์ที่เพิ่งบันทึกไปใช่หรือไม่?')) return;
+
+        const token = localStorage.getItem('helpdesk_token');
+        const targetTicketId = ticket?.id || ticket?.ticket_no || 'general';
+
+        // Delete each expense created by this scan
+        for (const expId of lastScannedExpenseIds) {
+            try {
+                await fetch(`/api/expenses/${encodeURIComponent(expId)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+                });
+            } catch (e) {}
+        }
+
+        // Delete evidence created by this scan if any
+        if (lastScannedEvidenceId) {
+            try {
+                await fetch(`/api/tickets/${encodeURIComponent(targetTicketId)}/evidence/${encodeURIComponent(lastScannedEvidenceId)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+                });
+            } catch (e) {}
+        }
+
+        // Update local storage and expenses list
+        const existing = Array.isArray(expenses) ? expenses : [];
+        const toDeleteSet = new Set(lastScannedExpenseIds);
+        const updatedList = existing.filter(e => !toDeleteSet.has(e.id));
+
+        let totalProp = 0, totalAppr = 0, totalDisb = 0, totalPend = 0;
+        updatedList.forEach(e => {
+            const amt = Number(e.net_amount || e.total_price || 0);
+            totalProp += amt;
+            if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
+                totalAppr += amt;
+                if (e.receipt_no || e.receipt_url) totalDisb += amt;
+            } else if (e.status === 'PENDING') {
+                totalPend += amt;
+            }
+        });
+        const updatedSummary = {
+            ...summary,
+            totalProposed: totalProp,
+            totalApproved: totalAppr,
+            totalDisbursed: totalDisb,
+            totalPending: totalPend,
+            remainingBudget: Math.max(0, totalAppr - totalDisb)
+        };
+
+        saveStoredExpenses(targetTicketId, updatedList, updatedSummary, ticket?.ticket_no || targetTicketId);
+
+        setLastScannedExpenseIds([]);
+        setLastScannedEvidenceId(null);
+        setLastScannedReceiptUrl(null);
+        setScanSuccessInfo(null);
+        setOcrResult(null);
+        resetForm();
+        setShowAddModal(false);
+
+        if (appContext?.toast?.info) {
+            appContext.toast.info('❌ ยกเลิกการสแกนและลบรายการเรียบร้อยแล้ว');
+        }
+        if (onExpenseUpdated) onExpenseUpdated();
+    };
+
     const handleOcrUpload = async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -190,11 +409,15 @@ export default function TicketExpenseManager({
                 }
 
                 setStatus('APPROVED');
+
+                // Auto-save scanned receipt items directly into database & budget table
+                await autoSaveParsedReceipt(parsed);
+
                 if (appContext?.toast?.success) {
                     if (data.ocr_engine === 'GEMINI_AI') {
-                        appContext.toast.success('✨ Google Gemini Vision AI สแกนใบเสร็จสำเร็จ แม่นยำ 100%!');
+                        appContext.toast.success(`✨ Google Gemini AI สแกนและบันทึกรายการ "${detectedDesc || parsed.vendor_name}" ลงฐานข้อมูลเรียบร้อยแล้ว!`);
                     } else {
-                        appContext.toast.success('🎉 สแกนใบเสร็จและกรอกข้อมูลอุปกรณ์ลงช่องฟอร์มเรียบร้อยแล้ว!');
+                        appContext.toast.success(`🎉 สแกนและบันทึกรายการ "${detectedDesc || parsed.vendor_name}" ลงฐานข้อมูลเรียบร้อยแล้ว!`);
                     }
                 }
 
@@ -734,6 +957,77 @@ export default function TicketExpenseManager({
                 </div>
             </div>
 
+            {/* Active Scanned Receipt Banner with "📷 สแกนใบเสร็จใหม่" and "❌ ยกเลิกการสแกน" */}
+            {lastScannedExpenseIds.length > 0 && scanSuccessInfo && (
+                <div style={{
+                    background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(59, 130, 246, 0.12) 100%)',
+                    border: '1px solid rgba(34, 197, 94, 0.4)',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    marginBottom: '1rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '10px'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <CheckCircle2 style={{ width: 18, height: 18, color: '#4ade80', flexShrink: 0 }} />
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                            <span style={{ fontWeight: 700, color: '#4ade80' }}>⚡ บันทึกจากการสแกนอัตโนมัติแล้ว: </span>
+                            <span>{scanSuccessInfo.count} รายการ (ยอดสุทธิ ฿{Number(scanSuccessInfo.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span>
+                            {scanSuccessInfo.receiptNo && <span style={{ color: 'var(--text-secondary)', marginLeft: '6px' }}>[เลขที่ {scanSuccessInfo.receiptNo}]</span>}
+                        </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <label 
+                            className="btn btn-secondary btn-xs"
+                            style={{
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                fontWeight: 600,
+                                background: 'rgba(59, 130, 246, 0.2)',
+                                borderColor: 'rgba(59, 130, 246, 0.5)',
+                                color: '#60a5fa',
+                                padding: '5px 12px'
+                            }}
+                            title="สแกนใบเสร็จใบถัดไปและบันทึกอัตโนมัติ"
+                        >
+                            <Sparkles style={{ width: 13, height: 13 }} /> 📷 สแกนใบเสร็จใหม่
+                            <input 
+                                type="file" 
+                                accept="image/png, image/jpeg, image/jpg, application/pdf" 
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                    resetForm();
+                                    handleOcrUpload(e);
+                                }}
+                            />
+                        </label>
+                        <button
+                            type="button"
+                            onClick={handleCancelCurrentScan}
+                            className="btn btn-danger btn-xs"
+                            style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                fontWeight: 600,
+                                background: 'rgba(239, 68, 68, 0.2)',
+                                borderColor: 'rgba(239, 68, 68, 0.5)',
+                                color: '#f87171',
+                                padding: '5px 12px'
+                            }}
+                            title="ยกเลิกการสแกนนี้ และลบรายการอุปกรณ์ที่เพิ่งบันทึกไป"
+                        >
+                            <X style={{ width: 13, height: 13 }} /> ❌ ยกเลิกการสแกน
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Expense Table */}
             {expenses.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
@@ -1049,46 +1343,52 @@ export default function TicketExpenseManager({
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <CheckCircle2 style={{ width: 20, height: 20, color: '#4ade80' }} />
                                                 <span style={{ fontWeight: 700, fontSize: '0.92rem', color: '#4ade80' }}>
-                                                    สแกนและกรอกข้อมูลอุปกรณ์อัตโนมัติสำเร็จ!
+                                                    ⚡ สแกนและบันทึกข้อมูลอุปกรณ์ลงฐานข้อมูลอัตโนมัติสำเร็จ!
                                                 </span>
                                             </div>
-                                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                                {ocrResult.items && ocrResult.items.length > 1 && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleSaveAllOcrItems}
-                                                        disabled={submitting}
-                                                        className="btn btn-secondary btn-sm"
-                                                        style={{
-                                                            fontSize: '0.78rem',
-                                                            fontWeight: 600,
-                                                            borderColor: 'rgba(34, 197, 94, 0.4)',
-                                                            color: '#4ade80'
+                                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                                <label 
+                                                    className="btn btn-secondary btn-sm"
+                                                    style={{
+                                                        cursor: 'pointer',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: 600,
+                                                        borderColor: 'rgba(59, 130, 246, 0.4)',
+                                                        color: '#60a5fa',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px'
+                                                    }}
+                                                    title="สแกนใบเสร็จใบถัดไป"
+                                                >
+                                                    <Sparkles style={{ width: 13, height: 13 }} /> 📷 สแกนใบเสร็จใหม่
+                                                    <input 
+                                                        type="file" 
+                                                        accept="image/png, image/jpeg, image/jpg, application/pdf" 
+                                                        style={{ display: 'none' }}
+                                                        onChange={(e) => {
+                                                            resetForm();
+                                                            handleOcrUpload(e);
                                                         }}
-                                                        title="บันทึกทุกรายการที่พบในใบเสร็จขึ้นตารางพร้อมกัน"
-                                                    >
-                                                        ⚡ บันทึกทั้งหมด ({ocrResult.items.length} รายการ)
-                                                    </button>
-                                                )}
+                                                    />
+                                                </label>
                                                 <button
                                                     type="button"
-                                                    onClick={() => handleInstantSaveOcrItem()}
-                                                    disabled={submitting}
-                                                    className="btn btn-primary btn-sm"
+                                                    onClick={handleCancelCurrentScan}
+                                                    className="btn btn-danger btn-sm"
                                                     style={{
-                                                        backgroundColor: '#16a34a',
-                                                        borderColor: '#15803d',
-                                                        color: '#fff',
-                                                        fontWeight: 700,
-                                                        padding: '6px 14px',
-                                                        display: 'flex',
+                                                        fontSize: '0.78rem',
+                                                        fontWeight: 600,
+                                                        background: 'rgba(239, 68, 68, 0.2)',
+                                                        borderColor: 'rgba(239, 68, 68, 0.5)',
+                                                        color: '#f87171',
+                                                        display: 'inline-flex',
                                                         alignItems: 'center',
-                                                        gap: '6px',
-                                                        boxShadow: '0 4px 12px rgba(22, 163, 74, 0.4)'
+                                                        gap: '4px'
                                                     }}
+                                                    title="ยกเลิกการสแกนนี้ และลบรายการที่เพิ่งบันทึกไป"
                                                 >
-                                                    <Zap style={{ width: 15, height: 15 }} />
-                                                    {submitting ? 'กำลังบันทึก...' : '⚡ บันทึกขึ้นรายการอุปกรณ์ทันที'}
+                                                    <X style={{ width: 13, height: 13 }} /> ❌ ยกเลิกการสแกน
                                                 </button>
                                             </div>
                                         </div>
@@ -1347,27 +1647,77 @@ export default function TicketExpenseManager({
                             gap: '0.75rem', 
                             borderTop: '1px solid var(--border-card)',
                             backgroundColor: 'var(--bg-secondary, #1e293b)',
-                            flexShrink: 0
+                            flexShrink: 0,
+                            flexWrap: 'wrap'
                         }}>
-                            <button 
-                                type="button" 
-                                className="btn btn-secondary" 
-                                onClick={() => {
-                                    setShowAddModal(false);
-                                    resetForm();
-                                }}
-                            >
-                                ยกเลิก
-                            </button>
-                            <button 
-                                type="submit" 
-                                form="expense-modal-form" 
-                                className="btn btn-primary" 
-                                disabled={submitting}
-                                style={{ minWidth: '180px', fontWeight: 700, backgroundColor: '#16a34a', borderColor: '#15803d' }}
-                            >
-                                {submitting ? 'กำลังบันทึกลงฐานข้อมูล...' : '⚡ ยืนยันและบันทึกลงฐานข้อมูล'}
-                            </button>
+                            {lastScannedExpenseIds.length > 0 ? (
+                                <>
+                                    <button 
+                                        type="button" 
+                                        className="btn btn-danger" 
+                                        onClick={handleCancelCurrentScan}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                                    >
+                                        <X style={{ width: 15, height: 15 }} /> ❌ ยกเลิกการสแกน
+                                    </button>
+                                    <label 
+                                        className="btn btn-secondary"
+                                        style={{ 
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            fontWeight: 600,
+                                            borderColor: 'rgba(59, 130, 246, 0.4)',
+                                            color: '#60a5fa'
+                                        }}
+                                    >
+                                        <Sparkles style={{ width: 15, height: 15 }} /> 📷 สแกนใบเสร็จใหม่
+                                        <input 
+                                            type="file" 
+                                            accept="image/png, image/jpeg, image/jpg, application/pdf" 
+                                            style={{ display: 'none' }}
+                                            onChange={(e) => {
+                                                resetForm();
+                                                handleOcrUpload(e);
+                                            }}
+                                        />
+                                    </label>
+                                    <button 
+                                        type="button" 
+                                        className="btn btn-primary" 
+                                        onClick={() => {
+                                            setShowAddModal(false);
+                                            resetForm();
+                                        }}
+                                        style={{ minWidth: '140px', fontWeight: 700, backgroundColor: '#16a34a', borderColor: '#15803d' }}
+                                    >
+                                        ✅ เสร็จสิ้น / ปิดหน้าต่าง
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button 
+                                        type="button" 
+                                        className="btn btn-secondary" 
+                                        onClick={() => {
+                                            setShowAddModal(false);
+                                            resetForm();
+                                        }}
+                                    >
+                                        ยกเลิก
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        form="expense-modal-form" 
+                                        className="btn btn-primary" 
+                                        disabled={submitting}
+                                        style={{ minWidth: '180px', fontWeight: 700, backgroundColor: '#16a34a', borderColor: '#15803d' }}
+                                    >
+                                        {submitting ? 'กำลังบันทึกลงฐานข้อมูล...' : '⚡ ยืนยันและบันทึกลงฐานข้อมูล'}
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>,

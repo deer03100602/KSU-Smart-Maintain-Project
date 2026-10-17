@@ -275,12 +275,14 @@ export function getStoredExpenses(ticketId) {
     }
 }
 
-export function saveStoredExpenses(ticketId, expenses, summary) {
+export function saveStoredExpenses(ticketId, expenses, summary, ticketNo = null) {
     if (typeof window === 'undefined' || !ticketId) return;
     try {
         const raw = localStorage.getItem(EXPENSES_KEY);
         const map = raw ? JSON.parse(raw) : {};
-        map[ticketId] = { expenses, summary, updated_at: new Date().toISOString() };
+        const payload = { expenses, summary, updated_at: new Date().toISOString() };
+        map[ticketId] = payload;
+        if (ticketNo) map[ticketNo] = payload;
         localStorage.setItem(EXPENSES_KEY, JSON.stringify(map));
     } catch (e) {}
 }
@@ -300,12 +302,13 @@ export function getStoredTimelines(ticketId) {
     }
 }
 
-export function saveStoredTimelines(ticketId, timelines) {
+export function saveStoredTimelines(ticketId, timelines, ticketNo = null) {
     if (typeof window === 'undefined' || !ticketId) return;
     try {
         const raw = localStorage.getItem(TIMELINES_KEY);
         const map = raw ? JSON.parse(raw) : {};
         map[ticketId] = timelines;
+        if (ticketNo) map[ticketNo] = timelines;
         localStorage.setItem(TIMELINES_KEY, JSON.stringify(map));
     } catch (e) {}
 }
@@ -325,12 +328,13 @@ export function getStoredEvidences(ticketId) {
     }
 }
 
-export function saveStoredEvidences(ticketId, evidences) {
+export function saveStoredEvidences(ticketId, evidences, ticketNo = null) {
     if (typeof window === 'undefined' || !ticketId) return;
     try {
         const raw = localStorage.getItem(EVIDENCES_KEY);
         const map = raw ? JSON.parse(raw) : {};
         map[ticketId] = evidences;
+        if (ticketNo) map[ticketNo] = evidences;
         localStorage.setItem(EVIDENCES_KEY, JSON.stringify(map));
     } catch (e) {}
 }
