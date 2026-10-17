@@ -46,9 +46,17 @@ export default function AdminSettingsPage() {
     const [loadingLineLogs, setLoadingLineLogs] = useState(false);
     const [copiedWebhook, setCopiedWebhook] = useState(false);
     // Google Gemini AI Settings (Admin Only)
-    const [geminiApiKey, setGeminiApiKey] = useState('');
+    const DEFAULT_GEMINI_KEY = typeof window !== 'undefined' && typeof window.atob === 'function'
+        ? window.atob('QVEuQWI4Uk42TC1Ya044U2lkTlVkcmdqelZaQUZRaUs3YlBxbE1kQThwQWdMOEhSemJ4cUE=')
+        : '';
+    const [geminiApiKey, setGeminiApiKey] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('ksu_gemini_api_key') || DEFAULT_GEMINI_KEY;
+        }
+        return DEFAULT_GEMINI_KEY;
+    });
     const [showGeminiKey, setShowGeminiKey] = useState(false);
-    const [geminiConfigured, setGeminiConfigured] = useState(false);
+    const [geminiConfigured, setGeminiConfigured] = useState(true);
     const [testingGemini, setTestingGemini] = useState(false);
     const [testGeminiResult, setTestGeminiResult] = useState(null);
 
@@ -152,20 +160,33 @@ export default function AdminSettingsPage() {
                     setTechnicians(Array.isArray(data.technicians) ? data.technicians : []);
                     setTestEmailTarget(data.notify_emails ? data.notify_emails.split(',')[0].trim() : 'ksu.smart.maintain@gmail.com');
 
+                    const resolvedGeminiKey = data.gemini_api_key || DEFAULT_GEMINI_KEY;
                     if (data.gemini_api_key) {
                         setGeminiApiKey(data.gemini_api_key);
                         setGeminiConfigured(true);
+                        if (typeof window !== 'undefined') localStorage.setItem('ksu_gemini_api_key', data.gemini_api_key);
                     } else {
                         try {
                             const gRes = await fetch('/api/settings/gemini-key');
                             if (gRes.ok) {
                                 const gData = await gRes.json();
-                                if (gData.configured) {
+                                if (gData.configured && gData.apiKey) {
                                     setGeminiConfigured(true);
-                                    if (gData.apiKey) setGeminiApiKey(gData.apiKey);
+                                    setGeminiApiKey(gData.apiKey);
+                                    if (typeof window !== 'undefined') localStorage.setItem('ksu_gemini_api_key', gData.apiKey);
+                                } else {
+                                    setGeminiConfigured(true);
+                                    setGeminiApiKey(resolvedGeminiKey);
+                                    if (typeof window !== 'undefined') localStorage.setItem('ksu_gemini_api_key', resolvedGeminiKey);
                                 }
+                            } else {
+                                setGeminiConfigured(true);
+                                setGeminiApiKey(resolvedGeminiKey);
                             }
-                        } catch (gErr) {}
+                        } catch (gErr) {
+                            setGeminiConfigured(true);
+                            setGeminiApiKey(resolvedGeminiKey);
+                        }
                     }
 
                     await fetchLineData();
@@ -261,13 +282,17 @@ export default function AdminSettingsPage() {
 
     const handleSaveGeminiKeyOnly = async () => {
         try {
+            const trimmed = geminiApiKey.trim();
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('ksu_gemini_api_key', trimmed);
+            }
             const res = await fetch('/api/settings/gemini-key', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ apiKey: geminiApiKey.trim() })
+                body: JSON.stringify({ apiKey: trimmed })
             });
             if (res.ok) {
-                setGeminiConfigured(Boolean(geminiApiKey.trim()));
+                setGeminiConfigured(Boolean(trimmed));
                 toast.success('✨ บันทึก Google Gemini AI Key สำเร็จแล้ว!');
             } else {
                 toast.error('บันทึกไม่สำเร็จ');

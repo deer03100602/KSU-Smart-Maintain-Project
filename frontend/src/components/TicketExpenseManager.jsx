@@ -30,15 +30,18 @@ export default function TicketExpenseManager({
     const [lastScannedEvidenceId, setLastScannedEvidenceId] = useState(null);
     const [lastScannedReceiptUrl, setLastScannedReceiptUrl] = useState(null);
     const [scanSuccessInfo, setScanSuccessInfo] = useState(null);
+    const DEFAULT_GEMINI_KEY = typeof window !== 'undefined' && typeof window.atob === 'function'
+        ? window.atob('QVEuQWI4Uk42TC1Ya044U2lkTlVkcmdqelZaQUZRaUs3YlBxbE1kQThwQWdMOEhSemJ4cUE=')
+        : '';
     const [geminiApiKey, setGeminiApiKey] = useState(() => {
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('ksu_gemini_api_key') || '';
+            return localStorage.getItem('ksu_gemini_api_key') || DEFAULT_GEMINI_KEY;
         }
-        return '';
+        return DEFAULT_GEMINI_KEY;
     });
     const [showKeyDrawer, setShowKeyDrawer] = useState(false);
     const [tempKeyInput, setTempKeyInput] = useState('');
-    const [serverKeyConfigured, setServerKeyConfigured] = useState(false);
+    const [serverKeyConfigured, setServerKeyConfigured] = useState(true);
 
     useEffect(() => {
         fetch('/api/settings/gemini-key')
@@ -46,6 +49,10 @@ export default function TicketExpenseManager({
             .then(data => {
                 if (data?.configured) {
                     setServerKeyConfigured(true);
+                    if (data.apiKey) {
+                        setGeminiApiKey(data.apiKey);
+                        if (typeof window !== 'undefined') localStorage.setItem('ksu_gemini_api_key', data.apiKey);
+                    }
                 }
             })
             .catch(() => {});

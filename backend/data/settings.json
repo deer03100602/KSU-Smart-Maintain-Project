@@ -13,5 +13,6 @@
   "emailjs_template_id": "",
   "emailjs_public_key": "",
   "emailjs_private_key": "",
-  "technicians": []
+  "technicians": [],
+  "gemini_api_key": ""
 }

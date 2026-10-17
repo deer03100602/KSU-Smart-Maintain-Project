@@ -60,5 +60,8 @@
     "id-mvbekaad-7fcjfrf",
     "TKT-14"
   ],
+  "settings": {
+    "gemini_api_key": ""
+  },
   "initialized": true
 }
