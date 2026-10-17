@@ -1048,34 +1048,40 @@ export default function AdminSettingsPage() {
                                 ขอรับ API Key ฟรีที่ Google AI Studio <ExternalLink style={{ width: 13, height: 13 }} />
                             </a>
                         </div>
-                        <div style={{ display: 'flex', gap: '0.75rem', position: 'relative' }}>
-                            <input
-                                type={showGeminiKey ? 'text' : 'password'}
-                                className="form-input"
-                                placeholder="วาง Google Gemini API Key ที่นี่ (เช่น AQ.Ab8RN6L... หรือ AIzaSy...)"
-                                value={geminiApiKey}
-                                onChange={(e) => setGeminiApiKey(e.target.value)}
-                                style={{ flex: 1, paddingRight: '40px', fontFamily: showGeminiKey ? 'inherit' : 'monospace' }}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowGeminiKey(!showGeminiKey)}
-                                style={{
-                                    position: 'absolute',
-                                    right: 180,
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    background: 'none',
-                                    border: 'none',
-                                    color: 'var(--text-secondary)',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                }}
-                                title={showGeminiKey ? 'ซ่อน Key' : 'แสดง Key'}
-                            >
-                                {showGeminiKey ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
-                            </button>
+                        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
+                                <input
+                                    type={showGeminiKey ? 'text' : 'password'}
+                                    className="form-input"
+                                    placeholder="วาง Google Gemini API Key ที่นี่ (เช่น AQ.Ab8RN6L... หรือ AIzaSy...)"
+                                    value={geminiApiKey}
+                                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                                    style={{ width: '100%', paddingRight: '40px', boxSizing: 'border-box', fontFamily: showGeminiKey ? 'inherit' : 'monospace' }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowGeminiKey(!showGeminiKey)}
+                                    style={{
+                                        position: 'absolute',
+                                        right: '12px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        background: 'none',
+                                        border: 'none',
+                                        color: 'var(--text-secondary)',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        padding: '4px',
+                                        borderRadius: '4px',
+                                        zIndex: 2
+                                    }}
+                                    title={showGeminiKey ? 'ซ่อน Key' : 'แสดง Key'}
+                                >
+                                    {showGeminiKey ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
+                                </button>
+                            </div>
                             <button
                                 type="button"
                                 onClick={handleSaveGeminiKeyOnly}
