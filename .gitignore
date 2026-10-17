@@ -38,6 +38,8 @@ backend/data/line_contacts.json
 # Local zip packages
 *.zip
 *.traineddata
+!backend/tessdata/*.traineddata
+
 
 # Operating System Files
 .DS_Store

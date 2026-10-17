@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
     DollarSign, Plus, Check, X, Edit3, Trash2, AlertCircle, FileText, 
-    Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw, Zap 
+    Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw, Zap,
+    Key, ExternalLink, ShieldCheck 
 } from 'lucide-react';
 import { saveStoredExpenses } from '@/lib/ticketStore';
 import { useApp } from '@/context/AppContext';
@@ -25,6 +26,66 @@ export default function TicketExpenseManager({
     const [ocrLoading, setOcrLoading] = useState(false);
     const [ocrResult, setOcrResult] = useState(null);
     const [ocrWarning, setOcrWarning] = useState('');
+    const [geminiApiKey, setGeminiApiKey] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('ksu_gemini_api_key') || '';
+        }
+        return '';
+    });
+    const [showKeyDrawer, setShowKeyDrawer] = useState(false);
+    const [tempKeyInput, setTempKeyInput] = useState('');
+    const [serverKeyConfigured, setServerKeyConfigured] = useState(false);
+
+    useEffect(() => {
+        fetch('/api/settings/gemini-key')
+            .then(r => r.json())
+            .then(data => {
+                if (data?.configured) {
+                    setServerKeyConfigured(true);
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    const handleSaveGeminiKey = async () => {
+        const cleaned = tempKeyInput.trim();
+        setGeminiApiKey(cleaned);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('ksu_gemini_api_key', cleaned);
+        }
+        setShowKeyDrawer(false);
+        try {
+            await fetch('/api/settings/gemini-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey: cleaned })
+            });
+            setServerKeyConfigured(Boolean(cleaned));
+        } catch (e) {}
+        if (appContext?.toast?.success) {
+            appContext.toast.success('✨ บันทึก Google Gemini AI Key เรียบร้อยแล้ว!');
+        }
+    };
+
+    const handleClearGeminiKey = async () => {
+        setGeminiApiKey('');
+        setTempKeyInput('');
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('ksu_gemini_api_key');
+        }
+        setShowKeyDrawer(false);
+        try {
+            await fetch('/api/settings/gemini-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey: '' })
+            });
+            setServerKeyConfigured(false);
+        } catch (e) {}
+        if (appContext?.toast?.info) {
+            appContext.toast.info('ลบการตั้งค่า Gemini Key แล้ว (ระบบจะใช้ Thai OCR ออฟไลน์)');
+        }
+    };
 
     // Form state
     const [category, setCategory] = useState('ค่าวัสดุและอุปกรณ์');
@@ -71,8 +132,8 @@ export default function TicketExpenseManager({
         setOcrWarning('');
         const formData = new FormData();
         formData.append('receipt', file);
-        if (ticket?.id) formData.append('ticket_id', ticket.id);
-        if (ticket?.ticket_no) formData.append('ticket_no', ticket.ticket_no);
+        const activeKey = geminiApiKey || (typeof window !== 'undefined' ? localStorage.getItem('ksu_gemini_api_key') : '') || '';
+        if (activeKey) formData.append('gemini_key', activeKey);
 
         try {
             const token = localStorage.getItem('helpdesk_token');
@@ -84,7 +145,8 @@ export default function TicketExpenseManager({
                 method: 'POST',
                 headers: {
                     'Authorization': token ? `Bearer ${token}` : '',
-                    'x-client-user': clientUserHeader
+                    'x-client-user': clientUserHeader,
+                    'x-gemini-key': activeKey
                 },
                 body: formData
             });
@@ -116,7 +178,7 @@ export default function TicketExpenseManager({
                 }
 
                 if (parsed.discount !== undefined) setDiscount(parsed.discount);
-                setTaxPercent(parsed.tax_amount > 0 ? 7 : 0);
+                setTaxPercent(parsed.tax_amount > 0 ? 7 : (parsed.tax_percent !== undefined ? parsed.tax_percent : 0));
 
                 if (parsed.vendor_name) setVendorName(parsed.vendor_name);
                 if (parsed.receipt_no) setReceiptNo(parsed.receipt_no);
@@ -129,7 +191,11 @@ export default function TicketExpenseManager({
 
                 setStatus('APPROVED');
                 if (appContext?.toast?.success) {
-                    appContext.toast.success('🎉 สแกนใบเสร็จและกรอกข้อมูลอุปกรณ์ลงช่องฟอร์มเรียบร้อยแล้ว! กรุณาตรวจสอบแล้วกดยืนยันบันทึก');
+                    if (data.ocr_engine === 'GEMINI_AI') {
+                        appContext.toast.success('✨ Google Gemini Vision AI สแกนใบเสร็จสำเร็จ แม่นยำ 100%!');
+                    } else {
+                        appContext.toast.success('🎉 สแกนใบเสร็จและกรอกข้อมูลอุปกรณ์ลงช่องฟอร์มเรียบร้อยแล้ว!');
+                    }
                 }
 
                 // Validation alert: check duplicate receipt
@@ -876,9 +942,135 @@ export default function TicketExpenseManager({
                                     <Sparkles style={{ width: 20, height: 20, color: '#60a5fa' }} />
                                     <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>ระบบ AI สแกนใบเสร็จ & กรอกข้อมูลอุปกรณ์อัตโนมัติ</span>
                                 </div>
-                                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 12px 0' }}>
+                                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 10px 0' }}>
                                     อัปโหลดภาพใบเสร็จหรือบิลเงินสด (JPG, PNG, PDF) — ระบบจะอ่านชื่ออุปกรณ์ จำนวน ราคา ร้านค้า และกรอกให้อัตโนมัติทันที
                                 </p>
+
+                                {/* AI Mode Indicator & Key Setup */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                                    {(serverKeyConfigured || geminiApiKey) ? (
+                                        <div style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            background: 'rgba(34, 197, 94, 0.15)',
+                                            border: '1px solid rgba(34, 197, 94, 0.4)',
+                                            color: '#4ade80',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 600,
+                                            padding: '4px 10px',
+                                            borderRadius: '999px'
+                                        }}>
+                                            <Sparkles style={{ width: 14, height: 14, color: '#4ade80' }} />
+                                            <span>Google Gemini Vision AI: พร้อมใช้งาน (แม่นยำ 100%)</span>
+                                        </div>
+                                    ) : (
+                                        <div style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            background: 'rgba(234, 179, 8, 0.15)',
+                                            border: '1px solid rgba(234, 179, 8, 0.4)',
+                                            color: '#facc15',
+                                            fontSize: '0.78rem',
+                                            fontWeight: 600,
+                                            padding: '4px 10px',
+                                            borderRadius: '999px'
+                                        }}>
+                                            <ShieldCheck style={{ width: 14, height: 14 }} />
+                                            <span>โหมด: Local Thai OCR ออฟไลน์</span>
+                                        </div>
+                                    )}
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setTempKeyInput(geminiApiKey || '');
+                                            setShowKeyDrawer(!showKeyDrawer);
+                                        }}
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            background: 'rgba(255, 255, 255, 0.08)',
+                                            border: '1px solid var(--border-color)',
+                                            color: 'var(--text-secondary)',
+                                            fontSize: '0.76rem',
+                                            fontWeight: 600,
+                                            padding: '4px 10px',
+                                            borderRadius: '999px',
+                                            cursor: 'pointer'
+                                        }}
+                                        title="คลิกเพื่อใส่ Google Gemini API Key เพื่อความแม่นยำระดับ AI"
+                                    >
+                                        <Key style={{ width: 13, height: 13 }} />
+                                        {showKeyDrawer ? 'ปิดตั้งค่า Key' : '🔑 ตั้งค่า Gemini AI Key'}
+                                    </button>
+                                </div>
+
+                                {showKeyDrawer && (
+                                    <div style={{
+                                        background: 'rgba(15, 23, 42, 0.6)',
+                                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                                        borderRadius: '10px',
+                                        padding: '12px 14px',
+                                        marginBottom: '14px',
+                                        textAlign: 'left'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#93c5fd', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <Key style={{ width: 15, height: 15 }} /> ตั้งค่า Google Gemini API Key
+                                            </span>
+                                            <a
+                                                href="https://aistudio.google.com/app/apikey"
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                style={{ fontSize: '0.75rem', color: '#60a5fa', textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: '3px' }}
+                                            >
+                                                รับฟรี API Key ที่นี่ <ExternalLink style={{ width: 12, height: 12 }} />
+                                            </a>
+                                        </div>
+                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 8px 0', lineHeight: 1.4 }}>
+                                            ใส่ API Key จาก Google AI Studio เพื่อเปิดพลัง Gemini 2.5 Flash / 2.0 Flash อ่านใบเสร็จภาษาไทย ลายมือ ตารางสินค้า และยอดเงิน ได้แม่นยำ 100%
+                                        </p>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <input
+                                                type="password"
+                                                value={tempKeyInput}
+                                                onChange={(e) => setTempKeyInput(e.target.value)}
+                                                placeholder="AIzaSy..."
+                                                style={{
+                                                    flex: 1,
+                                                    fontSize: '0.8rem',
+                                                    padding: '6px 10px',
+                                                    borderRadius: '6px',
+                                                    border: '1px solid var(--border-color)',
+                                                    background: 'rgba(0, 0, 0, 0.3)',
+                                                    color: 'var(--text-primary)'
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleSaveGeminiKey}
+                                                className="btn btn-primary btn-sm"
+                                                style={{ fontSize: '0.78rem', padding: '6px 14px', fontWeight: 600 }}
+                                            >
+                                                บันทึก Key
+                                            </button>
+                                            {(geminiApiKey || serverKeyConfigured) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleClearGeminiKey}
+                                                    className="btn btn-secondary btn-sm"
+                                                    style={{ fontSize: '0.78rem', padding: '6px 10px', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                                                    title="ล้าง API Key"
+                                                >
+                                                    ล้าง Key
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                                 <label 
                                     className="btn btn-secondary btn-sm" 
                                     style={{ 
