@@ -212,6 +212,7 @@ export default function AdminSettingsPage() {
                     technicians: technicians,
                     line_channel_access_token: lineChannelAccessToken.trim(),
                     line_channel_secret: lineChannelSecret.trim(),
+                    line_group_id: lineTargetId.trim(),
                     line_target_id: lineTargetId.trim(),
                     line_notify_enabled: lineNotifyEnabled,
                     app_base_url: appBaseUrl.trim()
@@ -245,6 +246,7 @@ export default function AdminSettingsPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     targetId: target,
+                    groupId: target,
                     message: testLineMessage.trim()
                 })
             });

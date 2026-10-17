@@ -41,24 +41,37 @@ function updateStoredSettings(partial) {
     }
 }
 
+// Helper: Format application URLs for frontend (supporting React HashRouter)
+function formatAppUrl(baseUrl, path) {
+    const cleanBase = (baseUrl || 'http://localhost:5173').replace(/\/+$/, '');
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    if (cleanBase.includes('#')) {
+        return `${cleanBase}${cleanPath}`;
+    }
+    return `${cleanBase}/#${cleanPath}`;
+}
+
 // Get active LINE configuration (Environment variables take precedence over settings.json)
 function getLineConfig() {
     const settings = getStoredSettings();
     const token = (process.env.LINE_CHANNEL_ACCESS_TOKEN || settings.line_channel_access_token || '').trim();
     const secret = (process.env.LINE_CHANNEL_SECRET || settings.line_channel_secret || '').trim();
-    const targetId = (process.env.LINE_TARGET_ID || settings.line_target_id || '').trim();
+    const groupId = (process.env.LINE_GROUP_ID || process.env.LINE_TARGET_ID || settings.line_group_id || settings.line_target_id || '').trim();
     const isEnabled = process.env.LINE_NOTIFY_ENABLED !== undefined
         ? (process.env.LINE_NOTIFY_ENABLED === 'true' || process.env.LINE_NOTIFY_ENABLED === '1')
         : (settings.line_notify_enabled !== false);
     const baseUrl = (process.env.APP_BASE_URL || settings.app_base_url || 'http://localhost:5173').trim().replace(/\/$/, '');
 
+    const isConfigured = Boolean(token && groupId);
+
     return {
         token,
         secret,
-        targetId,
-        isEnabled: isEnabled && Boolean(token),
+        targetId: groupId,
+        groupId,
+        isEnabled: isEnabled && isConfigured,
         baseUrl,
-        isConfigured: Boolean(token && (targetId || settings.line_target_id))
+        isConfigured
     };
 }
 
@@ -77,19 +90,22 @@ function getPublicLineStatus() {
     const contacts = getLineContacts();
 
     let targetType = 'NONE';
-    if (config.targetId) {
-        if (config.targetId.startsWith('U')) targetType = 'USER';
-        else if (config.targetId.startsWith('C') || config.targetId.startsWith('R')) targetType = 'GROUP';
-        else targetType = 'UNKNOWN';
+    if (config.groupId) {
+        if (config.groupId.startsWith('C') || config.groupId.startsWith('R')) targetType = 'GROUP';
+        else if (config.groupId.startsWith('U')) targetType = 'USER';
+        else targetType = 'CUSTOM';
     }
 
     return {
-        configured: Boolean(config.token),
-        targetConfigured: Boolean(config.targetId),
+        status: config.isConfigured ? 'CONFIGURED' : 'NOT_CONFIGURED',
+        configured: config.isConfigured,
+        hasToken: Boolean(config.token),
+        hasSecret: Boolean(config.secret),
+        targetConfigured: Boolean(config.groupId),
         enabled: config.isEnabled,
         maskedToken: maskSecret(config.token),
-        hasSecret: Boolean(config.secret),
-        targetId: config.targetId,
+        targetId: config.groupId,
+        groupId: config.groupId,
         targetType,
         recentLogs: logs,
         knownContactsCount: contacts.length,
@@ -244,8 +260,8 @@ function buildTicketFlexMessage(ticket, eventType, baseUrl) {
     const priorityMeta = getPriorityMeta(ticket.priority);
     const dateFormatted = formatThaiDateTime(ticket.created_at || new Date());
     const ticketNo = ticket.ticket_no || ticket.id || '-';
-    const ticketUrl = `${baseUrl}/tickets/${ticket.id || ticket.ticket_no}`;
-    const adminUrl = `${baseUrl}/admin`;
+    const ticketUrl = formatAppUrl(baseUrl, `/tickets/${ticket.id || ticket.ticket_no}`);
+    const adminUrl = formatAppUrl(baseUrl, `/admin`);
 
     const altText = `[${eventMeta.icon} ${ticketNo}] ${eventMeta.title}: ${ticket.title || '-'}`;
 
@@ -432,7 +448,7 @@ function buildTicketTextMessage(ticket, eventType, baseUrl) {
     const eventMeta = getEventMeta(eventType);
     const dateFormatted = formatThaiDateTime(ticket.created_at || new Date());
     const ticketNo = ticket.ticket_no || ticket.id || '-';
-    const ticketUrl = `${baseUrl}/tickets/${ticket.id || ticket.ticket_no}`;
+    const ticketUrl = formatAppUrl(baseUrl, `/tickets/${ticket.id || ticket.ticket_no}`);
 
     return {
         type: 'text',
@@ -453,13 +469,17 @@ function buildTicketTextMessage(ticket, eventType, baseUrl) {
 }
 
 // Core: Send LINE Push message to Target ID (User or Group)
-async function sendLinePush(targetId, messages) {
+async function sendLinePush(targetId, messages, maxRetries = 1) {
     const config = getLineConfig();
     if (!config.token) {
-        throw new Error('LINE_CHANNEL_ACCESS_TOKEN is not configured');
+        const err = new Error('LINE_CHANNEL_ACCESS_TOKEN is not configured');
+        err.statusCode = 401;
+        throw err;
     }
     if (!targetId) {
-        throw new Error('LINE Target ID (Group ID or User ID) is missing');
+        const err = new Error('LINE Group ID or Target ID is missing');
+        err.statusCode = 400;
+        throw err;
     }
 
     const payload = {
@@ -467,28 +487,59 @@ async function sendLinePush(targetId, messages) {
         messages: Array.isArray(messages) ? messages : [messages]
     };
 
-    const res = await fetch('https://api.line.me/v2/bot/message/push', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.token}`
-        },
-        body: JSON.stringify(payload)
-    });
+    let lastError = null;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+            const res = await fetch('https://api.line.me/v2/bot/message/push', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${config.token}`
+                },
+                body: JSON.stringify(payload)
+            });
 
-    const resBody = await res.text();
-    let parsedBody = {};
-    try { parsedBody = JSON.parse(resBody); } catch (e) {}
+            const resBody = await res.text();
+            let parsedBody = {};
+            try { parsedBody = JSON.parse(resBody); } catch (e) {}
 
-    if (!res.ok) {
-        const errorMsg = parsedBody.message || resBody || `LINE API Error ${res.status}`;
-        const err = new Error(errorMsg);
-        err.statusCode = res.status;
-        err.details = parsedBody.details || [];
-        throw err;
+            if (!res.ok) {
+                const errorMsg = parsedBody.message || resBody || `LINE API Error ${res.status}`;
+                const err = new Error(errorMsg);
+                err.statusCode = res.status;
+                err.details = parsedBody.details || [];
+
+                // Specific error messages for clear diagnosis
+                if (res.status === 401) {
+                    err.message = 'LINE Channel Access Token ไม่ถูกต้องหรือหมดอายุ (401 Unauthorized)';
+                    throw err;
+                }
+                if (res.status === 400 && parsedBody.details?.[0]?.message) {
+                    err.message = `LINE API Bad Request: ${parsedBody.details[0].message}`;
+                }
+
+                // Retry on server-side 5xx or rate limit 429
+                if ((res.status >= 500 || res.status === 429) && attempt < maxRetries) {
+                    console.warn(`⚠️ LINE push attempt ${attempt + 1} failed with ${res.status}, retrying in 1s...`);
+                    await new Promise(r => setTimeout(r, 1000));
+                    continue;
+                }
+                throw err;
+            }
+
+            return { success: true, statusCode: res.status };
+        } catch (fetchErr) {
+            lastError = fetchErr;
+            if (fetchErr.statusCode && fetchErr.statusCode < 500 && fetchErr.statusCode !== 429) {
+                throw fetchErr;
+            }
+            if (attempt < maxRetries) {
+                console.warn(`⚠️ LINE push network issue on attempt ${attempt + 1}, retrying in 1s...`);
+                await new Promise(r => setTimeout(r, 1000));
+            }
+        }
     }
-
-    return { success: true, statusCode: res.status };
+    throw lastError;
 }
 
 // Core: Send LINE Reply message for Webhook responses
@@ -665,39 +716,58 @@ function verifyWebhookSignature(rawBody, signature, secret) {
     }
 }
 
+// Cache to prevent duplicate webhook event processing
+const processedWebhookEventIds = new Set();
+
 // Webhook Processor for LINE Platform Events
 async function processWebhookEvents(events = []) {
     const results = [];
 
     for (const ev of events) {
         try {
+            // Deduplicate webhook events if webhookEventId is present
+            if (ev.webhookEventId) {
+                if (processedWebhookEventIds.has(ev.webhookEventId)) {
+                    continue;
+                }
+                processedWebhookEventIds.add(ev.webhookEventId);
+                if (processedWebhookEventIds.size > 2000) {
+                    const first = processedWebhookEventIds.values().next().value;
+                    processedWebhookEventIds.delete(first);
+                }
+            }
+
             const source = ev.source || {};
             const sourceType = source.type; // 'user' | 'group' | 'room'
             const userId = source.userId;
-            const groupId = source.groupId || source.roomId;
+            const isGroup = sourceType === 'group';
+            const groupId = isGroup ? source.groupId : (source.type === 'room' ? source.roomId : null);
             const targetId = groupId || userId;
 
             // 1. Bot joined group or room
             if (ev.type === 'join') {
-                console.log(`🤖 [LINE Bot Joined Group]: ${groupId}`);
-                recordLineContact({
-                    id: groupId,
-                    type: 'group',
-                    name: `กลุ่ม LINE (${groupId.substring(0, 8)}...)`,
-                    source: 'join_event'
-                });
+                const detectedGroup = groupId || targetId;
+                console.log(`🤖 [LINE Bot Joined Group]: ${detectedGroup}`);
+                if (detectedGroup) {
+                    recordLineContact({
+                        id: detectedGroup,
+                        type: 'group',
+                        name: `กลุ่ม LINE (${detectedGroup.substring(0, 8)}...)`,
+                        source: 'join_event'
+                    });
+                }
 
-                if (ev.replyToken) {
+                if (ev.replyToken && detectedGroup) {
                     await sendLineReply(ev.replyToken, [
                         {
                             type: 'text',
                             text: `🤖 สวัสดีครับ! บอท KSU Smart Maintain เข้าร่วมกลุ่มเรียบร้อยแล้ว\n\n` +
-                                `📋 Group ID สำหรับนำไปใส่ในระบบแจ้งเตือน:\n${groupId}\n\n` +
+                                `📋 Group ID สำหรับนำไปตั้งค่าระบบแจ้งเตือน:\n${detectedGroup}\n\n` +
                                 `💡 นำ Group ID นี้ไปใส่ในหน้า Admin Settings -> LINE Notification เพื่อรับการแจ้งเตือนงานซ่อมในกลุ่มนี้ได้ทันทีครับ`
                         }
                     ]);
                 }
-                results.push({ type: 'join', groupId });
+                results.push({ type: 'join', groupId: detectedGroup });
             }
 
             // 2. User followed bot (friend added)

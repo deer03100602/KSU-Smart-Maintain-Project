@@ -2463,7 +2463,8 @@ app.post('/api/settings', (req, res) => {
             technicians: Array.isArray(body.technicians) ? body.technicians : (prev.technicians || []),
             line_channel_access_token: body.line_channel_access_token !== undefined && !body.line_channel_access_token.includes('...') ? String(body.line_channel_access_token).trim() : (prev.line_channel_access_token || ''),
             line_channel_secret: body.line_channel_secret !== undefined && !body.line_channel_secret.includes('...') ? String(body.line_channel_secret).trim() : (prev.line_channel_secret || ''),
-            line_target_id: body.line_target_id !== undefined ? String(body.line_target_id).trim() : (prev.line_target_id || ''),
+            line_group_id: (body.line_group_id !== undefined ? String(body.line_group_id).trim() : (body.line_target_id !== undefined ? String(body.line_target_id).trim() : (prev.line_group_id || prev.line_target_id || ''))),
+            line_target_id: (body.line_group_id !== undefined ? String(body.line_group_id).trim() : (body.line_target_id !== undefined ? String(body.line_target_id).trim() : (prev.line_group_id || prev.line_target_id || ''))),
             line_notify_enabled: body.line_notify_enabled !== undefined ? Boolean(body.line_notify_enabled) : (prev.line_notify_enabled !== false),
             app_base_url: body.app_base_url !== undefined ? String(body.app_base_url).trim() : (prev.app_base_url || 'http://localhost:5173')
         };
@@ -2516,8 +2517,20 @@ app.get('/api/line/status', (req, res) => {
 // 3. Test LINE notification
 app.post('/api/line/test', async (req, res) => {
     try {
-        const { targetId, message } = req.body || {};
-        const result = await testLineNotification(targetId, message);
+        const { targetId, groupId, message } = req.body || {};
+        const config = getLineConfig();
+        const target = (groupId || targetId || config.groupId || config.targetId || '').trim();
+
+        if (!config.token || !target) {
+            return res.status(400).json({
+                error: 'ระบบยังไม่พร้อมส่ง (สถานะ: NOT_CONFIGURED): กรุณาระบุ Channel Access Token และ LINE Group ID ให้ครบถ้วนในหน้าตั้งค่าก่อนทำการทดสอบ',
+                status: 'NOT_CONFIGURED',
+                hasToken: Boolean(config.token),
+                hasTarget: Boolean(target)
+            });
+        }
+
+        const result = await testLineNotification(target, message);
         res.json(result);
     } catch (err) {
         console.error('❌ LINE test failed:', err.message);
@@ -2549,7 +2562,7 @@ app.get('/api/line/contacts', (req, res) => {
 // 6. Update LINE settings directly
 app.post('/api/line/settings', (req, res) => {
     try {
-        const { channelAccessToken, channelSecret, targetId, notifyEnabled, baseUrl } = req.body || {};
+        const { channelAccessToken, channelSecret, targetId, groupId, notifyEnabled, baseUrl } = req.body || {};
         const updates = {};
         if (channelAccessToken !== undefined && !channelAccessToken.includes('...')) {
             updates.line_channel_access_token = String(channelAccessToken).trim();
@@ -2557,8 +2570,10 @@ app.post('/api/line/settings', (req, res) => {
         if (channelSecret !== undefined && !channelSecret.includes('...')) {
             updates.line_channel_secret = String(channelSecret).trim();
         }
-        if (targetId !== undefined) {
-            updates.line_target_id = String(targetId).trim();
+        const finalTarget = groupId !== undefined ? String(groupId).trim() : (targetId !== undefined ? String(targetId).trim() : undefined);
+        if (finalTarget !== undefined) {
+            updates.line_group_id = finalTarget;
+            updates.line_target_id = finalTarget;
         }
         if (notifyEnabled !== undefined) {
             updates.line_notify_enabled = Boolean(notifyEnabled);
