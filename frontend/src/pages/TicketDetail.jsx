@@ -319,8 +319,15 @@ export default function TicketDetailPage(props) {
             const cachedTml = getStoredTimelines(id) || (ticketData?.id && getStoredTimelines(ticketData.id)) || (ticketData?.ticket_no && getStoredTimelines(ticketData.ticket_no));
             if (Array.isArray(cachedTml) && cachedTml.length > 0) {
                 const tmlMap = new Map();
-                tmlList.forEach(t => { if (t && t.id) tmlMap.set(t.id, t); });
-                cachedTml.forEach(t => { if (t && t.id && !tmlMap.has(t.id)) tmlMap.set(t.id, t); });
+                const seenActions = new Set();
+                [...tmlList, ...cachedTml].forEach(t => {
+                    if (!t) return;
+                    const actKey = t.action === 'CREATED' ? 'CREATED' : (t.id || (t.action + ':' + t.title));
+                    if (!seenActions.has(actKey)) {
+                        seenActions.add(actKey);
+                        tmlMap.set(t.id || actKey, t);
+                    }
+                });
                 tmlList = Array.from(tmlMap.values());
             }
             if (tmlList.length > 0) {

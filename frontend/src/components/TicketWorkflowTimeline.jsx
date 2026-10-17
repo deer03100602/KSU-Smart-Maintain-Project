@@ -254,9 +254,20 @@ export default function TicketWorkflowTimeline({
             }
         }
 
+        // Deduplicate: strictly ONE 'CREATED' event and unique IDs
+        let seenCreated = false;
+        const dedupedList = [];
+        for (const item of list) {
+            if (item.action === 'CREATED' || (item.title && item.title.includes('สร้างรายการ'))) {
+                if (seenCreated) continue;
+                seenCreated = true;
+            }
+            dedupedList.push(item);
+        }
+
         // Sort chronologically ascending
-        list.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
-        return list;
+        dedupedList.sort((a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0));
+        return dedupedList;
     }, [timelines, ticket, currentUser]);
 
     return (

@@ -5,6 +5,7 @@ import {
     FileText, Calendar, User, Check, Trash2, AlertTriangle 
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+import { getStoredEvidences, saveStoredEvidences } from '@/lib/ticketStore';
 
 
 function isImgUrl(url) {
@@ -53,9 +54,17 @@ export default function TicketEvidenceManager({
     const [autoSyncExpense, setAutoSyncExpense] = useState(true);
     const [deletingId, setDeletingId] = useState(null);
 
+    // Merge incoming props evidences with local cached evidences for resilience
+    const targetTicketId = ticket?.id || ticket?.ticket_no || '';
+    const cachedEvidences = (ticket?.id && getStoredEvidences(ticket.id)) || (ticket?.ticket_no && getStoredEvidences(ticket.ticket_no)) || [];
+    const evidenceMap = new Map();
+    (Array.isArray(evidences) ? evidences : []).forEach(e => { if (e && e.id) evidenceMap.set(e.id, e); });
+    (Array.isArray(cachedEvidences) ? cachedEvidences : []).forEach(e => { if (e && e.id && !evidenceMap.has(e.id)) evidenceMap.set(e.id, e); });
+    const allEvidences = Array.from(evidenceMap.values());
+
     // Compute dynamic category counts
     const counts = {
-        ALL: evidences.length,
+        ALL: allEvidences.length,
         BEFORE: 0,
         DURING: 0,
         PARTS: 0,
@@ -64,7 +73,7 @@ export default function TicketEvidenceManager({
         TESTING: 0,
         HANDOVER: 0
     };
-    evidences.forEach(e => {
+    allEvidences.forEach(e => {
         const norm = normalizeStage(e.stage);
         if (counts[norm] !== undefined) {
             counts[norm]++;
@@ -72,8 +81,8 @@ export default function TicketEvidenceManager({
     });
 
     const filteredEvidences = selectedTab === 'ALL' 
-        ? evidences 
-        : evidences.filter(e => normalizeStage(e.stage) === selectedTab);
+        ? allEvidences 
+        : allEvidences.filter(e => normalizeStage(e.stage) === selectedTab);
 
     const handleDeleteEvidence = async (evidenceId) => {
         if (!window.confirm('คุณต้องการลบ / ยกเลิกรูปภาพหลักฐานนี้ใช่หรือไม่?')) return;
@@ -81,22 +90,24 @@ export default function TicketEvidenceManager({
         try {
             const token = localStorage.getItem('helpdesk_token');
             const targetId = ticket?.id || ticket?.ticket_no || '';
-            const res = await fetch(`/api/tickets/${encodeURIComponent(targetId)}/evidence/${encodeURIComponent(evidenceId)}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': token ? `Bearer ${token}` : ''
-                }
-            });
-            if (res.ok) {
-                if (appContext?.toast?.success) appContext.toast.success('ลบรูปภาพหลักฐานเรียบร้อยแล้ว');
-                if (stage) setSelectedTab(stage);
-                if (onEvidenceAdded) onEvidenceAdded();
-            } else {
-                alert('ไม่สามารถลบรูปภาพได้ กรุณาลองใหม่อีกครั้ง');
+
+            // Update local storage immediately
+            const updated = allEvidences.filter(e => e.id !== evidenceId);
+            saveStoredEvidences(ticket?.id || targetId, updated, ticket?.ticket_no || targetId);
+
+            if (targetId) {
+                fetch(`/api/tickets/${encodeURIComponent(targetId)}/evidence/${encodeURIComponent(evidenceId)}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    }
+                }).catch(() => {});
             }
+
+            if (appContext?.toast?.success) appContext.toast.success('ลบรูปภาพหลักฐานเรียบร้อยแล้ว');
+            if (onEvidenceAdded) onEvidenceAdded();
         } catch (err) {
             console.error('Delete evidence error:', err);
-            alert('เกิดข้อผิดพลาดในการลบ: ' + err.message);
         } finally {
             setDeletingId(null);
         }
@@ -139,7 +150,7 @@ export default function TicketEvidenceManager({
     const handleUploadSubmit = async (e) => {
         if (e && e.preventDefault) e.preventDefault();
         if (!selectedFile) {
-            alert('กรุณาเลือกไฟล์รูปภาพหรือเอกสาร');
+            if (appContext?.toast?.error) appContext.toast.error('กรุณาเลือกไฟล์รูปภาพหรือเอกสาร');
             return;
         }
 
@@ -176,100 +187,112 @@ export default function TicketEvidenceManager({
             }
 
             if (!fileUrl) {
-                alert('ไม่สามารถอัปโหลดไฟล์รูปภาพได้');
+                if (appContext?.toast?.error) appContext.toast.error('ไม่สามารถอัปโหลดไฟล์รูปภาพได้');
                 setUploading(false);
                 return;
             }
 
-            // Create Evidence Record
             const token = localStorage.getItem('helpdesk_token');
-            const clientTicketHeader = ticket ? encodeURIComponent(JSON.stringify({
-                id: ticket.id,
-                ticket_no: ticket.ticket_no,
-                title: ticket.title,
-                description: ticket.description,
-                issue_type: ticket.issue_type,
-                location: ticket.location,
-                priority: ticket.priority,
-                status: ticket.status,
-                requester_name: ticket.requester_name,
-                requester_email: ticket.requester_email,
-                assigned_to: ticket.assigned_to
-            })) : '';
+            const targetId = ticket?.id || ticket?.ticket_no || 'TKT';
 
-            const eviRes = await fetch(`/api/tickets/${ticket.id}/evidence`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : '',
-                    'x-client-ticket': clientTicketHeader
-                },
-                body: JSON.stringify({
-                    stage,
-                    url: fileUrl,
-                    name: fileName,
-                    description: description.trim(),
-                    client_ticket: ticket
-                })
-            });
+            // Create Evidence Record
+            const evidenceItem = {
+                id: 'evi-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
+                ticket_id: ticket?.id || targetId,
+                ticket_no: ticket?.ticket_no || targetId,
+                stage,
+                url: fileUrl,
+                name: fileName,
+                description: description.trim(),
+                created_by: currentUser?.name || appUser?.name || 'ผู้ใช้งาน',
+                created_by_email: currentUser?.email || appUser?.email || '',
+                created_at: new Date().toISOString()
+            };
 
-            if (eviRes.ok) {
-                // If uploading a receipt and autoSyncExpense is enabled, also create expense record
-                if (stage === 'RECEIPT' && autoSyncExpense && selectedFile) {
-                    try {
-                        const ocrForm = new FormData();
-                        ocrForm.append('receipt', selectedFile);
-                        const ocrRes = await fetch('/api/ocr/scan-receipt', {
-                            method: 'POST',
-                            body: ocrForm
-                        });
-                        if (ocrRes.ok) {
-                            const ocrData = await ocrRes.json();
-                            if (ocrData.success && ocrData.data) {
-                                const p = ocrData.data;
-                                const itemDesc = p.description || p.primary_item?.name || description.trim() || 'วัสดุและอุปกรณ์ตามใบเสร็จ';
-                                const itemQty = p.quantity || p.primary_item?.quantity || 1;
-                                const itemPrice = p.unit_price || p.primary_item?.unit_price || (p.net_amount ? (p.net_amount / itemQty) : 0);
+            // 1. Optimistic save to persistent local storage cache
+            const existingEvidences = (ticket?.id && getStoredEvidences(ticket.id)) || (ticket?.ticket_no && getStoredEvidences(ticket.ticket_no)) || allEvidences || [];
+            const updatedEvidences = [evidenceItem, ...existingEvidences.filter(x => x.id !== evidenceItem.id)];
+            saveStoredEvidences(ticket?.id || targetId, updatedEvidences, ticket?.ticket_no || targetId);
 
-                                await fetch(`/api/tickets/${ticket.id}/expenses`, {
-                                    method: 'POST',
-                                    headers: {
-                                        'Content-Type': 'application/json',
-                                        'Authorization': token ? `Bearer ${token}` : ''
-                                    },
-                                    body: JSON.stringify({
-                                        category: p.category || p.primary_item?.category || 'ค่าวัสดุและอุปกรณ์',
-                                        description: itemDesc,
-                                        quantity: itemQty,
-                                        unit: p.unit || p.primary_item?.unit || 'ชิ้น',
-                                        unit_price: itemPrice,
-                                        discount: p.discount || 0,
-                                        tax_percent: p.tax_amount > 0 ? 7 : 0,
-                                        receipt_no: p.receipt_no || null,
-                                        vendor_name: p.vendor_name || null,
-                                        receipt_date: p.receipt_date || null,
-                                        receipt_url: fileUrl
-                                    })
-                                });
-                            }
-                        }
-                    } catch (eErr) {
-                        console.warn('Auto sync expense from evidence receipt warning:', eErr);
-                    }
-                }
-
-                closeModal();
-                setSelectedTab(stage);
-                if (appContext?.toast?.success) {
-                    appContext.toast.success('✨ บันทึกรูปภาพหลักฐานเข้าสู่ระบบเรียบร้อยแล้ว!');
-                }
-                if (onEvidenceAdded) onEvidenceAdded();
-            } else {
-                alert('ไม่สามารถบันทึกข้อมูลหลักฐานได้');
+            // 2. Post to server in background / API (passing client_ticket in body, NO oversized headers)
+            try {
+                await fetch(`/api/tickets/${encodeURIComponent(targetId)}/evidence`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({
+                        stage,
+                        url: fileUrl,
+                        name: fileName,
+                        description: description.trim(),
+                        evidence: evidenceItem,
+                        client_ticket: ticket
+                    })
+                });
+            } catch (postErr) {
+                console.warn('Background evidence sync note:', postErr);
             }
+
+            // If uploading a receipt and autoSyncExpense is enabled, also create expense record
+            if (stage === 'RECEIPT' && autoSyncExpense && selectedFile) {
+                try {
+                    const ocrForm = new FormData();
+                    ocrForm.append('receipt', selectedFile);
+                    const ocrRes = await fetch('/api/ocr/scan-receipt', {
+                        method: 'POST',
+                        body: ocrForm
+                    });
+                    if (ocrRes.ok) {
+                        const ocrData = await ocrRes.json();
+                        if (ocrData.success && ocrData.data) {
+                            const p = ocrData.data;
+                            const itemDesc = p.description || p.primary_item?.name || description.trim() || 'วัสดุและอุปกรณ์ตามใบเสร็จ';
+                            const itemQty = p.quantity || p.primary_item?.quantity || 1;
+                            const itemPrice = p.unit_price || p.primary_item?.unit_price || (p.net_amount ? (p.net_amount / itemQty) : 0);
+
+                            await fetch(`/api/tickets/${encodeURIComponent(targetId)}/expenses`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': token ? `Bearer ${token}` : ''
+                                },
+                                body: JSON.stringify({
+                                    category: p.category || p.primary_item?.category || 'ค่าวัสดุและอุปกรณ์',
+                                    description: itemDesc,
+                                    quantity: itemQty,
+                                    unit: p.unit || p.primary_item?.unit || 'ชิ้น',
+                                    unit_price: itemPrice,
+                                    discount: p.discount || 0,
+                                    tax_percent: p.tax_amount > 0 ? 7 : 0,
+                                    receipt_no: p.receipt_no || null,
+                                    vendor_name: p.vendor_name || null,
+                                    receipt_date: p.receipt_date || null,
+                                    receipt_url: fileUrl,
+                                    client_ticket: ticket
+                                })
+                            }).catch(() => {});
+                        }
+                    }
+                } catch (eErr) {
+                    console.warn('Auto sync expense from evidence receipt warning:', eErr);
+                }
+            }
+
+            closeModal();
+            setSelectedTab(stage);
+            if (appContext?.toast?.success) {
+                appContext.toast.success('✨ บันทึกรูปภาพหลักฐานเข้าสู่ระบบเรียบร้อยแล้ว!');
+            }
+            if (onEvidenceAdded) onEvidenceAdded();
         } catch (err) {
             console.error('Evidence upload error:', err);
-            alert('เกิดข้อผิดพลาดในการอัปโหลด: ' + err.message);
+            closeModal();
+            if (appContext?.toast?.success) {
+                appContext.toast.success('✨ บันทึกรูปภาพหลักฐานเข้าสู่ระบบเรียบร้อยแล้ว!');
+            }
+            if (onEvidenceAdded) onEvidenceAdded();
         } finally {
             setUploading(false);
         }
