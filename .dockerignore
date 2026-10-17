@@ -1,0 +1,11 @@
+node_modules
+*/node_modules
+backend/node_modules
+frontend/node_modules
+_legacy_nextjs
+AI-Powered-University-Maintenance-Ticket-Management-Web-Application-main
+legacy
+.git
+.github
+*.zip
+.env.local

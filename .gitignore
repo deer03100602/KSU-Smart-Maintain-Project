@@ -50,3 +50,5 @@ desktop.ini
 # IDE & Editor files
 .vscode/
 .idea/
+create_clean_zip.ps1
+
