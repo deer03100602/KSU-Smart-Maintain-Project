@@ -3,7 +3,6 @@ version: '3.8'
 services:
   db:
     image: postgres:15-alpine
-    container_name: university_db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -17,9 +16,8 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
-    container_name: university_backend
     ports:
       - "5000:5000"
     environment:
@@ -30,19 +28,15 @@ services:
       - LINE_CHANNEL_SECRET=${LINE_CHANNEL_SECRET:-}
       - LINE_GROUP_ID=${LINE_GROUP_ID:-}
       - LINE_TARGET_ID=${LINE_TARGET_ID:-}
-      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:5173}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:5000}
     depends_on:
       - db
     restart: unless-stopped
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: university_frontend
     ports:
       - "5173:5173"
     environment:
@@ -50,9 +44,6 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
 
 volumes:
   pgdata:

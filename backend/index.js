@@ -680,6 +680,15 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'ksu_smart_maintain_jwt_secret_2026';
 
 app.use(cors());
+
+// Transparent reverse proxy subpath normalization (supporting deployment behind university subpaths like /app/ksu-smart-maintain)
+app.use((req, res, next) => {
+    const subpathPrefix = '/app/ksu-smart-maintain';
+    if (req.url.startsWith(subpathPrefix)) {
+        req.url = req.url.slice(subpathPrefix.length) || '/';
+    }
+    next();
+});
 app.use(express.json({ 
     limit: '50mb',
     verify: (req, res, buf) => {
@@ -4901,9 +4910,18 @@ app.post('/api/discord/test', requireAdmin, async (req, res) => {
 });
 
 // Serve frontend static build in standalone production / university server deployment
-const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
-if (fs.existsSync(frontendDistPath)) {
+// Serve frontend static build in standalone production / university server deployment
+const candidateDistPaths = [
+    path.join(__dirname, '..', 'frontend', 'dist'),
+    path.join(__dirname, 'dist'),
+    path.join(__dirname, 'public')
+];
+const frontendDistPath = candidateDistPaths.find(p => fs.existsSync(path.join(p, 'index.html')));
+
+if (frontendDistPath) {
+    console.log(`📦 Serving frontend static build from: ${frontendDistPath}`);
     app.use(express.static(frontendDistPath));
+    app.use('/app/ksu-smart-maintain', express.static(frontendDistPath));
     app.use((req, res, next) => {
         if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
             return res.sendFile(path.join(frontendDistPath, 'index.html'));
