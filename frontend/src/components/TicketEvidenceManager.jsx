@@ -2,9 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
     Camera, Image as ImageIcon, Plus, Upload, X, Maximize2, 
-    FileText, Calendar, User, Check 
+    FileText, Calendar, User, Check, Trash2, AlertTriangle 
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
+
+
+function isImgUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const clean = url.trim().toLowerCase();
+    if (clean.startsWith('data:image/') || clean.startsWith('blob:')) return true;
+    if (/\.(png|jpe?g|webp|gif|svg|avif|bmp)(\?.*)?$/i.test(clean)) return true;
+    if (clean.includes('/uploads/') && !/\.(pdf|docx?|xlsx?|txt)$/i.test(clean)) return true;
+    return false;
+}
 
 export default function TicketEvidenceManager({
     ticket,
@@ -28,6 +38,35 @@ export default function TicketEvidenceManager({
     const [previewUrl, setPreviewUrl] = useState(null);
     const [selectedPreview, setSelectedPreview] = useState(null);
     const [autoSyncExpense, setAutoSyncExpense] = useState(true);
+    const [deletingId, setDeletingId] = useState(null);
+
+    const handleDeleteEvidence = async (evidenceId) => {
+        if (!window.confirm('คุณต้องการลบ / ยกเลิกรูปภาพหลักฐานนี้ใช่หรือไม่?')) return;
+        setDeletingId(evidenceId);
+        try {
+            const token = localStorage.getItem('helpdesk_token');
+            const targetId = ticket?.id || ticket?.ticket_no || '';
+            const res = await fetch(`/api/tickets/${encodeURIComponent(targetId)}/evidence/${encodeURIComponent(evidenceId)}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : ''
+                }
+            });
+            if (res.ok) {
+                if (appContext?.toast?.success) appContext.toast.success('ลบรูปภาพหลักฐานเรียบร้อยแล้ว');
+                if (stage) setSelectedTab(stage);
+                if (onEvidenceAdded) onEvidenceAdded();
+            } else {
+                alert('ไม่สามารถลบรูปภาพได้ กรุณาลองใหม่อีกครั้ง');
+            }
+        } catch (err) {
+            console.error('Delete evidence error:', err);
+            alert('เกิดข้อผิดพลาดในการลบ: ' + err.message);
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
 
     // Close on Escape key
     useEffect(() => {
@@ -263,60 +302,114 @@ export default function TicketEvidenceManager({
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
                     {filteredEvidences.map((evi) => {
-                        const isImg = evi.url && (evi.url.endsWith('.png') || evi.url.endsWith('.jpg') || evi.url.endsWith('.jpeg') || evi.url.endsWith('.webp'));
+                        const isImg = isImgUrl(evi.url);
                         return (
                             <div 
                                 key={evi.id}
                                 style={{
                                     border: '1px solid var(--border-color)',
-                                    borderRadius: '10px',
+                                    borderRadius: '12px',
                                     overflow: 'hidden',
-                                    background: 'rgba(255, 255, 255, 0.02)',
+                                    background: 'var(--bg-card, rgba(255, 255, 255, 0.03))',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                                     display: 'flex',
-                                    flexDirection: 'column'
+                                    flexDirection: 'column',
+                                    position: 'relative'
                                 }}
                             >
                                 <div 
                                     style={{
-                                        height: '140px',
-                                        background: 'rgba(0,0,0,0.4)',
+                                        height: '160px',
+                                        background: '#0f172a',
                                         position: 'relative',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        cursor: isImg ? 'pointer' : 'default'
+                                        cursor: isImg ? 'pointer' : 'default',
+                                        overflow: 'hidden'
                                     }}
                                     onClick={() => isImg && setSelectedPreview(evi.url)}
                                 >
                                     {isImg ? (
                                         <img 
                                             src={evi.url} 
-                                            alt={evi.description || 'evidence'} 
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                            alt={evi.description || evi.name || 'หลักฐานงานซ่อม'} 
+                                            loading="lazy"
+                                            style={{ 
+                                                width: '100%', 
+                                                height: '100%', 
+                                                objectFit: 'cover',
+                                                transition: 'transform 0.25s ease'
+                                            }}
+                                            onError={(e) => {
+                                                e.target.style.display = 'none';
+                                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                            }}
                                         />
-                                    ) : (
-                                        <FileText style={{ width: 42, height: 42, color: '#60a5fa' }} />
-                                    )}
-                                    <div style={{ position: 'absolute', top: 6, left: 6 }}>
+                                    ) : null}
+                                    <div style={{ display: isImg ? 'none' : 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', color: '#60a5fa' }}>
+                                        <FileText style={{ width: 44, height: 44 }} />
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>เอกสารแนบ</span>
+                                    </div>
+
+                                    {/* Stage Badge on Top Left */}
+                                    <div style={{ position: 'absolute', top: 6, left: 6, zIndex: 4 }}>
                                         {getStageBadge(evi.stage)}
                                     </div>
+
+                                    {/* Delete / Cancel button on Top Right */}
+                                    {canManageEvidence && (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteEvidence(evi.id);
+                                            }}
+                                            disabled={deletingId === evi.id}
+                                            style={{
+                                                position: 'absolute',
+                                                top: 6,
+                                                right: 6,
+                                                background: 'rgba(239, 68, 68, 0.9)',
+                                                border: '1px solid rgba(255, 255, 255, 0.2)',
+                                                borderRadius: '6px',
+                                                padding: '3px 7px',
+                                                color: '#fff',
+                                                fontSize: '0.72rem',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                zIndex: 5,
+                                                boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
+                                            }}
+                                            title="ลบ / ยกเลิกรูปภาพนี้ เผื่อส่งผิด"
+                                        >
+                                            <Trash2 style={{ width: 12, height: 12 }} />
+                                            {deletingId === evi.id ? '...' : 'ยกเลิก/ลบ'}
+                                        </button>
+                                    )}
+
+                                    {/* View Zoom Badge */}
                                     {isImg && (
                                         <div style={{
                                             position: 'absolute', bottom: 6, right: 6,
-                                            background: 'rgba(0,0,0,0.65)', padding: '3px 6px',
-                                            borderRadius: 4, color: '#fff', fontSize: '0.65rem',
-                                            display: 'flex', alignItems: 'center', gap: 4
+                                            background: 'rgba(0,0,0,0.75)', padding: '3px 8px',
+                                            borderRadius: 6, color: '#fff', fontSize: '0.7rem',
+                                            display: 'flex', alignItems: 'center', gap: 4,
+                                            zIndex: 4, backdropFilter: 'blur(4px)'
                                         }}>
-                                            <Maximize2 style={{ width: 10, height: 10 }} /> ดูรูป
+                                            <Maximize2 style={{ width: 11, height: 11 }} /> ดูรูปชัดๆ
                                         </div>
                                     )}
                                 </div>
-                                <div style={{ padding: '10px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                    <div style={{ fontSize: '0.825rem', fontWeight: 500, marginBottom: '6px' }}>
+                                <div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: 'var(--bg-secondary, rgba(0,0,0,0.2))' }}>
+                                    <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)', wordBreak: 'break-word' }}>
                                         {evi.description || evi.name || 'หลักฐานงานซ่อม'}
                                     </div>
-                                    <div style={{ fontSize: '0.725rem', color: 'var(--text-secondary)' }}>
-                                        <div>บันทึกโดย: {evi.created_by}</div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                        <div>👤 {evi.created_by || 'เจ้าหน้าที่'}</div>
                                         <div>{new Date(evi.created_at).toLocaleDateString('th-TH')}</div>
                                     </div>
                                 </div>
@@ -456,23 +549,42 @@ export default function TicketEvidenceManager({
                                     />
                                 </div>
 
-                                {previewUrl && (
+                                {selectedFile && (
                                     <div style={{
                                         marginTop: '0.25rem',
                                         padding: '0.75rem',
-                                        background: 'var(--bg-card, rgba(0,0,0,0.04))',
-                                        border: '1px solid var(--border-card, rgba(0,0,0,0.08))',
+                                        background: 'rgba(0,0,0,0.25)',
+                                        border: '1px solid var(--border-card, rgba(255,255,255,0.1))',
                                         borderRadius: '8px',
                                         textAlign: 'center'
                                     }}>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                                            ตัวอย่างรูปภาพที่เลือก:
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '6px' }}>
+                                            <span style={{ fontSize: '0.8rem', color: '#60a5fa', fontWeight: 600 }}>
+                                                📁 {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedFile(null);
+                                                    if (previewUrl) {
+                                                        try { URL.revokeObjectURL(previewUrl); } catch (e) {}
+                                                    }
+                                                    setPreviewUrl(null);
+                                                }}
+                                                className="btn btn-secondary btn-xs"
+                                                style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.4)', fontWeight: 600, padding: '3px 10px', fontSize: '0.75rem' }}
+                                                title="ยกเลิกไฟล์นี้ เผื่อเลือกไฟล์ผิด"
+                                            >
+                                                ❌ ยกเลิกรูปนี้ / เลือกใหม่
+                                            </button>
                                         </div>
-                                        <img 
-                                            src={previewUrl} 
-                                            alt="Preview" 
-                                            style={{ maxHeight: '180px', maxWidth: '100%', borderRadius: 6, objectFit: 'contain', margin: '0 auto' }} 
-                                        />
+                                        {previewUrl && (
+                                            <img 
+                                                src={previewUrl} 
+                                                alt="Preview" 
+                                                style={{ maxHeight: '200px', maxWidth: '100%', borderRadius: 8, objectFit: 'contain', margin: '0 auto', border: '1px solid rgba(255,255,255,0.1)' }} 
+                                            />
+                                        )}
                                     </div>
                                 )}
 

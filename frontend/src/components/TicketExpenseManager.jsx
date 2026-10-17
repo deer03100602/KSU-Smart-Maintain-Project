@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { 
     DollarSign, Plus, Check, X, Edit3, Trash2, AlertCircle, FileText, 
     Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw, Zap,
-    Key, ExternalLink, ShieldCheck 
+    Key, ExternalLink, ShieldCheck, Settings 
 } from 'lucide-react';
 import { saveStoredExpenses } from '@/lib/ticketStore';
 import { useApp } from '@/context/AppContext';
@@ -982,95 +982,29 @@ export default function TicketExpenseManager({
                                         </div>
                                     )}
 
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setTempKeyInput(geminiApiKey || '');
-                                            setShowKeyDrawer(!showKeyDrawer);
-                                        }}
-                                        style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '5px',
-                                            background: 'rgba(255, 255, 255, 0.08)',
-                                            border: '1px solid var(--border-color)',
-                                            color: 'var(--text-secondary)',
-                                            fontSize: '0.76rem',
-                                            fontWeight: 600,
-                                            padding: '4px 10px',
-                                            borderRadius: '999px',
-                                            cursor: 'pointer'
-                                        }}
-                                        title="คลิกเพื่อใส่ Google Gemini API Key เพื่อความแม่นยำระดับ AI"
-                                    >
-                                        <Key style={{ width: 13, height: 13 }} />
-                                        {showKeyDrawer ? 'ปิดตั้งค่า Key' : '🔑 ตั้งค่า Gemini AI Key'}
-                                    </button>
+                                    {isAdmin && (
+                                        <a
+                                            href="/settings"
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                color: 'var(--text-secondary)',
+                                                fontSize: '0.74rem',
+                                                textDecoration: 'none',
+                                                padding: '3px 8px',
+                                                borderRadius: '6px',
+                                                background: 'rgba(255,255,255,0.05)',
+                                                border: '1px solid var(--border-color)'
+                                            }}
+                                            title="ไปที่หน้าตั้งค่าผู้ดูแลระบบเพื่อแก้ไขหรือตั้งค่า Gemini Key"
+                                        >
+                                            <Settings style={{ width: 12, height: 12 }} /> ⚙️ ตั้งค่าในระบบผู้ดูแล
+                                        </a>
+                                    )}
                                 </div>
-
-                                {showKeyDrawer && (
-                                    <div style={{
-                                        background: 'rgba(15, 23, 42, 0.6)',
-                                        border: '1px solid rgba(59, 130, 246, 0.3)',
-                                        borderRadius: '10px',
-                                        padding: '12px 14px',
-                                        marginBottom: '14px',
-                                        textAlign: 'left'
-                                    }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                                            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#93c5fd', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <Key style={{ width: 15, height: 15 }} /> ตั้งค่า Google Gemini API Key
-                                            </span>
-                                            <a
-                                                href="https://aistudio.google.com/app/apikey"
-                                                target="_blank"
-                                                rel="noreferrer"
-                                                style={{ fontSize: '0.75rem', color: '#60a5fa', textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: '3px' }}
-                                            >
-                                                รับฟรี API Key ที่นี่ <ExternalLink style={{ width: 12, height: 12 }} />
-                                            </a>
-                                        </div>
-                                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0 0 8px 0', lineHeight: 1.4 }}>
-                                            ใส่ API Key จาก Google AI Studio เพื่อเปิดพลัง Gemini 2.5 Flash / 2.0 Flash อ่านใบเสร็จภาษาไทย ลายมือ ตารางสินค้า และยอดเงิน ได้แม่นยำ 100%
-                                        </p>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                            <input
-                                                type="password"
-                                                value={tempKeyInput}
-                                                onChange={(e) => setTempKeyInput(e.target.value)}
-                                                placeholder="AIzaSy..."
-                                                style={{
-                                                    flex: 1,
-                                                    fontSize: '0.8rem',
-                                                    padding: '6px 10px',
-                                                    borderRadius: '6px',
-                                                    border: '1px solid var(--border-color)',
-                                                    background: 'rgba(0, 0, 0, 0.3)',
-                                                    color: 'var(--text-primary)'
-                                                }}
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={handleSaveGeminiKey}
-                                                className="btn btn-primary btn-sm"
-                                                style={{ fontSize: '0.78rem', padding: '6px 14px', fontWeight: 600 }}
-                                            >
-                                                บันทึก Key
-                                            </button>
-                                            {(geminiApiKey || serverKeyConfigured) && (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleClearGeminiKey}
-                                                    className="btn btn-secondary btn-sm"
-                                                    style={{ fontSize: '0.78rem', padding: '6px 10px', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.3)' }}
-                                                    title="ล้าง API Key"
-                                                >
-                                                    ล้าง Key
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
                                 <label 
                                     className="btn btn-secondary btn-sm" 
                                     style={{ 

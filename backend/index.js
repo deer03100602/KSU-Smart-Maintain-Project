@@ -594,29 +594,76 @@ const prisma = {
     },
     evidence: {
         findMany: async ({ where } = {}) => {
+            const ticketId = where?.ticket_id;
+            const ticketNo = where?.ticket_no;
+            const orList = Array.isArray(where?.OR) ? where.OR : [];
+            const ids = new Set();
+            if (ticketId) ids.add(ticketId);
+            if (ticketNo) ids.add(ticketNo);
+            orList.forEach(item => {
+                if (item.ticket_id) ids.add(item.ticket_id);
+                if (item.ticket_no) ids.add(item.ticket_no);
+            });
+
+            let realResults = null;
             if (realPrisma && realPrisma.evidence) {
-                try { return await realPrisma.evidence.findMany({ where, orderBy: { created_at: 'desc' } }); } catch (e) {}
+                try {
+                    const orConds = [];
+                    ids.forEach(v => {
+                        orConds.push({ ticket_id: v });
+                        orConds.push({ ticket_no: v });
+                    });
+                    const queryWhere = orConds.length > 0 ? { OR: orConds } : (where || {});
+                    realResults = await realPrisma.evidence.findMany({ where: queryWhere, orderBy: { created_at: 'desc' } });
+                } catch (e) {}
             }
+
             const db = getLocalDb();
             let list = [...(db.evidences || [])];
-            if (where?.ticket_id) list = list.filter(e => e.ticket_id === where.ticket_id || e.ticket_no === where.ticket_id);
-            if (where?.ticket_no) list = list.filter(e => e.ticket_no === where.ticket_no);
+            if (ids.size > 0) {
+                list = list.filter(e => ids.has(e.ticket_id) || ids.has(e.ticket_no));
+            } else if (where?.stage) {
+                list = list.filter(e => e.stage === where.stage);
+            }
+
+            if (Array.isArray(realResults) && realResults.length > 0) {
+                const map = new Map();
+                realResults.forEach(item => map.set(item.id, item));
+                list.forEach(item => { if (!map.has(item.id)) map.set(item.id, item); });
+                list = Array.from(map.values());
+            }
+
             list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
             return list;
         },
         create: async ({ data }) => {
+            const item = {
+                id: data.id || ('evi-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6)),
+                ticket_id: data.ticket_id,
+                ticket_no: data.ticket_no || data.ticket_id,
+                stage: data.stage || 'DURING',
+                url: data.url,
+                name: data.name || 'หลักฐานงานซ่อม',
+                description: data.description || '',
+                created_by: data.created_by || 'ผู้ใช้งาน',
+                created_by_email: data.created_by_email || '',
+                created_at: data.created_at ? new Date(data.created_at) : new Date()
+            };
+
             if (realPrisma && realPrisma.evidence) {
-                try { return await realPrisma.evidence.create({ data }); } catch (e) {}
+                try { await realPrisma.evidence.create({ data: item }); } catch (e) {}
             }
+
             const db = getLocalDb();
             db.evidences = db.evidences || [];
-            db.evidences.unshift(data);
+            db.evidences = db.evidences.filter(e => e.id !== item.id);
+            db.evidences.unshift(item);
             saveLocalDb(db);
-            return data;
+            return item;
         },
         delete: async ({ where }) => {
             if (realPrisma && realPrisma.evidence) {
-                try { return await realPrisma.evidence.delete({ where }); } catch (e) {}
+                try { await realPrisma.evidence.delete({ where }); } catch (e) {}
             }
             const db = getLocalDb();
             db.evidences = (db.evidences || []).filter(e => e.id !== where.id);
@@ -2459,8 +2506,52 @@ app.get('/api/tickets/:id/evidence', async (req, res) => {
         if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
         const ticketEvidences = await prisma.evidence.findMany({
-            where: { ticket_id: ticket.id }
+            where: {
+                OR: [
+                    { ticket_id: ticket.id },
+                    { ticket_no: ticket.id },
+                    { ticket_id: ticket.ticket_no },
+                    { ticket_no: ticket.ticket_no }
+                ]
+            }
         });
+
+        // Auto-link expenses that have receipts to the 'RECEIPT' stage in Evidence Gallery
+        try {
+            const expenses = await prisma.expense.findMany({
+                where: {
+                    OR: [
+                        { ticket_id: ticket.id },
+                        { ticket_no: ticket.id },
+                        { ticket_id: ticket.ticket_no },
+                        { ticket_no: ticket.ticket_no }
+                    ]
+                }
+            });
+            const existingUrls = new Set(ticketEvidences.map(e => e.url));
+            for (const exp of (expenses || [])) {
+                if (exp.receipt_url && !existingUrls.has(exp.receipt_url)) {
+                    const autoRcpt = {
+                        id: 'evi-rcpt-' + (exp.id || Date.now().toString(36)),
+                        ticket_id: ticket.id,
+                        ticket_no: ticket.ticket_no,
+                        stage: 'RECEIPT',
+                        url: exp.receipt_url,
+                        name: exp.receipt_no ? ('ใบเสร็จเลขที่ ' + exp.receipt_no) : (exp.description || 'ใบเสร็จค่าใช้จ่าย'),
+                        description: (exp.description || 'ค่าใช้จ่าย') + (exp.net_amount ? (' (฿' + Number(exp.net_amount).toLocaleString() + ')') : ''),
+                        created_by: exp.created_by_name || 'ระบบบันทึกค่าใช้จ่าย',
+                        created_by_email: '',
+                        created_at: exp.created_at || new Date()
+                    };
+                    await prisma.evidence.create({ data: autoRcpt });
+                    ticketEvidences.unshift(autoRcpt);
+                    existingUrls.add(exp.receipt_url);
+                }
+            }
+        } catch (syncExpErr) {
+            console.warn('Auto-sync expense receipts error:', syncExpErr.message);
+        }
+
         res.json(ticketEvidences);
     } catch (error) {
         console.error('Error fetching evidence:', error);
@@ -2686,18 +2777,57 @@ async function scanReceiptWithGeminiVision(buffer, mimeType, apiKey) {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/settings/gemini-key', (req, res) => {
     const db = getLocalDb();
-    const key = process.env.GEMINI_API_KEY || db.settings?.gemini_api_key || '';
+    const settings = getSettings ? getSettings() : {};
+    const key = process.env.GEMINI_API_KEY || db.settings?.gemini_api_key || settings.gemini_api_key || '';
     const masked = key ? (key.slice(0, 6) + '...' + key.slice(-4)) : '';
-    res.json({ configured: !!key, maskedKey: masked });
+    res.json({ configured: !!key, maskedKey: masked, apiKey: key });
 });
 
 app.post('/api/settings/gemini-key', (req, res) => {
     const { apiKey } = req.body;
+    const cleanKey = String(apiKey || '').trim();
     const db = getLocalDb();
     db.settings = db.settings || {};
-    db.settings.gemini_api_key = String(apiKey || '').trim();
+    db.settings.gemini_api_key = cleanKey;
     saveLocalDb(db);
-    res.json({ success: true, message: 'บันทึก Gemini API Key เรียบร้อยแล้ว' });
+
+    try {
+        const current = getSettings ? getSettings() : {};
+        current.gemini_api_key = cleanKey;
+        fs.writeFileSync(settingsPath, JSON.stringify(current, null, 2), 'utf8');
+    } catch (e) {}
+
+    process.env.GEMINI_API_KEY = cleanKey;
+    res.json({ success: true, message: 'บันทึก Gemini API Key เรียบร้อยแล้ว', configured: !!cleanKey });
+});
+
+app.post('/api/settings/gemini-test', async (req, res) => {
+    const db = getLocalDb();
+    const settings = getSettings ? getSettings() : {};
+    const key = req.body?.apiKey || process.env.GEMINI_API_KEY || db.settings?.gemini_api_key || settings.gemini_api_key;
+    if (!key) {
+        return res.status(400).json({ success: false, error: 'ยังไม่ได้ระบุ Google Gemini API Key' });
+    }
+
+    try {
+        const testRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: 'ตอบข้อความสั้นๆ: ระบบ AI เชื่อมต่อสำเร็จ' }] }]
+            })
+        });
+        if (testRes.ok) {
+            const data = await testRes.json();
+            const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'เชื่อมต่อสำเร็จ';
+            return res.json({ success: true, message: 'เชื่อมต่อ Google Gemini AI สำเร็จสมบูรณ์!', reply, model: 'gemini-3.8-flash' });
+        } else {
+            const errTxt = await testRes.text();
+            return res.status(testRes.status).json({ success: false, error: `Google API Error (${testRes.status}): ${errTxt.slice(0, 200)}` });
+        }
+    } catch (e) {
+        return res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 app.post('/api/ocr/scan-receipt', upload.single('receipt'), async (req, res) => {
@@ -3491,6 +3621,10 @@ const settingsPath = path.join(__dirname, 'data', 'settings.json');
 app.get('/api/settings', (req, res) => {
     try {
         const settings = getSettings();
+        const db = getLocalDb();
+        const geminiKey = process.env.GEMINI_API_KEY || db.settings?.gemini_api_key || settings.gemini_api_key || '';
+        settings.gemini_api_key = geminiKey;
+        settings.gemini_configured = Boolean(geminiKey);
         res.json(settings);
     } catch (error) {
         console.error('Error fetching settings:', error);
@@ -3502,6 +3636,10 @@ app.post('/api/settings', (req, res) => {
     try {
         const body = req.body;
         const prev = getSettings();
+        const incomingGemini = body.gemini_api_key !== undefined && !body.gemini_api_key.includes('...')
+            ? String(body.gemini_api_key).trim()
+            : (prev.gemini_api_key || process.env.GEMINI_API_KEY || '');
+
         const cleanSettings = {
             notify_emails: body.notify_emails !== undefined ? String(body.notify_emails).trim() : (prev.notify_emails || ''),
             smtp_enabled: body.smtp_enabled !== undefined ? Boolean(body.smtp_enabled) : (prev.smtp_enabled !== false),
@@ -3523,8 +3661,18 @@ app.post('/api/settings', (req, res) => {
             line_group_id: (body.line_group_id !== undefined ? String(body.line_group_id).trim() : (body.line_target_id !== undefined ? String(body.line_target_id).trim() : (prev.line_group_id || prev.line_target_id || ''))),
             line_target_id: (body.line_group_id !== undefined ? String(body.line_group_id).trim() : (body.line_target_id !== undefined ? String(body.line_target_id).trim() : (prev.line_group_id || prev.line_target_id || ''))),
             line_notify_enabled: body.line_notify_enabled !== undefined ? Boolean(body.line_notify_enabled) : (prev.line_notify_enabled !== false),
-            app_base_url: body.app_base_url !== undefined ? String(body.app_base_url).trim() : (prev.app_base_url || 'http://localhost:5173')
+            app_base_url: body.app_base_url !== undefined ? String(body.app_base_url).trim() : (prev.app_base_url || 'http://localhost:5173'),
+            gemini_api_key: incomingGemini
         };
+
+        if (body.gemini_api_key !== undefined) {
+            const db = getLocalDb();
+            db.settings = db.settings || {};
+            db.settings.gemini_api_key = incomingGemini;
+            saveLocalDb(db);
+            process.env.GEMINI_API_KEY = incomingGemini;
+        }
+
         fs.writeFileSync(settingsPath, JSON.stringify(cleanSettings, null, 2), 'utf8');
         res.json({ success: true, settings: cleanSettings });
     } catch (error) {

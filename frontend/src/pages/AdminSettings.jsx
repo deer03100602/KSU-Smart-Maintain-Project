@@ -9,7 +9,7 @@ import { useApp } from '@/context/AppContext';
 import { 
     Settings, ArrowLeft, Save, Bell, Mail, Send, Loader, AlertCircle, Info,
     UserCheck, UserPlus, Trash2, X, CheckCircle, ShieldCheck, Key,
-    MessageSquare, Smartphone, Copy, ExternalLink, Eye, EyeOff, RefreshCw, Check, CheckCircle2
+    MessageSquare, Smartphone, Copy, ExternalLink, Eye, EyeOff, RefreshCw, Check, CheckCircle2, Sparkles
 } from 'lucide-react';
 
 export default function AdminSettingsPage() {
@@ -45,6 +45,13 @@ export default function AdminSettingsPage() {
     const [testingLine, setTestingLine] = useState(false);
     const [loadingLineLogs, setLoadingLineLogs] = useState(false);
     const [copiedWebhook, setCopiedWebhook] = useState(false);
+    // Google Gemini AI Settings (Admin Only)
+    const [geminiApiKey, setGeminiApiKey] = useState('');
+    const [showGeminiKey, setShowGeminiKey] = useState(false);
+    const [geminiConfigured, setGeminiConfigured] = useState(false);
+    const [testingGemini, setTestingGemini] = useState(false);
+    const [testGeminiResult, setTestGeminiResult] = useState(null);
+
 
     // Discord & EmailJS (Alternative)
     const [discordUrl, setDiscordUrl] = useState('');
@@ -145,6 +152,22 @@ export default function AdminSettingsPage() {
                     setTechnicians(Array.isArray(data.technicians) ? data.technicians : []);
                     setTestEmailTarget(data.notify_emails ? data.notify_emails.split(',')[0].trim() : 'ksu.smart.maintain@gmail.com');
 
+                    if (data.gemini_api_key) {
+                        setGeminiApiKey(data.gemini_api_key);
+                        setGeminiConfigured(true);
+                    } else {
+                        try {
+                            const gRes = await fetch('/api/settings/gemini-key');
+                            if (gRes.ok) {
+                                const gData = await gRes.json();
+                                if (gData.configured) {
+                                    setGeminiConfigured(true);
+                                    if (gData.apiKey) setGeminiApiKey(gData.apiKey);
+                                }
+                            }
+                        } catch (gErr) {}
+                    }
+
                     await fetchLineData();
                 }
             } catch (e) {
@@ -210,6 +233,50 @@ export default function AdminSettingsPage() {
         }
     };
 
+        const handleTestGemini = async () => {
+        setTestingGemini(true);
+        setTestGeminiResult(null);
+        try {
+            const res = await fetch('/api/settings/gemini-test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey: geminiApiKey.trim() })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setTestGeminiResult({ success: true, message: data.message, reply: data.reply, model: data.model });
+                setGeminiConfigured(true);
+                toast.success('✨ ทดสอบ Google Gemini AI สำเร็จสมบูรณ์!');
+            } else {
+                setTestGeminiResult({ success: false, message: data.error || 'การเชื่อมต่อล้มเหลว' });
+                toast.error('❌ ทดสอบล้มเหลว: ' + (data.error || ''));
+            }
+        } catch (e) {
+            setTestGeminiResult({ success: false, message: e.message });
+            toast.error('❌ เกิดข้อผิดพลาด: ' + e.message);
+        } finally {
+            setTestingGemini(false);
+        }
+    };
+
+    const handleSaveGeminiKeyOnly = async () => {
+        try {
+            const res = await fetch('/api/settings/gemini-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ apiKey: geminiApiKey.trim() })
+            });
+            if (res.ok) {
+                setGeminiConfigured(Boolean(geminiApiKey.trim()));
+                toast.success('✨ บันทึก Google Gemini AI Key สำเร็จแล้ว!');
+            } else {
+                toast.error('บันทึกไม่สำเร็จ');
+            }
+        } catch (e) {
+            toast.error('เกิดข้อผิดพลาด: ' + e.message);
+        }
+    };
+
     const handleSave = async (e) => {
         if (e) e.preventDefault();
         setSaving(true);
@@ -238,7 +305,8 @@ export default function AdminSettingsPage() {
                     line_group_id: lineTargetId.trim(),
                     line_target_id: lineTargetId.trim(),
                     line_notify_enabled: lineNotifyEnabled,
-                    app_base_url: appBaseUrl.trim()
+                    app_base_url: appBaseUrl.trim(),
+                    gemini_api_key: geminiApiKey.trim()
                 })
             });
 
@@ -909,6 +977,120 @@ export default function AdminSettingsPage() {
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* 5. Google Gemini Multimodal Vision AI & Receipt OCR (Admin Only) */}
+                <div className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(59, 130, 246, 0.35)', position: 'relative' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                        <div>
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>
+                                <Sparkles style={{ width: 22, height: 22, color: '#60a5fa' }} />
+                                ระบบปัญญาประดิษฐ์ AI สแกนใบเสร็จ & บิล (Google Gemini Vision AI)
+                            </h3>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>
+                                ขุมพลัง AI วิเคราะห์ใบเสร็จรับเงิน ใบกำกับภาษี และบิลส่งของภาษาไทย เพื่อกรอกข้อมูลวัสดุและอุปกรณ์อัตโนมัติ (เฉพาะผู้ดูแลระบบที่มีสิทธิ์กำหนดค่า)
+                            </p>
+                        </div>
+                        <span style={{
+                            padding: '6px 14px',
+                            borderRadius: '20px',
+                            background: geminiConfigured || geminiApiKey ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                            color: geminiConfigured || geminiApiKey ? '#4ade80' : '#facc15',
+                            border: geminiConfigured || geminiApiKey ? '1px solid rgba(34, 197, 94, 0.4)' : '1px solid rgba(234, 179, 8, 0.4)',
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6
+                        }}>
+                            {geminiConfigured || geminiApiKey ? <CheckCircle2 style={{ width: 15, height: 15 }} /> : <AlertCircle style={{ width: 15, height: 15 }} />}
+                            {geminiConfigured || geminiApiKey ? 'พร้อมใช้งาน (โมเดล Gemini 3.8 / 2.5 Flash)' : 'ยังไม่ได้ระบุ Key (ใช้งานโหมดออฟไลน์)'}
+                        </span>
+                    </div>
+
+                    <div style={{ background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 10, padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: 6 }}>
+                            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, margin: 0 }}>
+                                <Key style={{ width: 16, height: 16, color: '#93c5fd' }} />
+                                Google Gemini API Key
+                            </label>
+                            <a 
+                                href="https://aistudio.google.com/app/apikey" 
+                                target="_blank" 
+                                rel="noreferrer"
+                                style={{ fontSize: '0.8rem', color: '#60a5fa', textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: 4 }}
+                            >
+                                ขอรับ API Key ฟรีที่ Google AI Studio <ExternalLink style={{ width: 13, height: 13 }} />
+                            </a>
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.75rem', position: 'relative' }}>
+                            <input
+                                type={showGeminiKey ? 'text' : 'password'}
+                                className="form-input"
+                                placeholder="วาง Google Gemini API Key ที่นี่ (เช่น AQ.Ab8RN6L... หรือ AIzaSy...)"
+                                value={geminiApiKey}
+                                onChange={(e) => setGeminiApiKey(e.target.value)}
+                                style={{ flex: 1, paddingRight: '40px', fontFamily: showGeminiKey ? 'inherit' : 'monospace' }}
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowGeminiKey(!showGeminiKey)}
+                                style={{
+                                    position: 'absolute',
+                                    right: 180,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'var(--text-secondary)',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                }}
+                                title={showGeminiKey ? 'ซ่อน Key' : 'แสดง Key'}
+                            >
+                                {showGeminiKey ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveGeminiKeyOnly}
+                                className="btn btn-secondary"
+                                style={{ whiteSpace: 'nowrap', borderColor: 'rgba(59, 130, 246, 0.4)', color: '#60a5fa', fontWeight: 600 }}
+                            >
+                                บันทึก Key
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleTestGemini}
+                                disabled={testingGemini || !geminiApiKey}
+                                className="btn btn-primary"
+                                style={{ whiteSpace: 'nowrap', minWidth: '130px', fontWeight: 600 }}
+                            >
+                                {testingGemini ? <Loader style={{ width: 15, height: 15, animation: 'spin 1s linear infinite' }} /> : <Sparkles style={{ width: 15, height: 15 }} />}
+                                {testingGemini ? 'กำลังทดสอบ...' : 'ทดสอบการเชื่อมต่อ'}
+                            </button>
+                        </div>
+                        <span className="form-hint" style={{ marginTop: '6px', display: 'block' }}>
+                            Key นี้จะถูกเก็บรักษาอย่างปลอดภัยบนเซิร์ฟเวอร์ และนำไปใช้ประมวลผลการอ่านใบเสร็จของระบบแจ้งซ่อมบำรุงทั้งมหาวิทยาลัย
+                        </span>
+
+                        {testGeminiResult && (
+                            <div style={{
+                                marginTop: '1rem',
+                                padding: '10px 14px',
+                                borderRadius: 8,
+                                background: testGeminiResult.success ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                                border: testGeminiResult.success ? '1px solid rgba(34, 197, 94, 0.35)' : '1px solid rgba(239, 68, 68, 0.35)',
+                                color: testGeminiResult.success ? '#4ade80' : '#f87171',
+                                fontSize: '0.85rem'
+                            }}>
+                                <div style={{ fontWeight: 700, marginBottom: 4 }}>
+                                    {testGeminiResult.success ? '✅ ผลการทดสอบ: เชื่อมต่อ Google Gemini AI สำเร็จ!' : '❌ การเชื่อมต่อขัดข้อง:'}
+                                </div>
+                                <div>{testGeminiResult.reply || testGeminiResult.message}</div>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Technicians Management section */}
