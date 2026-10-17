@@ -242,13 +242,25 @@ const prisma = {
     },
     ticket: {
         findMany: async ({ select, orderBy } = {}) => {
+            let list = [];
             if (realPrisma) {
-                try { return await realPrisma.ticket.findMany({ select, orderBy }); } catch (e) {}
+                try { 
+                    list = await realPrisma.ticket.findMany({ select, orderBy }); 
+                } catch (e) {}
             }
+            if (!list || list.length === 0) {
+                const db = getLocalDb();
+                list = [...(db.tickets || [])];
+                list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+            }
+            const MOCK_TICKETS = new Set(['tkt-001', 'tkt-002', 'id-mv5j19jv-3b0qtw8', 'id-tkt-sample-002']);
             const db = getLocalDb();
-            const list = [...(db.tickets || [])];
-            list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
-            return list;
+            const deletedSet = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
+            return (list || []).filter(t => {
+                const id = String(t.id || '').trim().toLowerCase();
+                const no = String(t.ticket_no || '').trim().toLowerCase();
+                return !MOCK_TICKETS.has(id) && !MOCK_TICKETS.has(no) && !deletedSet.has(id) && !deletedSet.has(no);
+            });
         },
         findFirst: async ({ where } = {}) => {
             if (realPrisma) {
@@ -747,6 +759,57 @@ async function initDatabase() {
         } catch (uErr) {
             console.warn('Prisma user sync note:', uErr.message);
         }
+
+        // Ensure dummy / sample tickets are completely wiped from PostgreSQL
+        if (realPrisma) {
+            try {
+                const dummyTicketNos = ['TKT-001', 'TKT-002', 'tkt-001', 'tkt-002'];
+                const dummyTicketIds = ['id-mv5j19jv-3b0qtw8', 'id-tkt-sample-002', 'tkt-001', 'tkt-002'];
+                if (realPrisma.evidence) {
+                    await realPrisma.evidence.deleteMany({
+                        where: {
+                            OR: [
+                                { ticket_no: { in: dummyTicketNos } },
+                                { ticket_id: { in: dummyTicketIds } }
+                            ]
+                        }
+                    }).catch(() => {});
+                }
+                if (realPrisma.ticketTimeline) {
+                    await realPrisma.ticketTimeline.deleteMany({
+                        where: {
+                            OR: [
+                                { ticket_no: { in: dummyTicketNos } },
+                                { ticket_id: { in: dummyTicketIds } }
+                            ]
+                        }
+                    }).catch(() => {});
+                }
+                if (realPrisma.expense) {
+                    await realPrisma.expense.deleteMany({
+                        where: {
+                            OR: [
+                                { ticket_no: { in: dummyTicketNos } },
+                                { ticket_id: { in: dummyTicketIds } }
+                            ]
+                        }
+                    }).catch(() => {});
+                }
+                if (realPrisma.ticket) {
+                    await realPrisma.ticket.deleteMany({
+                        where: {
+                            OR: [
+                                { ticket_no: { in: dummyTicketNos } },
+                                { id: { in: dummyTicketIds } }
+                            ]
+                        }
+                    }).catch(() => {});
+                }
+                console.log('✅ Mock tickets (TKT-001, TKT-002) purged from PostgreSQL.');
+            } catch (pErr) {
+                console.warn('Prisma mock ticket purge note:', pErr.message);
+            }
+        }
     } catch (err) {
         console.warn('ℹ️ PostgreSQL not immediately ready, running in resilient mode:', err.message);
     }
@@ -849,7 +912,14 @@ app.get('/api/tickets', async (req, res) => {
             orderBy: { created_at: 'desc' }
         });
 
-        // Always filter out any tickets that were marked/recorded as deleted
+        // Always filter out mock/sample tickets and any tickets that were marked/recorded as deleted
+        const MOCK_TICKETS = new Set(['tkt-001', 'tkt-002', 'id-mv5j19jv-3b0qtw8', 'id-tkt-sample-002']);
+        tickets = tickets.filter(t => {
+            const tId = String(t.id || '').trim().toLowerCase();
+            const tNo = String(t.ticket_no || '').trim().toLowerCase();
+            return !MOCK_TICKETS.has(tId) && !MOCK_TICKETS.has(tNo);
+        });
+
         const db = getLocalDb();
         if (db && Array.isArray(db.deletedTicketIds) && db.deletedTicketIds.length > 0) {
             const deletedSet = new Set(db.deletedTicketIds.map(d => String(d).trim().toLowerCase()));
@@ -3645,6 +3715,18 @@ app.post('/api/discord/test', requireAdmin, async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
+// Serve frontend static build in standalone production / university server deployment
+const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
+if (fs.existsSync(frontendDistPath)) {
+    app.use(express.static(frontendDistPath));
+    app.use((req, res, next) => {
+        if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
+            return res.sendFile(path.join(frontendDistPath, 'index.html'));
+        }
+        next();
+    });
+}
 
 // Global Express Error Handler: ส่งแจ้งเตือนเข้าห้อง "ข้อผิดพลาดของระบบ"
 app.use((err, req, res, next) => {
