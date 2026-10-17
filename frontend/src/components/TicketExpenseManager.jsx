@@ -5,7 +5,7 @@ import {
     Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw, Zap,
     Key, ExternalLink, ShieldCheck, Settings 
 } from 'lucide-react';
-import { saveStoredExpenses } from '@/lib/ticketStore';
+import { saveStoredExpenses, getStoredExpenses } from '@/lib/ticketStore';
 import { useApp } from '@/context/AppContext';
 
 export default function TicketExpenseManager({ 
@@ -57,6 +57,47 @@ export default function TicketExpenseManager({
             })
             .catch(() => {});
     }, []);
+
+    // Auto-heal any corrupted astronomical expenses from barcode misreads
+    useEffect(() => {
+        const targetId = ticket?.id || ticket?.ticket_no;
+        if (!targetId) return;
+        const stored = getStoredExpenses(targetId);
+        if (stored && Array.isArray(stored.expenses)) {
+            let hasCorrupted = false;
+            const cleanedList = stored.expenses.map(e => {
+                const amt = Number(e.net_amount || e.total_price || 0);
+                if (amt > 10000000) { // e.g. 147105313393229380 barcode
+                    hasCorrupted = true;
+                    return { ...e, unit_price: 0, total_price: 0, net_amount: 0 };
+                }
+                return e;
+            });
+            if (hasCorrupted || (stored.summary?.totalProposed > 10000000)) {
+                let prop = 0, appr = 0, disb = 0, pend = 0;
+                cleanedList.forEach(e => {
+                    const a = Number(e.net_amount || e.total_price || 0);
+                    prop += a;
+                    if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
+                        appr += a;
+                        if (e.receipt_no || e.receipt_url) disb += a;
+                    } else if (e.status === 'PENDING') {
+                        pend += a;
+                    }
+                });
+                const cleanSum = {
+                    ...stored.summary,
+                    totalProposed: prop,
+                    totalApproved: appr,
+                    totalDisbursed: disb,
+                    totalPending: pend,
+                    remainingBudget: Math.max(0, appr - disb)
+                };
+                saveStoredExpenses(targetId, cleanedList, cleanSum, ticket?.ticket_no || targetId);
+                if (onExpenseUpdated) onExpenseUpdated();
+            }
+        }
+    }, [ticket?.id, ticket?.ticket_no]);
 
     const handleSaveGeminiKey = async () => {
         const cleaned = tempKeyInput.trim();
@@ -139,7 +180,8 @@ export default function TicketExpenseManager({
         const token = localStorage.getItem('helpdesk_token');
         const savedExpenses = [];
 
-        const itemsToSave = (Array.isArray(parsed.items) && parsed.items.length > 0)
+        const parsedNet = parseFloat(parsed.net_amount) || 0;
+        let rawItems = (Array.isArray(parsed.items) && parsed.items.length > 0)
             ? parsed.items
             : [{
                 name: parsed.description || (parsed.vendor_name ? `วัสดุและอุปกรณ์ (${parsed.vendor_name})` : 'วัสดุและอุปกรณ์ตามใบเสร็จ'),
@@ -151,6 +193,23 @@ export default function TicketExpenseManager({
                 tax_percent: parsed.tax_amount > 0 ? 7 : (parsed.tax_percent !== undefined ? parsed.tax_percent : 0),
                 category: parsed.category || 'ค่าวัสดุและอุปกรณ์'
             }];
+
+        // Filter and sanitize items from barcode or astronomical numbers
+        const itemsToSave = rawItems.map(it => {
+            let itQty = parseFloat(it.quantity) || 1;
+            let itPrice = parseFloat(it.unit_price) || 0;
+            // Reject barcode / serial misreads (>= 8 digits without decimal, or > 1,000,000, or > parsedNet * 1.5)
+            if (itPrice > 1000000 || (parsedNet > 0 && itPrice > parsedNet * 1.5)) {
+                itPrice = parsedNet > 0 ? (parsedNet / rawItems.length) : 0;
+            }
+            return {
+                ...it,
+                quantity: itQty,
+                unit_price: itPrice,
+                discount: parseFloat(it.discount) || 0,
+                tax_percent: parseFloat(it.tax_percent) || (parsed.tax_amount > 0 ? 7 : 0)
+            };
+        });
 
         for (const it of itemsToSave) {
             const itQty = parseFloat(it.quantity) || 1;
@@ -246,7 +305,8 @@ export default function TicketExpenseManager({
 
         let totalProp = 0, totalAppr = 0, totalDisb = 0, totalPend = 0;
         updatedList.forEach(e => {
-            const amt = Number(e.net_amount || e.total_price || 0);
+            let amt = Number(e.net_amount || e.total_price || 0);
+            if (amt > 10000000) amt = 0;
             totalProp += amt;
             if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
                 totalAppr += amt;
@@ -941,28 +1001,75 @@ export default function TicketExpenseManager({
             </div>
 
             {/* Financial Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>งบประมาณที่เสนอ</div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#60a5fa' }}>฿{(summary.totalProposed || 0).toLocaleString()}</div>
-                </div>
-                <div style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>งบประมาณที่อนุมัติ</div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#4ade80' }}>฿{(summary.totalApproved || 0).toLocaleString()}</div>
-                </div>
-                <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ยอดเบิกจ่ายแล้ว (มีใบเสร็จ)</div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#c084fc' }}>฿{(summary.totalDisbursed || summary.totalActual || 0).toLocaleString()}</div>
-                </div>
-                <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>งบประมาณคงเหลือ</div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#10b981' }}>฿{(summary.remainingBudget || 0).toLocaleString()}</div>
-                </div>
-                <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '10px 14px', borderRadius: '8px' }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>รอดำเนินการอนุมัติ</div>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#fbbf24' }}>฿{(summary.totalPending || 0).toLocaleString()}</div>
-                </div>
-            </div>
+            {(() => {
+                const safeExpenses = (Array.isArray(expenses) ? expenses : []).map(e => {
+                    const amt = Number(e.net_amount || e.total_price || 0);
+                    if (amt > 10000000) {
+                        return { ...e, net_amount: 0, total_price: 0, unit_price: 0 };
+                    }
+                    return e;
+                });
+
+                let calcProp = 0, calcAppr = 0, calcDisb = 0, calcPend = 0;
+                safeExpenses.forEach(e => {
+                    const amt = Number(e.net_amount || e.total_price || 0);
+                    calcProp += amt;
+                    if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
+                        calcAppr += amt;
+                        if (e.receipt_no || e.receipt_url) calcDisb += amt;
+                    } else if (e.status === 'PENDING') {
+                        calcPend += amt;
+                    }
+                });
+
+                const isCorrupt = (v) => !v || isNaN(Number(v)) || Number(v) > 10000000;
+                const safeProp = isCorrupt(summary?.totalProposed) ? calcProp : Number(summary.totalProposed);
+                const safeAppr = isCorrupt(summary?.totalApproved) ? calcAppr : Number(summary.totalApproved);
+                const safeDisb = isCorrupt(summary?.totalDisbursed || summary?.totalActual) ? calcDisb : Number(summary.totalDisbursed || summary.totalActual || 0);
+                const safePend = isCorrupt(summary?.totalPending) ? calcPend : Number(summary.totalPending || 0);
+                const safeRem = Math.max(0, safeAppr - safeDisb);
+
+                const fmtAmt = (val) => {
+                    const num = Number(val || 0);
+                    if (isNaN(num) || num <= 0) return '฿0';
+                    return `฿${num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+                };
+
+                return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.65rem', marginBottom: '1.25rem' }}>
+                        <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', padding: '10px 12px', borderRadius: '8px', minWidth: 0, overflow: 'hidden' }}>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>งบประมาณที่เสนอ</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#60a5fa', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }} title={fmtAmt(safeProp)}>
+                                {fmtAmt(safeProp)}
+                            </div>
+                        </div>
+                        <div style={{ background: 'rgba(34, 197, 94, 0.08)', border: '1px solid rgba(34, 197, 94, 0.2)', padding: '10px 12px', borderRadius: '8px', minWidth: 0, overflow: 'hidden' }}>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>งบประมาณที่อนุมัติ</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#4ade80', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }} title={fmtAmt(safeAppr)}>
+                                {fmtAmt(safeAppr)}
+                            </div>
+                        </div>
+                        <div style={{ background: 'rgba(168, 85, 247, 0.08)', border: '1px solid rgba(168, 85, 247, 0.2)', padding: '10px 12px', borderRadius: '8px', minWidth: 0, overflow: 'hidden' }}>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>ยอดเบิกจ่ายแล้ว (มีใบเสร็จ)</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#c084fc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }} title={fmtAmt(safeDisb)}>
+                                {fmtAmt(safeDisb)}
+                            </div>
+                        </div>
+                        <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '10px 12px', borderRadius: '8px', minWidth: 0, overflow: 'hidden' }}>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>งบประมาณคงเหลือ</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#10b981', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }} title={fmtAmt(safeRem)}>
+                                {fmtAmt(safeRem)}
+                            </div>
+                        </div>
+                        <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)', padding: '10px 12px', borderRadius: '8px', minWidth: 0, overflow: 'hidden' }}>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>รอดำเนินการอนุมัติ</div>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#fbbf24', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }} title={fmtAmt(safePend)}>
+                                {fmtAmt(safePend)}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Active Scanned Receipt Banner with "📷 สแกนใบเสร็จใหม่" and "❌ ยกเลิกการสแกน" */}
             {lastScannedExpenseIds.length > 0 && scanSuccessInfo && (

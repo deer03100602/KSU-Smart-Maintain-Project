@@ -3279,6 +3279,17 @@ function parseReceiptText(text) {
             const qty = parseInt(lineMatch[3], 10) || 1;
             const unit = lineMatch[4] || 'ชิ้น';
             const price = parseFloat(lineMatch[5].replace(/,/g, '')) || 0;
+            const rawPriceStr = lineMatch[5].replace(/,/g, '');
+            // Reject if looks like a barcode, tax ID, or serial number (>= 8 digits without decimal)
+            if (rawPriceStr.length >= 8 && !rawPriceStr.includes('.')) {
+                continue;
+            }
+            if (price >= 5000000) {
+                continue;
+            }
+            if (result.net_amount > 0 && price > result.net_amount) {
+                continue;
+            }
             const total = lineMatch[6] ? parseFloat(lineMatch[6].replace(/,/g, '')) : (qty * price);
 
             if (itemName.length >= 2 && !nonItemWords.test(itemName)) {
@@ -3349,6 +3360,18 @@ function parseReceiptText(text) {
             unit_price: result.net_amount || result.total_price || 0,
             total_price: result.net_amount || result.total_price || 0
         });
+    }
+
+    // Reconcile parsed items with result.net_amount if known
+    if (result.net_amount > 0 && parsedItems.length > 0) {
+        const sumItems = parsedItems.reduce((acc, it) => acc + (it.total_price || 0), 0);
+        if (sumItems > result.net_amount * 1.5 || sumItems <= 0) {
+            const ratio = result.net_amount / (sumItems || 1);
+            parsedItems.forEach(it => {
+                it.unit_price = Math.round((it.unit_price * ratio) * 100) / 100;
+                it.total_price = Math.round((it.total_price * ratio) * 100) / 100;
+            });
+        }
     }
 
     result.items = parsedItems;

@@ -287,7 +287,13 @@ export default function TicketDetailPage(props) {
                         }
                     }
                 });
-                expList = Array.from(expMap.values());
+                expList = Array.from(expMap.values()).map(e => {
+                    const amt = Number(e.net_amount || e.total_price || 0);
+                    if (amt > 10000000) {
+                        return { ...e, net_amount: 0, total_price: 0, unit_price: 0 };
+                    }
+                    return e;
+                });
 
                 let totalProp = 0, totalAppr = 0, totalDisb = 0;
                 expList.forEach(e => {
