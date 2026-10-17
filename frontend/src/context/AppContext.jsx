@@ -46,11 +46,11 @@ export const MOCK_PROFILES = [
 ];
 
 export function AppProvider({ children }) {
-    // ── Simulated or Real Role ──────────────────────────────────────
-    const [role, setRoleState] = useState('user');
+    // ── Simulated or Real Role (Default to 'guest' - not logged in) ──
+    const [role, setRoleState] = useState('guest');
     
-    // ── Simulated or Real User Profile ──────────────────────────────
-    const [user, setUserState] = useState({ name: '', email: '', group: 'นักศึกษา' });
+    // ── Simulated or Real User Profile (Default to null = Guest) ──
+    const [user, setUserState] = useState(null);
     
     // ── Toast Notifications State ───────────────────────────
     const [toasts, setToasts] = useState([]);
@@ -62,24 +62,30 @@ export function AppProvider({ children }) {
     const [theme, setTheme] = useState('dark');
 
     const loadSimulatedUser = () => {
-        let storedRole = localStorage.getItem('helpdesk_current_role') || 'user';
         const storedUser = localStorage.getItem('helpdesk_current_user');
         if (storedUser) {
             try {
                 const parsed = JSON.parse(storedUser);
-                setUserState(parsed);
-                if (['นักศึกษา', 'อาจารย์'].includes(parsed?.group)) {
-                    storedRole = 'user';
-                    localStorage.setItem('helpdesk_current_role', 'user');
+                if (parsed && parsed.email && parsed.email.trim()) {
+                    setUserState(parsed);
+                    let storedRole = localStorage.getItem('helpdesk_current_role');
+                    if (!storedRole) {
+                        const isGroupAMember = ['นักศึกษา', 'อาจารย์'].includes(parsed.group);
+                        storedRole = isGroupAMember ? 'user' : (parsed.role || 'user');
+                    }
+                    setRoleState(storedRole);
+                    return;
                 }
             } catch (e) {
                 console.error(e);
-                setUserState({ name: '', email: '', group: 'นักศึกษา' });
             }
-        } else {
-            setUserState({ name: '', email: '', group: 'นักศึกษา' });
         }
-        setRoleState(storedRole);
+        
+        // Default strictly to GUEST (ยังไม่ได้เข้าสู่ระบบ)
+        setUserState(null);
+        setRoleState('guest');
+        localStorage.removeItem('helpdesk_current_user');
+        localStorage.removeItem('helpdesk_current_role');
     };
 
     // Initial auth load from persistent storage
@@ -279,9 +285,9 @@ export function AppProvider({ children }) {
         localStorage.removeItem('helpdesk_current_user');
         localStorage.removeItem('helpdesk_current_role');
         localStorage.removeItem('helpdesk_token');
-        setUserState({ name: '', email: '', group: 'นักศึกษา' });
-        setRoleState('user');
-        showToast('ออกจากระบบเรียบร้อยแล้ว', 'info');
+        setUserState(null);
+        setRoleState('guest');
+        showToast('ออกจากระบบเรียบร้อยแล้ว (สถานะ: ผู้เยี่ยมชม)', 'info');
     };
 
     const setRole = (newRole) => {

@@ -253,13 +253,12 @@ const prisma = {
                 list = [...(db.tickets || [])];
                 list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
             }
-            const MOCK_TICKETS = new Set(['tkt-001', 'tkt-002', 'id-mv5j19jv-3b0qtw8', 'id-tkt-sample-002']);
             const db = getLocalDb();
             const deletedSet = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
             return (list || []).filter(t => {
                 const id = String(t.id || '').trim().toLowerCase();
                 const no = String(t.ticket_no || '').trim().toLowerCase();
-                return !MOCK_TICKETS.has(id) && !MOCK_TICKETS.has(no) && !deletedSet.has(id) && !deletedSet.has(no);
+                return !deletedSet.has(id) && !deletedSet.has(no);
             });
         },
         findFirst: async ({ where } = {}) => {

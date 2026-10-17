@@ -239,8 +239,11 @@ export default function TicketDetailPage(props) {
                 } catch (syncRetryErr) {}
             }
 
+            let ticketData = cachedTicket || null;
+
             if (ticketRes.ok) {
                 const data = await ticketRes.json();
+                ticketData = data;
                 setTicket(data);
                 setNoteContent(data.resolution_note || '');
                 saveStoredTicket(data);
@@ -258,69 +261,87 @@ export default function TicketDetailPage(props) {
                 setIssueTypes(typesData);
             }
 
+            let expList = [];
+            let expSum = {};
             if (expRes.ok) {
                 const expData = await expRes.json();
-                let expList = expData.expenses || [];
-                let expSum = expData.summary || {};
-                
-                const cachedExp = getStoredExpenses(id) || (data && getStoredExpenses(data.id));
-                if (cachedExp && Array.isArray(cachedExp.expenses) && cachedExp.expenses.length > 0) {
-                    const expMap = new Map();
-                    // Put server items first
-                    expList.forEach(e => { if (e && e.id) expMap.set(e.id, e); });
-                    // Merge local items if local has newer status (e.g. APPROVED)
-                    cachedExp.expenses.forEach(e => {
-                        if (e && e.id) {
-                            if (!expMap.has(e.id)) {
-                                expMap.set(e.id, e);
-                            } else {
-                                const s = expMap.get(e.id);
-                                if (e.status === 'APPROVED' && s.status !== 'APPROVED') {
-                                    expMap.set(e.id, { ...s, ...e });
-                                }
+                expList = expData.expenses || [];
+                expSum = expData.summary || {};
+            }
+
+            const cachedExp = getStoredExpenses(id) || (ticketData?.id && getStoredExpenses(ticketData.id)) || (ticketData?.ticket_no && getStoredExpenses(ticketData.ticket_no));
+            if (cachedExp && Array.isArray(cachedExp.expenses) && cachedExp.expenses.length > 0) {
+                const expMap = new Map();
+                // Put server items first
+                expList.forEach(e => { if (e && e.id) expMap.set(e.id, e); });
+                // Merge local items if local has newer status (e.g. APPROVED)
+                cachedExp.expenses.forEach(e => {
+                    if (e && e.id) {
+                        if (!expMap.has(e.id)) {
+                            expMap.set(e.id, e);
+                        } else {
+                            const s = expMap.get(e.id);
+                            if (e.status === 'APPROVED' && s.status !== 'APPROVED') {
+                                expMap.set(e.id, { ...s, ...e });
                             }
                         }
-                    });
-                    expList = Array.from(expMap.values());
+                    }
+                });
+                expList = Array.from(expMap.values());
 
-                    let totalProp = 0, totalAppr = 0, totalDisb = 0;
-                    expList.forEach(e => {
-                        const amt = Number(e.net_amount || e.total_price || 0);
-                        totalProp += amt;
-                        if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
-                            totalAppr += amt;
-                            if (e.receipt_no || e.receipt_url) totalDisb += amt;
-                        }
-                    });
-                    expSum = {
-                        ...expSum,
-                        totalProposed: totalProp,
-                        totalApproved: totalAppr,
-                        totalDisbursed: totalDisb,
-                        remainingBudget: Math.max(0, totalAppr - totalDisb)
-                    };
-                }
-
-                setExpenses(expList);
-                setExpenseSummary(expSum);
-                saveStoredExpenses(id, expList, expSum, ticketData?.ticket_no || id);
+                let totalProp = 0, totalAppr = 0, totalDisb = 0;
+                expList.forEach(e => {
+                    const amt = Number(e.net_amount || e.total_price || 0);
+                    totalProp += amt;
+                    if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
+                        totalAppr += amt;
+                        if (e.receipt_no || e.receipt_url) totalDisb += amt;
+                    }
+                });
+                expSum = {
+                    ...expSum,
+                    totalProposed: totalProp,
+                    totalApproved: totalAppr,
+                    totalDisbursed: totalDisb,
+                    remainingBudget: Math.max(0, totalAppr - totalDisb)
+                };
             }
 
+            setExpenses(expList);
+            setExpenseSummary(expSum);
+            saveStoredExpenses(id, expList, expSum, ticketData?.ticket_no || id);
+
+            let tmlList = [];
             if (tmlRes.ok) {
                 const tmlData = await tmlRes.json();
-                if (Array.isArray(tmlData)) {
-                    setTimelines(tmlData);
-                    saveStoredTimelines(id, tmlData, ticketData?.ticket_no || id);
-                }
+                if (Array.isArray(tmlData)) tmlList = tmlData;
+            }
+            const cachedTml = getStoredTimelines(id) || (ticketData?.id && getStoredTimelines(ticketData.id)) || (ticketData?.ticket_no && getStoredTimelines(ticketData.ticket_no));
+            if (Array.isArray(cachedTml) && cachedTml.length > 0) {
+                const tmlMap = new Map();
+                tmlList.forEach(t => { if (t && t.id) tmlMap.set(t.id, t); });
+                cachedTml.forEach(t => { if (t && t.id && !tmlMap.has(t.id)) tmlMap.set(t.id, t); });
+                tmlList = Array.from(tmlMap.values());
+            }
+            if (tmlList.length > 0) {
+                setTimelines(tmlList);
+                saveStoredTimelines(id, tmlList, ticketData?.ticket_no || id);
             }
 
+            let eviList = [];
             if (eviRes.ok) {
                 const eviData = await eviRes.json();
-                if (Array.isArray(eviData)) {
-                    setEvidences(eviData);
-                    saveStoredEvidences(id, eviData, ticketData?.ticket_no || id);
-                }
+                if (Array.isArray(eviData)) eviList = eviData;
             }
+            const cachedEvi = getStoredEvidences(id) || (ticketData?.id && getStoredEvidences(ticketData.id)) || (ticketData?.ticket_no && getStoredEvidences(ticketData.ticket_no));
+            if (Array.isArray(cachedEvi) && cachedEvi.length > 0) {
+                const eviMap = new Map();
+                eviList.forEach(ev => { if (ev && ev.id) eviMap.set(ev.id, ev); });
+                cachedEvi.forEach(ev => { if (ev && ev.id && !eviMap.has(ev.id)) eviMap.set(ev.id, ev); });
+                eviList = Array.from(eviMap.values());
+            }
+            setEvidences(eviList);
+            saveStoredEvidences(id, eviList, ticketData?.ticket_no || id);
         } catch (e) {
             console.error('Error fetching ticket detail:', e);
             if (!cachedTicket) {
