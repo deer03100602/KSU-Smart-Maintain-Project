@@ -490,95 +490,68 @@ export default function AdminSettingsPage() {
                     </div>
                 </div>
 
-                {/* 3. Technicians Management section */}
-                <div className="glass-card" style={{ padding: '2rem' }}>
-                    <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 600 }}>
-                        <UserCheck style={{ width: 20, height: 20, color: 'var(--primary-color)' }} />
-                        รายชื่อเจ้าหน้าที่ / ช่างผู้รับผิดชอบงานซ่อม
-                    </h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
-                        กำหนดรายชื่อช่างหรือเจ้าหน้าที่ซ่อมบำรุงในระบบด้วยตนเอง โดยรายชื่อเหล่านี้จะปรากฏในตัวเลือกมอบหมายงาน (Assign) และรายงานสถิติภาระงานใน Dashboard
-                    </p>
+                {/* Alternative Options (Discord Webhook & EmailJS) */}
+                <details className="glass-card" style={{ padding: '1.5rem 2rem' }}>
+                    <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '1.05rem', color: 'var(--text-secondary)', userSelect: 'none' }}>
+                        ⚙️ ช่องทางการแจ้งเตือนเสริม (Discord Webhook & EmailJS REST API)
+                    </summary>
 
-                    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                        <input
-                            type="text"
-                            className="form-input"
-                            placeholder="ระบุชื่อ-นามสกุล หรือตำแหน่งช่าง เช่น ช่างสมคิด (ไฟฟ้า)..."
-                            value={newTechName}
-                            onChange={(e) => setNewTechName(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleAddTechnician();
-                                }
-                            }}
-                            style={{ flex: 1 }}
-                        />
-                        <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={handleAddTechnician}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
-                        >
-                            <UserPlus style={{ width: 16, height: 16 }} />
-                            เพิ่มรายชื่อ
-                        </button>
+                    <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                        {/* Discord */}
+                        <div>
+                            <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 0.5rem 0', fontSize: '1rem' }}>
+                                <Bell style={{ width: 16, height: 16, color: '#818cf8' }} />
+                                Discord Webhook
+                            </h4>
+                            <input 
+                                type="url" 
+                                className="form-input" 
+                                placeholder="https://discord.com/api/webhooks/..." 
+                                value={discordUrl}
+                                onChange={(e) => setDiscordUrl(e.target.value)}
+                            />
+                            <span className="form-hint">วาง URL Discord Webhook เพื่อแจ้งเตือนเข้าห้องแชต Discord</span>
+                        </div>
+
+                        {/* EmailJS */}
+                        <div>
+                            <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 0.5rem 0', fontSize: '1rem' }}>
+                                <Mail style={{ width: 16, height: 16, color: '#f59e0b' }} />
+                                EmailJS REST API (ทางเลือกสำรอง)
+                            </h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginTop: '0.5rem' }}>
+                                <input 
+                                    type="text" 
+                                    className="form-input" 
+                                    placeholder="Service ID (service_xxx)" 
+                                    value={serviceId}
+                                    onChange={(e) => setServiceId(e.target.value)}
+                                />
+                                <input 
+                                    type="text" 
+                                    className="form-input" 
+                                    placeholder="Template ID (template_xxx)" 
+                                    value={templateId}
+                                    onChange={(e) => setTemplateId(e.target.value)}
+                                />
+                                <input 
+                                    type="text" 
+                                    className="form-input" 
+                                    placeholder="Public Key" 
+                                    value={publicKey}
+                                    onChange={(e) => setPublicKey(e.target.value)}
+                                />
+                                <input 
+                                    type="password" 
+                                    className="form-input" 
+                                    placeholder="Private Key" 
+                                    value={privateKey}
+                                    onChange={(e) => setPrivateKey(e.target.value)}
+                                />
+                            </div>
+                        </div>
                     </div>
-
-                    {technicians.length === 0 ? (
-                        <div style={{
-                            padding: '1.5rem',
-                            textAlign: 'center',
-                            borderRadius: '8px',
-                            background: 'rgba(255,255,255,0.02)',
-                            border: '1px dashed var(--border-color)',
-                            color: 'var(--text-secondary)',
-                            fontSize: '0.9rem'
-                        }}>
-                            ยังไม่มีการกำหนดรายชื่อช่างในระบบ สามารถพิมพ์ชื่อด้านบนแล้วกด "เพิ่มรายชื่อ" ได้ทันที
-                        </div>
-                    ) : (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-                            {technicians.map((name) => (
-                                <div
-                                    key={name}
-                                    style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.5rem',
-                                        padding: '0.4rem 0.85rem',
-                                        background: 'rgba(59, 130, 246, 0.1)',
-                                        border: '1px solid rgba(59, 130, 246, 0.3)',
-                                        borderRadius: '20px',
-                                        color: '#93c5fd',
-                                        fontSize: '0.9rem',
-                                        fontWeight: 500
-                                    }}
-                                >
-                                    <span>{name}</span>
-                                    <button
-                                        type="button"
-                                        onClick={() => handleRemoveTechnician(name)}
-                                        style={{
-                                            background: 'transparent',
-                                            border: 'none',
-                                            color: '#f87171',
-                                            cursor: 'pointer',
-                                            padding: 2,
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            borderRadius: '50%'
-                                        }}
-                                        title={`ลบ ${name}`}
-                                    >
-                                        <X style={{ width: 14, height: 14 }} />
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                </details>
 
                 {/* 4. LINE Official Account / Messaging API Notification */}
                 <div className="glass-card" style={{ padding: '1.5rem 2rem', border: '1px solid rgba(6, 199, 85, 0.25)', position: 'relative' }}>
@@ -938,68 +911,95 @@ export default function AdminSettingsPage() {
                     )}
                 </div>
 
-                {/* 5. Alternative Options (Discord Webhook & EmailJS) */}
-                <details className="glass-card" style={{ padding: '1.5rem 2rem' }}>
-                    <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: '1.05rem', color: 'var(--text-secondary)', userSelect: 'none' }}>
-                        ⚙️ ช่องทางการแจ้งเตือนเสริม (Discord Webhook & EmailJS REST API)
-                    </summary>
+                {/* Technicians Management section */}
+                <div className="glass-card" style={{ padding: '2rem' }}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 600 }}>
+                        <UserCheck style={{ width: 20, height: 20, color: 'var(--primary-color)' }} />
+                        รายชื่อเจ้าหน้าที่ / ช่างผู้รับผิดชอบงานซ่อม
+                    </h3>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
+                        กำหนดรายชื่อช่างหรือเจ้าหน้าที่ซ่อมบำรุงในระบบด้วยตนเอง โดยรายชื่อเหล่านี้จะปรากฏในตัวเลือกมอบหมายงาน (Assign) และรายงานสถิติภาระงานใน Dashboard
+                    </p>
 
-                    <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                        {/* Discord */}
-                        <div>
-                            <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 0.5rem 0', fontSize: '1rem' }}>
-                                <Bell style={{ width: 16, height: 16, color: '#818cf8' }} />
-                                Discord Webhook
-                            </h4>
-                            <input 
-                                type="url" 
-                                className="form-input" 
-                                placeholder="https://discord.com/api/webhooks/..." 
-                                value={discordUrl}
-                                onChange={(e) => setDiscordUrl(e.target.value)}
-                            />
-                            <span className="form-hint">วาง URL Discord Webhook เพื่อแจ้งเตือนเข้าห้องแชต Discord</span>
-                        </div>
-
-                        {/* EmailJS */}
-                        <div>
-                            <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '0 0 0.5rem 0', fontSize: '1rem' }}>
-                                <Mail style={{ width: 16, height: 16, color: '#f59e0b' }} />
-                                EmailJS REST API (ทางเลือกสำรอง)
-                            </h4>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginTop: '0.5rem' }}>
-                                <input 
-                                    type="text" 
-                                    className="form-input" 
-                                    placeholder="Service ID (service_xxx)" 
-                                    value={serviceId}
-                                    onChange={(e) => setServiceId(e.target.value)}
-                                />
-                                <input 
-                                    type="text" 
-                                    className="form-input" 
-                                    placeholder="Template ID (template_xxx)" 
-                                    value={templateId}
-                                    onChange={(e) => setTemplateId(e.target.value)}
-                                />
-                                <input 
-                                    type="text" 
-                                    className="form-input" 
-                                    placeholder="Public Key" 
-                                    value={publicKey}
-                                    onChange={(e) => setPublicKey(e.target.value)}
-                                />
-                                <input 
-                                    type="password" 
-                                    className="form-input" 
-                                    placeholder="Private Key" 
-                                    value={privateKey}
-                                    onChange={(e) => setPrivateKey(e.target.value)}
-                                />
-                            </div>
-                        </div>
+                    <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                        <input
+                            type="text"
+                            className="form-input"
+                            placeholder="ระบุชื่อ-นามสกุล หรือตำแหน่งช่าง เช่น ช่างสมคิด (ไฟฟ้า)..."
+                            value={newTechName}
+                            onChange={(e) => setNewTechName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddTechnician();
+                                }
+                            }}
+                            style={{ flex: 1 }}
+                        />
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={handleAddTechnician}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}
+                        >
+                            <UserPlus style={{ width: 16, height: 16 }} />
+                            เพิ่มรายชื่อ
+                        </button>
                     </div>
-                </details>
+
+                    {technicians.length === 0 ? (
+                        <div style={{
+                            padding: '1.5rem',
+                            textAlign: 'center',
+                            borderRadius: '8px',
+                            background: 'rgba(255,255,255,0.02)',
+                            border: '1px dashed var(--border-color)',
+                            color: 'var(--text-secondary)',
+                            fontSize: '0.9rem'
+                        }}>
+                            ยังไม่มีการกำหนดรายชื่อช่างในระบบ สามารถพิมพ์ชื่อด้านบนแล้วกด "เพิ่มรายชื่อ" ได้ทันที
+                        </div>
+                    ) : (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
+                            {technicians.map((name) => (
+                                <div
+                                    key={name}
+                                    style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.5rem',
+                                        padding: '0.4rem 0.85rem',
+                                        background: 'rgba(59, 130, 246, 0.1)',
+                                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                                        borderRadius: '20px',
+                                        color: '#93c5fd',
+                                        fontSize: '0.9rem',
+                                        fontWeight: 500
+                                    }}
+                                >
+                                    <span>{name}</span>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleRemoveTechnician(name)}
+                                        style={{
+                                            background: 'transparent',
+                                            border: 'none',
+                                            color: '#f87171',
+                                            cursor: 'pointer',
+                                            padding: 2,
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            borderRadius: '50%'
+                                        }}
+                                        title={`ลบ ${name}`}
+                                    >
+                                        <X style={{ width: 14, height: 14 }} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
 
                 {/* 5. Test Alert & Action Buttons */}
                 <div className="glass-card" style={{ padding: '1.75rem 2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.25rem' }}>
