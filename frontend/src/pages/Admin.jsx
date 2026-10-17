@@ -16,7 +16,7 @@ import {
     Calendar, Save, MessageSquare, ClipboardCheck, Tag, Info, UserCheck, Settings,
     FileText, Printer, RefreshCw
 } from 'lucide-react';
-import { parseDescriptionAndAttachments, isImageFile } from '@/lib/utils';
+import { parseDescriptionAndAttachments, isImageFile, timeAgo } from '@/lib/utils';
 import { removeStoredTicket, resequenceStoredTickets, getStoredTickets, mergeTicketsWithStorage, syncTicketsWithServer } from '@/lib/ticketStore';
 // DEFAULT_ISSUE_TYPES is loaded dynamically
 
@@ -114,7 +114,10 @@ export default function AdminManagementPage() {
         return null;
     };
 
-    const allAvailableStaff = [...new Set([...staffMembers, ...tickets.map(t => t.assigned_to).filter(Boolean)])];
+    const allAvailableStaff = [...new Set([
+        ...(Array.isArray(staffMembers) ? staffMembers : []), 
+        ...(Array.isArray(tickets) ? tickets.map(t => t?.assigned_to).filter(Boolean) : [])
+    ])];
 
     // Modal view state
     const [viewingTicket, setViewingTicket] = useState(null);
@@ -128,14 +131,6 @@ export default function AdminManagementPage() {
     const [priority, setPriority] = useState('');
     const [assigneeFilter, setAssigneeFilter] = useState('');
     const [requesterGroupFilter, setRequesterGroupFilter] = useState('');
-
-    // Check Role Guard
-    useEffect(() => {
-        if (role !== 'admin') {
-            toast.warning('คุณไม่มีสิทธิ์เข้าถึงหน้าสำหรับแอดมิน');
-            router.push('/');
-        }
-    }, [role]);
 
     const [resequencing, setResequencing] = useState(false);
 
@@ -208,10 +203,10 @@ export default function AdminManagementPage() {
     };
 
     useEffect(() => {
-        if (role === 'admin') {
+        if (isAdmin) {
             fetchData();
         }
-    }, [role]);
+    }, [isAdmin]);
 
     // Open detail modal helper
     const handleOpenDetailModal = (ticket) => {
@@ -220,20 +215,24 @@ export default function AdminManagementPage() {
     };
 
     // Derived Statistics
-    const totalTickets = tickets.length;
-    const completedCount = tickets.filter(t => t.status === STATUSES.RESOLVED || t.status === STATUSES.CLOSED).length;
+    const safeTicketsList = Array.isArray(tickets) ? tickets.filter(Boolean) : [];
+    const totalTickets = safeTicketsList.length;
+    const completedCount = safeTicketsList.filter(t => t?.status === STATUSES.RESOLVED || t?.status === STATUSES.CLOSED).length;
     const completionRate = totalTickets > 0 ? Math.round((completedCount / totalTickets) * 100) : 0;
 
     // Filtered Tickets list
-    const filteredTickets = tickets.filter(t => {
+    const filteredTickets = safeTicketsList.filter(t => {
+        if (!t) return false;
+
         // Query Match
         if (query.trim()) {
             const q = query.toLowerCase().trim();
-            const matchQuery = t.ticket_no.toLowerCase().includes(q) ||
-                               t.title.toLowerCase().includes(q) ||
-                               t.description.toLowerCase().includes(q) ||
-                               t.requester_name.toLowerCase().includes(q) ||
-                               (t.location && t.location.toLowerCase().includes(q));
+            const ticketNo = String(t.ticket_no || t.id || '').toLowerCase();
+            const title = String(t.title || '').toLowerCase();
+            const desc = String(t.description || '').toLowerCase();
+            const reqName = String(t.requester_name || '').toLowerCase();
+            const loc = String(t.location || '').toLowerCase();
+            const matchQuery = ticketNo.includes(q) || title.includes(q) || desc.includes(q) || reqName.includes(q) || loc.includes(q);
             if (!matchQuery) return false;
         }
 
@@ -254,7 +253,7 @@ export default function AdminManagementPage() {
 
         // Requester Group Match
         if (requesterGroupFilter) {
-            const parsed = parseRequester(t.requester_name);
+            const parsed = parseRequester(t.requester_name || '');
             if (parsed.group !== requesterGroupFilter) return false;
         }
 

@@ -86,6 +86,7 @@ export default function TicketDetailPage(props) {
     const [noteContent, setNoteContent] = useState('');
     const [selectedImageModal, setSelectedImageModal] = useState(null);
     const [uploadingDirectFile, setUploadingDirectFile] = useState(false);
+    const [failedImages, setFailedImages] = useState({});
 
     useEffect(() => {
         async function fetchStaff() {
@@ -937,7 +938,9 @@ export default function TicketDetailPage(props) {
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'center' }}>
                                 {attachments.map((file, idx) => {
                                     const isImage = file.isImage || isImageFile(file.name, file.url);
-                                    const isValidUrl = file.url && file.url !== '#';
+                                    const fileKey = file.url || file.name || String(idx);
+                                    const hasImgError = !!failedImages[fileKey];
+                                    const isValidUrl = file.url && file.url !== '#' && !hasImgError;
 
                                     return (
                                         <div key={idx} style={{
@@ -973,6 +976,19 @@ export default function TicketDetailPage(props) {
                                                                 style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.25s ease' }} 
                                                                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.05)'; }}
                                                                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                                                                onError={(e) => {
+                                                                    if (file.url && file.url.startsWith('/uploads/') && !e.currentTarget.dataset.retried) {
+                                                                        e.currentTarget.dataset.retried = '1';
+                                                                        e.currentTarget.src = file.url.substring(1);
+                                                                        return;
+                                                                    }
+                                                                    if (file.url && !file.url.startsWith('/api/') && !e.currentTarget.dataset.retriedApi) {
+                                                                        e.currentTarget.dataset.retriedApi = '1';
+                                                                        e.currentTarget.src = `/api${file.url.startsWith('/') ? '' : '/'}${file.url}`;
+                                                                        return;
+                                                                    }
+                                                                    setFailedImages(prev => ({ ...prev, [fileKey]: true }));
+                                                                }}
                                                             />
                                                             <div style={{
                                                                 position: 'absolute',
@@ -992,9 +1008,10 @@ export default function TicketDetailPage(props) {
                                                             </div>
                                                         </>
                                                     ) : (
-                                                        <div style={{ textAlign: 'center', padding: '0.5rem', color: 'var(--text-secondary)' }}>
-                                                            <ImageIcon style={{ width: 36, height: 36, margin: '0 auto 4px', color: '#4ade80' }} />
-                                                            <div style={{ fontSize: '0.75rem' }}>{file.name}</div>
+                                                        <div style={{ textAlign: 'center', padding: '0.75rem 0.5rem', color: 'var(--text-secondary)' }}>
+                                                            <ImageIcon style={{ width: 36, height: 36, margin: '0 auto 6px', color: '#60a5fa' }} />
+                                                            <div style={{ fontSize: '0.75rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>{file.name}</div>
+                                                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 2 }}>รูปภาพแนบ</div>
                                                         </div>
                                                     )}
                                                 </div>

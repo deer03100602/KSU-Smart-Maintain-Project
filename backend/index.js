@@ -691,6 +691,7 @@ if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
 }
 app.use('/uploads', express.static(uploadsDir));
+app.use('/api/uploads', express.static(uploadsDir));
 
 // Multer Storage Configuration: Use memory storage for serverless compatibility, write to disk if possible
 const storage = multer.memoryStorage();
