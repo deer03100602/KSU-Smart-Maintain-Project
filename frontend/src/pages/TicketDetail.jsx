@@ -220,13 +220,25 @@ export default function TicketDetailPage(props) {
         }
 
         try {
-            const [ticketRes, typesRes, expRes, tmlRes, eviRes] = await Promise.all([
-                fetch(`/api/tickets/${id}`),
+            const clientTicketHeader = cachedTicket ? encodeURIComponent(JSON.stringify(cachedTicket)) : '';
+            const reqHeaders = clientTicketHeader ? { 'x-client-ticket': clientTicketHeader } : {};
+
+            let [ticketRes, typesRes, expRes, tmlRes, eviRes] = await Promise.all([
+                fetch(`/api/tickets/${id}`, { headers: reqHeaders }),
                 fetch('/api/issue-types'),
-                fetch(`/api/tickets/${id}/expenses`),
-                fetch(`/api/tickets/${id}/timeline`),
-                fetch(`/api/tickets/${id}/evidence`)
+                fetch(`/api/tickets/${id}/expenses`, { headers: reqHeaders }),
+                fetch(`/api/tickets/${id}/timeline`, { headers: reqHeaders }),
+                fetch(`/api/tickets/${id}/evidence`, { headers: reqHeaders })
             ]);
+
+            // Self-healing: if server gave 404 but we have cachedTicket, immediately sync and re-fetch once
+            if (!ticketRes.ok && cachedTicket) {
+                try {
+                    await syncTicketsWithServer([cachedTicket]);
+                    ticketRes = await fetch(`/api/tickets/${id}`, { headers: reqHeaders });
+                } catch (syncRetryErr) {}
+            }
+
             if (ticketRes.ok) {
                 const data = await ticketRes.json();
                 setTicket(data);

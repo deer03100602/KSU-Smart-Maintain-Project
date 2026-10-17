@@ -164,11 +164,26 @@ export default function TicketExpenseManager({
         setSubmitting(true);
         try {
             const token = localStorage.getItem('helpdesk_token');
+            const clientTicketHeader = ticket ? encodeURIComponent(JSON.stringify({
+                id: ticket.id,
+                ticket_no: ticket.ticket_no,
+                title: ticket.title,
+                description: ticket.description,
+                issue_type: ticket.issue_type,
+                location: ticket.location,
+                priority: ticket.priority,
+                status: ticket.status,
+                requester_name: ticket.requester_name,
+                requester_email: ticket.requester_email,
+                assigned_to: ticket.assigned_to
+            })) : '';
+
             const res = await fetch(`/api/tickets/${ticket.id}/expenses`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : ''
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-client-ticket': clientTicketHeader
                 },
                 body: JSON.stringify({
                     category: targetCategory,
@@ -181,7 +196,8 @@ export default function TicketExpenseManager({
                     receipt_no: targetReceiptNo ? String(targetReceiptNo).trim() : null,
                     vendor_name: targetVendorName ? String(targetVendorName).trim() : null,
                     receipt_date: targetReceiptDate || null,
-                    receipt_url: targetReceiptUrl || null
+                    receipt_url: targetReceiptUrl || null,
+                    client_ticket: ticket
                 })
             });
 

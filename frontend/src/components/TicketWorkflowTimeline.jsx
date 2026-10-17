@@ -66,11 +66,27 @@ export default function TicketWorkflowTimeline({
                 ? { action, ...noteOrData }
                 : { action, note: noteOrData || actionNote, reason: noteOrData || actionNote };
 
+            // Ensure ticket is passed in request so serverless lambda can self-heal if container restarted
+            const clientTicketHeader = ticket ? encodeURIComponent(JSON.stringify({
+                id: ticket.id,
+                ticket_no: ticket.ticket_no,
+                title: ticket.title,
+                description: ticket.description,
+                issue_type: ticket.issue_type,
+                location: ticket.location,
+                priority: ticket.priority,
+                status: ticket.status,
+                requester_name: ticket.requester_name,
+                requester_email: ticket.requester_email,
+                assigned_to: ticket.assigned_to
+            })) : '';
+
             const res = await fetch(`/api/tickets/${ticket.id}/action`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': token ? `Bearer ${token}` : ''
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-client-ticket': clientTicketHeader
                 },
                 body: JSON.stringify(reqBody)
             });
