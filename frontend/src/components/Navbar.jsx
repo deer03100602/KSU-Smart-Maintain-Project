@@ -244,21 +244,9 @@ export default function Navbar() {
                     </button>
                 </div>
 
-                <div className="role-switcher">
-                    <div className="role-switcher-label">สลับกลุ่มผู้ใช้งาน</div>
-                    {isRealAuth ? (
-                        <div style={{
-                            padding: '8px 12px',
-                            background: 'rgba(255,255,255,0.02)',
-                            borderRadius: '6px',
-                            fontSize: '0.8rem',
-                            color: 'var(--text-secondary)',
-                            border: '1px solid var(--border-color)',
-                            textAlign: 'center'
-                        }}>
-                            ใช้บัญชีจริง
-                        </div>
-                    ) : (
+                {!isGuest && !isRealAuth && (
+                    <div className="role-switcher">
+                        <div className="role-switcher-label">สลับกลุ่มผู้ใช้งาน</div>
                         <select
                             className="form-input form-select"
                             style={{
@@ -285,8 +273,8 @@ export default function Navbar() {
                                 </option>
                             ))}
                         </select>
-                    )}
-                </div>
+                    </div>
+                )}
 
                 <nav className="sidebar-nav">
                     {menuItems.map((item) => (

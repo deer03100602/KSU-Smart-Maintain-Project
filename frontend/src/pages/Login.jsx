@@ -253,62 +253,6 @@ export default function LoginPage() {
                     </div>
                 )}
 
-                {/* ── Role Preset Selection ── */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '0.6rem' }}>
-                        💡 เลือกบทบาทเพื่อเข้าสู่ระบบ (คลิกเพื่อใส่ข้อมูลตัวอย่าง):
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem' }}>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setEmail('student@ksu.ac.th');
-                                setPassword('123456');
-                                toast.info('เลือกบทบาท: นักศึกษา (Group A)');
-                            }}
-                            className="btn btn-ghost"
-                            style={{ fontSize: '0.78rem', padding: '6px 8px', textAlign: 'center', border: '1px solid var(--border-color)', borderRadius: '6px', color: '#60a5fa' }}
-                        >
-                            🎓 นักศึกษา
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setEmail('teacher@ksu.ac.th');
-                                setPassword('123456');
-                                toast.info('เลือกบทบาท: อาจารย์ (Group A)');
-                            }}
-                            className="btn btn-ghost"
-                            style={{ fontSize: '0.78rem', padding: '6px 8px', textAlign: 'center', border: '1px solid var(--border-color)', borderRadius: '6px', color: '#34d399' }}
-                        >
-                            👨‍🏫 อาจารย์
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setEmail('tech@ksu.ac.th');
-                                setPassword('123456');
-                                toast.info('เลือกบทบาท: ช่างเทคนิค (Group B)');
-                            }}
-                            className="btn btn-ghost"
-                            style={{ fontSize: '0.78rem', padding: '6px 8px', textAlign: 'center', border: '1px solid var(--border-color)', borderRadius: '6px', color: '#fbbf24' }}
-                        >
-                            🛠️ ช่างเทคนิค
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setEmail('admin@ksu.ac.th');
-                                setPassword('123456');
-                                toast.info('เลือกบทบาท: ผู้ดูแลระบบ (Admin)');
-                            }}
-                            className="btn btn-ghost"
-                            style={{ fontSize: '0.78rem', padding: '6px 8px', textAlign: 'center', border: '1px solid var(--border-color)', borderRadius: '6px', color: '#f87171' }}
-                        >
-                            🛡️ แอดมิน
-                        </button>
-                    </div>
-                </div>
 
                 <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                     <div className="form-group">
