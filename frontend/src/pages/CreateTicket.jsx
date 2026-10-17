@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from "react-router-dom";
 import { useApp } from '@/context/AppContext';
 import { PlusCircle, Info, User, Send, Loader, UploadCloud, FileText, X, Image as ImageIcon, Eye, ExternalLink, Download, Lock } from 'lucide-react';
-import { saveStoredTicket } from '@/lib/ticketStore';
+import { saveStoredTicket, getStoredTickets } from '@/lib/ticketStore';
 
 const formatFileSize = (bytes) => {
     if (!bytes || bytes === 0) return '';
@@ -221,10 +221,52 @@ export default function CreateTicketPage() {
                 finalDescription += '\n\n**ไฟล์แนบ:**\n' + attachments.map(a => `- [${a.name}](${a.url})`).join('\n');
             }
 
-            const res = await fetch('/api/tickets', {
+            // 1. Calculate sequential Ticket Number immediately from local store
+            const storedTickets = getStoredTickets();
+            const existingNums = new Set();
+            storedTickets.forEach(t => {
+                if (t.ticket_no) {
+                    const match = t.ticket_no.match(/TKT-(\d+)/i);
+                    if (match) existingNums.add(parseInt(match[1], 10));
+                }
+            });
+            let nextNum = 1;
+            while (existingNums.has(nextNum)) nextNum++;
+            const ticketNo = 'TKT-' + String(nextNum).padStart(2, '0');
+            const optimisticId = 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 9);
+            const nowIso = new Date().toISOString();
+
+            const newTicket = {
+                id: optimisticId,
+                ticket_no: ticketNo,
+                title: title.trim(),
+                description: finalDescription,
+                issue_type: issueType,
+                priority,
+                location: location.trim(),
+                status: 'Open',
+                requester_name: requesterName.trim() + (requesterGroup ? ` (${requesterGroup})` : ''),
+                requester_email: requesterEmail.trim(),
+                requester_group: requesterGroup,
+                created_at: nowIso,
+                updated_at: nowIso
+            };
+
+            // 2. Save IMMEDIATELY into persistent local store (ZERO WAIT TIME!)
+            saveStoredTicket(newTicket);
+            setUser(requesterName.trim(), requesterEmail.trim(), requesterGroup);
+
+            // 3. Instant feedback & direct navigation to newly created ticket!
+            toast.success(`🎉 แจ้งปัญหาสำเร็จ! ได้รับรหัส Ticket: ${ticketNo} เรียบร้อยแล้ว`);
+            router.push(`/tickets/${optimisticId}`);
+
+            // 4. Send to backend in background / fast non-blocking
+            fetch('/api/tickets', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    id: optimisticId,
+                    ticket_no: ticketNo,
                     title: title.trim(),
                     description: finalDescription,
                     issue_type: issueType,
@@ -234,56 +276,18 @@ export default function CreateTicketPage() {
                     requester_email: requesterEmail.trim(),
                     requester_group: requesterGroup
                 })
+            }).then(async res => {
+                if (res.ok) {
+                    const serverTicket = await res.json();
+                    saveStoredTicket(serverTicket);
+                }
+            }).catch(err => {
+                console.warn('Background ticket sync note:', err.message);
             });
 
-            if (res.ok) {
-                const ticket = await res.json();
-                
-                // Save immediately into persistent local store for serverless survival
-                saveStoredTicket(ticket);
-                
-                // Save user profile state for next time
-                setUser(requesterName.trim(), requesterEmail.trim(), requesterGroup);
-
-                // Reset form
-                setTitle('');
-                setDescription('');
-                setIssueType('');
-                setPriority('Medium');
-                setLocation('');
-                setAttachments([]);
-
-                // Display beautiful custom declarative Modal
-                confirm(
-                    '✅ แจ้งปัญหาสำเร็จ!',
-                    '',
-                    () => router.push(`/tickets/${ticket.id}`),
-                    {
-                        confirmText: 'ดูรายละเอียด Ticket',
-                        cancelText: 'แจ้งปัญหาเพิ่มเติม',
-                        onCancel: () => {},
-                        content: (
-                            <div className="success-ticket-info">
-                                <div className="ticket-id-display">
-                                    <span className="label">Ticket ID</span>
-                                    <span className="value">{ticket.ticket_no}</span>
-                                </div>
-                                <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)' }}>
-                                    ปัญหาของคุณถูกบันทึกเข้าระบบเรียบร้อยแล้ว<br />
-                                    คุณสามารถใช้เลข Ticket ID นี้ในการติดตามสถานะการดำเนินงานได้
-                                </p>
-                            </div>
-                        )
-                    }
-                );
-            } else {
-                const err = await res.json();
-                toast.error(`เกิดข้อผิดพลาด: ${err.error || 'ไม่สามารถสร้างตั๋วได้'}`);
-            }
         } catch (err) {
             console.error('Error submitting ticket:', err);
             toast.error('ไม่สามารถส่งคำขอได้ กรุณาลองใหม่อีกครั้ง');
-        } finally {
             setSubmitting(false);
         }
     };

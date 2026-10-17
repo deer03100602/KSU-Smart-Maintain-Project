@@ -13,18 +13,74 @@ import {
     Zap, Edit3, Wrench 
 } from 'lucide-react';
 import TicketCard from '@/components/TicketCard';
+import { getStoredTickets, mergeTicketsWithStorage, syncTicketsWithServer } from '@/lib/ticketStore';
 
 export default function HomePage() {
-    const [stats, setStats] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const buildInitialStats = (stored) => {
+        if (!Array.isArray(stored) || stored.length === 0) return null;
+        const byStatus = {
+            'Open': 0,
+            'In Progress': 0,
+            'Waiting for Information': 0,
+            'Resolved': 0,
+            'Closed': 0,
+            'Cancelled': 0
+        };
+        stored.forEach(t => {
+            if (byStatus[t.status] !== undefined) byStatus[t.status]++;
+        });
+        return {
+            total: stored.length,
+            byStatus,
+            recentTickets: stored.slice(0, 5)
+        };
+    };
+
+    const [stats, setStats] = useState(() => buildInitialStats(getStoredTickets()));
+    const [loading, setLoading] = useState(() => !getStoredTickets().length);
 
     useEffect(() => {
+        const refreshFromLocal = () => {
+            const stored = getStoredTickets();
+            const localStats = buildInitialStats(stored);
+            if (localStats) {
+                setStats(prev => ({
+                    ...(prev || {}),
+                    ...localStats,
+                    byStatus: { ...((prev && prev.byStatus) || {}), ...localStats.byStatus },
+                    recentTickets: localStats.recentTickets
+                }));
+                setLoading(false);
+            }
+        };
+
+        window.addEventListener('ksu_ticket_updated', refreshFromLocal);
+        window.addEventListener('ksu_ticket_deleted', refreshFromLocal);
+        window.addEventListener('ksu_tickets_resequenced', refreshFromLocal);
+
         async function fetchStats() {
             try {
                 const res = await fetch('/api/stats');
                 if (res.ok) {
                     const data = await res.json();
-                    setStats(data);
+                    const mergedRecent = mergeTicketsWithStorage(data.recentTickets || []);
+                    const allStored = getStoredTickets();
+                    const localStats = buildInitialStats(allStored);
+
+                    if (localStats) {
+                        setStats({
+                            ...data,
+                            total: Math.max(data.total || 0, allStored.length),
+                            byStatus: {
+                                ...(data.byStatus || {}),
+                                ...localStats.byStatus
+                            },
+                            recentTickets: mergedRecent.slice(0, 5)
+                        });
+                        syncTicketsWithServer(allStored).catch(() => {});
+                    } else {
+                        setStats(data);
+                    }
                 }
             } catch (e) {
                 console.error('Error fetching home stats:', e);
@@ -33,10 +89,16 @@ export default function HomePage() {
             }
         }
         fetchStats();
+
+        return () => {
+            window.removeEventListener('ksu_ticket_updated', refreshFromLocal);
+            window.removeEventListener('ksu_ticket_deleted', refreshFromLocal);
+            window.removeEventListener('ksu_tickets_resequenced', refreshFromLocal);
+        };
     }, []);
 
     const resolvedAndClosed = stats 
-        ? (stats.byStatus['Resolved'] || 0) + (stats.byStatus['Closed'] || 0)
+        ? ((stats.byStatus && stats.byStatus['Resolved']) || 0) + ((stats.byStatus && stats.byStatus['Closed']) || 0)
         : 0;
 
     return (

@@ -10,8 +10,6 @@ const EVIDENCES_KEY = 'ksu_evidences_store_v1';
 const DELETED_KEY = 'ksu_deleted_tickets_v1';
 const DEFAULT_MOCK_DELETED_IDS = [
     'tkt-ksu-001', 'tkt-ksu-002', 'tkt-ksu-003',
-    'tkt-001', 'tkt-002', 'tkt-003',
-    'TKT-001', 'TKT-002', 'TKT-003',
     'id-mv5j19jv-3b0qtw8', 'id-tkt-sample-002'
 ].map(s => s.toLowerCase());
 
@@ -199,36 +197,35 @@ export function resequenceStoredTickets(providedList = null) {
 
 export function mergeTicketsWithStorage(serverTickets = []) {
     const deleted = new Set(getDeletedTicketIds());
-    const validServerTickets = (serverTickets || []).filter(t => {
-        if (!t) return false;
-        const id = String(t.id || '').trim().toLowerCase();
-        const no = String(t.ticket_no || '').trim().toLowerCase();
-        return !deleted.has(id) && !deleted.has(no);
-    });
-
-    // If server returned a definitive array (even empty or with items):
-    // The server is the authority! We only keep local tickets that are genuinely newly created
-    // in this browser session (within last 30 seconds) that might not have reached server yet.
-    const localList = getStoredTickets();
     const map = new Map();
 
-    validServerTickets.forEach(t => {
-        const key = t.id || t.ticket_no;
-        if (key) map.set(key, t);
+    // 1. First populate all valid local tickets (guaranteed persistence across Ctrl+R & serverless cold boots)
+    const localList = getStoredTickets();
+    localList.forEach(t => {
+        if (!t) return;
+        const id = String(t.id || '').trim().toLowerCase();
+        const no = String(t.ticket_no || '').trim().toLowerCase();
+        if (!deleted.has(id) && !deleted.has(no)) {
+            const key = t.id || t.ticket_no;
+            if (key) map.set(key, t);
+        }
     });
 
-    const now = Date.now();
-    localList.forEach(t => {
-        const key = t.id || t.ticket_no;
-        if (!key) return;
-        const createdMs = new Date(t.created_at || 0).getTime();
-        const isVeryRecent = (now - createdMs) < 30000; // 30 seconds
-        if (!map.has(key) && isVeryRecent) {
-            map.set(key, t);
-        } else if (map.has(key)) {
-            const s = map.get(key);
-            if (new Date(t.updated_at || 0) > new Date(s.updated_at || 0)) {
-                map.set(key, { ...s, ...t });
+    // 2. Merge server tickets (preserving local tickets and applying newer updates from server)
+    (serverTickets || []).forEach(t => {
+        if (!t) return;
+        const id = String(t.id || '').trim().toLowerCase();
+        const no = String(t.ticket_no || '').trim().toLowerCase();
+        if (!deleted.has(id) && !deleted.has(no)) {
+            const key = t.id || t.ticket_no;
+            if (!key) return;
+            if (!map.has(key)) {
+                map.set(key, t);
+            } else {
+                const localT = map.get(key);
+                if (new Date(t.updated_at || 0) >= new Date(localT.updated_at || 0)) {
+                    map.set(key, { ...localT, ...t });
+                }
             }
         }
     });

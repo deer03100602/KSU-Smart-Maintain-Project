@@ -1221,15 +1221,24 @@ app.post('/api/tickets', async (req, res) => {
         while (existingNums.has(nextNum)) {
             nextNum++;
         }
-        const ticketNo = 'TKT-' + String(nextNum).padStart(2, '0');
+        const ticketNo = body.ticket_no || ('TKT-' + String(nextNum).padStart(2, '0'));
 
         const now = new Date();
-        const id = 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 9);
+        const id = body.id || ('id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 9));
 
         // Format requester name with group if needed
         const reqName = (/\((นักศึกษา|อาจารย์|เจ้าหน้าที่|เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์|ผู้ดูแลระบบ)\)$/.test(body.requester_name) || !body.requester_group)
             ? body.requester_name
             : `${body.requester_name} (${body.requester_group})`;
+
+        // Unmark from deletedTicketIds if needed
+        if (localDb && Array.isArray(localDb.deletedTicketIds)) {
+            localDb.deletedTicketIds = localDb.deletedTicketIds.filter(d => 
+                String(d).toLowerCase() !== String(id).toLowerCase() && 
+                String(d).toLowerCase() !== String(ticketNo).toLowerCase()
+            );
+            saveLocalDb(localDb);
+        }
 
         const newTicket = await prisma.ticket.create({
             data: {
@@ -1251,8 +1260,8 @@ app.post('/api/tickets', async (req, res) => {
             }
         });
 
-        // Add Initial Timeline Event
-        await addTimelineEvent({
+        // Add Initial Timeline Event asynchronously (fast non-blocking)
+        addTimelineEvent({
             ticket_id: newTicket.id,
             ticket_no: newTicket.ticket_no,
             action: 'CREATED',

@@ -27,8 +27,8 @@ const THAI_MONTHS = [
 
 export default function TicketListPage() {
     const [issueTypes, setIssueTypes] = useState([]);
-    const [tickets, setTickets] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [tickets, setTickets] = useState(() => getStoredTickets());
+    const [loading, setLoading] = useState(() => !getStoredTickets().length);
 
     // Fetch issue types on mount
     useEffect(() => {

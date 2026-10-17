@@ -16,9 +16,8 @@ import {
     Calendar, Save, MessageSquare, ClipboardCheck, Tag, Info, UserCheck, Settings,
     FileText, Printer, RefreshCw
 } from 'lucide-react';
-import { timeAgo } from '@/components/TicketCard';
 import { parseDescriptionAndAttachments, isImageFile } from '@/lib/utils';
-import { removeStoredTicket, resequenceStoredTickets } from '@/lib/ticketStore';
+import { removeStoredTicket, resequenceStoredTickets, getStoredTickets, mergeTicketsWithStorage, syncTicketsWithServer } from '@/lib/ticketStore';
 // DEFAULT_ISSUE_TYPES is loaded dynamically
 
 const STATUSES = {
@@ -67,10 +66,10 @@ export default function AdminManagementPage() {
     const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
     const { role, toast, confirm } = useApp();
 
-    const [tickets, setTickets] = useState([]);
+    const [tickets, setTickets] = useState(() => getStoredTickets());
     const [issueTypes, setIssueTypes] = useState([]);
     const [staffMembers, setStaffMembers] = useState([]);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => !getStoredTickets().length);
     const [selectedIds, setSelectedIds] = useState([]);
 
     useEffect(() => {
@@ -175,16 +174,21 @@ export default function AdminManagementPage() {
             ]);
             if (ticketsRes.ok) {
                 const data = await ticketsRes.json();
-                setTickets(data);
+                const merged = mergeTicketsWithStorage(data);
+                setTickets(merged);
+                syncTicketsWithServer(merged).catch(() => {});
                 
                 // If currently viewing a ticket, sync it
                 if (viewingTicket) {
-                    const updated = data.find(t => t.id === viewingTicket.id);
+                    const updated = merged.find(t => t.id === viewingTicket.id);
                     if (updated) {
                         setViewingTicket(updated);
                         setResolutionNote(updated.resolution_note || '');
                     }
                 }
+            } else {
+                const stored = getStoredTickets();
+                if (stored.length > 0) setTickets(stored);
             }
             if (typesRes.ok) {
                 const typesData = await typesRes.json();
@@ -192,7 +196,12 @@ export default function AdminManagementPage() {
             }
         } catch (e) {
             console.error('Error fetching admin data:', e);
-            toast.error('ไม่สามารถโหลดข้อมูลได้');
+            const stored = getStoredTickets();
+            if (stored.length > 0) {
+                setTickets(stored);
+            } else {
+                toast.error('ไม่สามารถโหลดข้อมูลได้');
+            }
         } finally {
             setLoading(false);
         }
