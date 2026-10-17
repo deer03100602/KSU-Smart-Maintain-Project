@@ -25,6 +25,11 @@ services:
     environment:
       - PORT=5000
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/university_maintenance?schema=public
+      - LINE_NOTIFY_ENABLED=${LINE_NOTIFY_ENABLED:-true}
+      - LINE_CHANNEL_ACCESS_TOKEN=${LINE_CHANNEL_ACCESS_TOKEN:-}
+      - LINE_CHANNEL_SECRET=${LINE_CHANNEL_SECRET:-}
+      - LINE_TARGET_ID=${LINE_TARGET_ID:-}
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:5173}
     depends_on:
       - db
     restart: unless-stopped

@@ -14,6 +14,16 @@ const {
     notifyDiscordSystemError,
     notifyDiscordActivity 
 } = require('./discordService');
+const {
+    getLineConfig,
+    getPublicLineStatus,
+    getLineLogs,
+    getLineContacts,
+    testLineNotification,
+    verifyWebhookSignature,
+    processWebhookEvents,
+    updateStoredSettings
+} = require('./lineService');
 
 const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 const baseDataDir = isServerless ? '/tmp' : path.join(__dirname, 'data');
@@ -483,7 +493,12 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'ksu_smart_maintain_jwt_secret_2026';
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ 
+    limit: '50mb',
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Public static directory for uploads
@@ -2445,13 +2460,117 @@ app.post('/api/settings', (req, res) => {
             emailjs_template_id: body.emailjs_template_id !== undefined ? String(body.emailjs_template_id).trim() : (prev.emailjs_template_id || ''),
             emailjs_public_key: body.emailjs_public_key !== undefined ? String(body.emailjs_public_key).trim() : (prev.emailjs_public_key || ''),
             emailjs_private_key: body.emailjs_private_key !== undefined ? String(body.emailjs_private_key).trim() : (prev.emailjs_private_key || ''),
-            technicians: Array.isArray(body.technicians) ? body.technicians : (prev.technicians || [])
+            technicians: Array.isArray(body.technicians) ? body.technicians : (prev.technicians || []),
+            line_channel_access_token: body.line_channel_access_token !== undefined && !body.line_channel_access_token.includes('...') ? String(body.line_channel_access_token).trim() : (prev.line_channel_access_token || ''),
+            line_channel_secret: body.line_channel_secret !== undefined && !body.line_channel_secret.includes('...') ? String(body.line_channel_secret).trim() : (prev.line_channel_secret || ''),
+            line_target_id: body.line_target_id !== undefined ? String(body.line_target_id).trim() : (prev.line_target_id || ''),
+            line_notify_enabled: body.line_notify_enabled !== undefined ? Boolean(body.line_notify_enabled) : (prev.line_notify_enabled !== false),
+            app_base_url: body.app_base_url !== undefined ? String(body.app_base_url).trim() : (prev.app_base_url || 'http://localhost:5173')
         };
         fs.writeFileSync(settingsPath, JSON.stringify(cleanSettings, null, 2), 'utf8');
         res.json({ success: true, settings: cleanSettings });
     } catch (error) {
         console.error('Error saving settings:', error);
         res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// ============================================================
+// LINE Messaging API Endpoints
+// ============================================================
+
+// 1. Webhook endpoint for LINE platform callbacks (Group/User Events)
+app.post('/api/line/webhook', async (req, res) => {
+    try {
+        const signature = req.headers['x-line-signature'];
+        const config = getLineConfig();
+
+        // Verify HMAC-SHA256 signature if channel secret is provided
+        if (config.secret && signature) {
+            const isValid = verifyWebhookSignature(req.rawBody, signature, config.secret);
+            if (!isValid) {
+                console.warn('⚠️ LINE Webhook signature validation failed.');
+                return res.status(403).json({ error: 'Invalid LINE signature' });
+            }
+        }
+
+        const events = req.body?.events || [];
+        const processed = await processWebhookEvents(events);
+        res.status(200).json({ success: true, count: events.length, processed });
+    } catch (err) {
+        console.error('❌ LINE Webhook Error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. Get LINE status & health (Masked token, no secret leakage)
+app.get('/api/line/status', (req, res) => {
+    try {
+        const status = getPublicLineStatus();
+        res.json(status);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. Test LINE notification
+app.post('/api/line/test', async (req, res) => {
+    try {
+        const { targetId, message } = req.body || {};
+        const result = await testLineNotification(targetId, message);
+        res.json(result);
+    } catch (err) {
+        console.error('❌ LINE test failed:', err.message);
+        res.status(err.statusCode || 400).json({ error: err.message, details: err.details || [] });
+    }
+});
+
+// 4. Get recent delivery logs
+app.get('/api/line/logs', (req, res) => {
+    try {
+        const limit = req.query.limit ? parseInt(req.query.limit) : 50;
+        const logs = getLineLogs(limit);
+        res.json(logs);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 5. Get detected contacts / groups
+app.get('/api/line/contacts', (req, res) => {
+    try {
+        const contacts = getLineContacts();
+        res.json(contacts);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 6. Update LINE settings directly
+app.post('/api/line/settings', (req, res) => {
+    try {
+        const { channelAccessToken, channelSecret, targetId, notifyEnabled, baseUrl } = req.body || {};
+        const updates = {};
+        if (channelAccessToken !== undefined && !channelAccessToken.includes('...')) {
+            updates.line_channel_access_token = String(channelAccessToken).trim();
+        }
+        if (channelSecret !== undefined && !channelSecret.includes('...')) {
+            updates.line_channel_secret = String(channelSecret).trim();
+        }
+        if (targetId !== undefined) {
+            updates.line_target_id = String(targetId).trim();
+        }
+        if (notifyEnabled !== undefined) {
+            updates.line_notify_enabled = Boolean(notifyEnabled);
+        }
+        if (baseUrl !== undefined) {
+            updates.app_base_url = String(baseUrl).trim();
+        }
+
+        updateStoredSettings(updates);
+        res.json({ success: true, status: getPublicLineStatus() });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 

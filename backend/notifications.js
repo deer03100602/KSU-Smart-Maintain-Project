@@ -693,7 +693,7 @@ async function sendViaDiscord(webhookUrl, ticket, eventType = 'CREATED') {
 // Master function to notify Admins, Staff, Central Mail, and Requester
 async function notifyTicketEvent(ticket, eventType = 'CREATED') {
     const settings = getSettings();
-    const results = { email: false, discord: false, errors: [] };
+    const results = { email: false, discord: false, line: false, errors: [] };
 
     // 1. Extract attachments and inline images
     const parsedAttachments = extractAttachments(ticket.description);
@@ -838,6 +838,20 @@ async function notifyTicketEvent(ticket, eventType = 'CREATED') {
         } catch (dcErr) {
             results.errors.push(`Discord: ${dcErr.message}`);
         }
+    }
+
+    // 6. Send via LINE Messaging API (LINE Official Account)
+    try {
+        const { sendLineTicketNotification } = require('./lineService');
+        const lineResult = await sendLineTicketNotification(ticket, eventType);
+        if (lineResult && lineResult.success) {
+            results.line = true;
+        } else if (lineResult && lineResult.error) {
+            results.errors.push(`LINE: ${lineResult.error}`);
+        }
+    } catch (lineErr) {
+        console.warn('⚠️ LINE notification trigger error:', lineErr.message);
+        results.errors.push(`LINE: ${lineErr.message}`);
     }
 
     // Keep log of notification delivery

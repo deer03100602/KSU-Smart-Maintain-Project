@@ -32,6 +32,8 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 backend/data/discord_logs.json
 backend/data/email_logs.json
+backend/data/line_logs.json
+backend/data/line_contacts.json
 
 # Local zip packages
 *.zip
