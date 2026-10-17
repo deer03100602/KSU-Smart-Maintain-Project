@@ -216,18 +216,7 @@ export function getStoredTickets() {
     if (typeof window === 'undefined') return [];
     try {
         const raw = localStorage.getItem(TICKETS_KEY);
-        if (!raw) {
-            // First time load: only seed if storage key has never been initialized
-            const hasInit = localStorage.getItem('ksu_client_storage_initialized');
-            if (!hasInit) {
-                try {
-                    localStorage.setItem('ksu_client_storage_initialized', 'true');
-                    localStorage.setItem(TICKETS_KEY, JSON.stringify(INITIAL_DEMO_TICKETS));
-                } catch (e) {}
-                return INITIAL_DEMO_TICKETS;
-            }
-            return [];
-        }
+        if (!raw) return [];
         const parsed = JSON.parse(raw);
         if (!Array.isArray(parsed) || parsed.length === 0) {
             return [];

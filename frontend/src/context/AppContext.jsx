@@ -63,6 +63,14 @@ export function AppProvider({ children }) {
 
     const loadSimulatedUser = () => {
         try {
+            // Require active session to restore login; otherwise strictly default to Guest Mode
+            const isSessionActive = typeof window !== 'undefined' ? sessionStorage.getItem('helpdesk_session_active') === 'true' : false;
+            if (!isSessionActive) {
+                setUserState(null);
+                setRoleState('guest');
+                return;
+            }
+
             const storedUser = typeof window !== 'undefined' ? localStorage.getItem('helpdesk_current_user') : null;
             if (storedUser) {
                 const parsed = JSON.parse(storedUser);

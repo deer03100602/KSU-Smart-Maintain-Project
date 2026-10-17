@@ -59,16 +59,16 @@ export default function CreateTicketPage() {
     const [issueType, setIssueType] = useState('');
     const [priority, setPriority] = useState('Medium');
     const [location, setLocation] = useState('');
-    const [requesterName, setRequesterName] = useState(user.name || 'นักศึกษา ทดสอบ');
-    const [requesterEmail, setRequesterEmail] = useState(user.email || 'student@example.com');
-    const [requesterGroup, setRequesterGroup] = useState(user.group || 'นักศึกษา');
+    const [requesterName, setRequesterName] = useState(user?.name || '');
+    const [requesterEmail, setRequesterEmail] = useState(user?.email || '');
+    const [requesterGroup, setRequesterGroup] = useState(user?.group || 'นักศึกษา');
     const [submitting, setSubmitting] = useState(false);
 
     // Sync state if simulated user profile loads later
     useEffect(() => {
-        if (user.name) setRequesterName(user.name);
-        if (user.email) setRequesterEmail(user.email);
-        if (user.group) setRequesterGroup(user.group);
+        if (user?.name) setRequesterName(user.name);
+        if (user?.email) setRequesterEmail(user.email);
+        if (user?.group) setRequesterGroup(user.group);
     }, [user]);
 
     // Handle File Dropzone & Selection

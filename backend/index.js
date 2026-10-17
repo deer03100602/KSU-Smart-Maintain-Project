@@ -89,21 +89,7 @@ function getLocalDb() {
             db.deletedTicketIds = db.deletedTicketIds || [];
             const deletedSet = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
 
-            // Auto-seed with master university dataset ONLY IF DB IS UNINITIALIZED (first boot ever)
-            if (!db.initialized && db.tickets.length === 0 && Array.isArray(SEED_TICKETS) && SEED_TICKETS.length > 0) {
-                const seedIds = new Set(SEED_TICKETS.map(t => String(t.id).toLowerCase()));
-                const seedNos = new Set(SEED_TICKETS.map(t => String(t.ticket_no).toLowerCase()));
-                // Clean deletedTicketIds from seed IDs
-                db.deletedTicketIds = (db.deletedTicketIds || []).filter(d => !seedIds.has(String(d).toLowerCase()) && !seedNos.has(String(d).toLowerCase()));
-                db.tickets = JSON.parse(JSON.stringify(SEED_TICKETS));
-                if (!db.expenses || db.expenses.length === 0) db.expenses = JSON.parse(JSON.stringify(SEED_EXPENSES || []));
-                if (!db.timelines || db.timelines.length === 0) db.timelines = JSON.parse(JSON.stringify(SEED_TIMELINES || []));
-                db.counter = Math.max(db.counter || 0, SEED_TICKETS.length);
-                db.initialized = true;
-                try {
-                    fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2), 'utf8');
-                } catch (e) {}
-            }
+            db.initialized = true;
 
             // Always ensure deleted tickets are filtered out
             const activeDeleted = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
@@ -913,15 +899,9 @@ async function initDatabase() {
                 console.log('✅ Mock tickets (TKT-001, TKT-002) purged from PostgreSQL.');
             } catch (pErr) {
                 console.warn('Prisma mock ticket purge note:', pErr.message);
-            }
         }
-
-        // Auto-seed demo dataset if database has 0 tickets
-        await ensureDatabaseSeeded();
     } catch (err) {
         console.warn('ℹ️ PostgreSQL not immediately ready, running in resilient mode:', err.message);
-        // Seed JSON store anyway
-        await ensureDatabaseSeeded();
     }
 }
 
@@ -931,7 +911,7 @@ async function initDatabase() {
 async function ensureDatabaseSeeded(force = false) {
     try {
         const db = getLocalDb();
-        const needsSeed = force || (!db.initialized);
+        const needsSeed = force;
 
         if (needsSeed) {
             console.log('🌱 Seeding JSON store with master KSU demo dataset (6 tickets)...');
