@@ -71,12 +71,13 @@ export default function AdminSettingsPage() {
         }
     }, [role]);
 
-    const fetchLineData = async () => {
+    const fetchLineData = async (showToast = false) => {
+        setLoadingLineLogs(true);
         try {
             const [statusRes, contactsRes, logsRes] = await Promise.all([
                 fetch('/api/line/status'),
                 fetch('/api/line/contacts'),
-                fetch('/api/line/logs?limit=15')
+                fetch('/api/line/logs?limit=25')
             ]);
             if (statusRes.ok) {
                 const s = await statusRes.json();
@@ -84,11 +85,33 @@ export default function AdminSettingsPage() {
                 if (s.targetId && !lineTargetId) setLineTargetId(s.targetId);
                 if (!testLineTarget) setTestLineTarget(s.targetId || '');
             }
-            if (contactsRes.ok) setLineContacts(await contactsRes.json());
-            if (logsRes.ok) setLineLogs(await logsRes.json());
+            if (contactsRes.ok) {
+                const c = await contactsRes.json();
+                setLineContacts(Array.isArray(c) ? c : []);
+            }
+            if (logsRes.ok) {
+                const l = await logsRes.json();
+                setLineLogs(Array.isArray(l) ? l : []);
+            }
+            if (showToast) {
+                toast.success('รีเฟรชข้อมูลสถานะ LINE และประวัติสำเร็จแล้ว');
+            }
         } catch (e) {
             console.warn('LINE status fetch error:', e);
+            if (showToast) {
+                toast.error('ไม่สามารถรีเฟรชข้อมูลได้: ' + (e.message || 'เกิดข้อผิดพลาด'));
+            }
+        } finally {
+            setTimeout(() => setLoadingLineLogs(false), 500);
         }
+    };
+
+    const handleRefreshLine = async (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        await fetchLineData(true);
     };
 
     // Fetch settings
@@ -794,13 +817,27 @@ export default function AdminSettingsPage() {
                                 <button
                                     type="button"
                                     className="btn btn-secondary"
-                                    onClick={fetchLineData}
+                                    onClick={handleRefreshLine}
                                     disabled={loadingLineLogs}
-                                    style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                                    title="รีเฟรชข้อมูลสถานะและประวัติ"
+                                    style={{
+                                        padding: '0.45rem 1rem',
+                                        fontSize: '0.85rem',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        cursor: loadingLineLogs ? 'wait' : 'pointer',
+                                        border: '1px solid var(--border-color)',
+                                        borderRadius: 8,
+                                        userSelect: 'none',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                    title="คลิกเพื่อรีเฟรชข้อมูลสถานะและประวัติ LINE"
                                 >
-                                    <RefreshCw style={{ width: 14, height: 14, animation: loadingLineLogs ? 'spin 1s linear infinite' : 'none' }} />
-                                    รีเฟรช
+                                    <RefreshCw
+                                        style={{ width: 14, height: 14 }}
+                                        className={loadingLineLogs ? 'animate-spin' : ''}
+                                    />
+                                    <span>{loadingLineLogs ? 'กำลังรีเฟรช...' : 'รีเฟรช'}</span>
                                 </button>
                                 <button
                                     type="button"
@@ -836,10 +873,25 @@ export default function AdminSettingsPage() {
                                 </span>
                                 <button
                                     type="button"
-                                    onClick={fetchLineData}
-                                    style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                    onClick={handleRefreshLine}
+                                    disabled={loadingLineLogs}
+                                    style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#60a5fa',
+                                        cursor: loadingLineLogs ? 'wait' : 'pointer',
+                                        fontSize: '0.78rem',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 4
+                                    }}
+                                    title="คลิกเพื่อโหลดประวัติล่าสุดใหม่"
                                 >
-                                    <RefreshCw style={{ width: 12, height: 12 }} /> โหลดใหม่
+                                    <RefreshCw
+                                        style={{ width: 12, height: 12 }}
+                                        className={loadingLineLogs ? 'animate-spin' : ''}
+                                    />
+                                    <span>{loadingLineLogs ? 'กำลังโหลด...' : 'โหลดใหม่'}</span>
                                 </button>
                             </div>
                             <div style={{ maxHeight: 220, overflowY: 'auto', borderRadius: 6, border: '1px solid var(--border-color)', background: 'rgba(0,0,0,0.2)' }}>
