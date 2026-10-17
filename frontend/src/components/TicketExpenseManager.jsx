@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
     DollarSign, Plus, Check, X, Edit3, Trash2, AlertCircle, FileText, 
-    Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw 
+    Upload, Sparkles, CheckCircle2, AlertTriangle, Clock, RefreshCw, Zap 
 } from 'lucide-react';
 import { saveStoredExpenses } from '@/lib/ticketStore';
 import { useApp } from '@/context/AppContext';
@@ -27,7 +27,7 @@ export default function TicketExpenseManager({
     const [ocrWarning, setOcrWarning] = useState('');
 
     // Form state
-    const [category, setCategory] = useState('อุปกรณ์');
+    const [category, setCategory] = useState('ค่าวัสดุและอุปกรณ์');
     const [description, setDescription] = useState('');
     const [quantity, setQuantity] = useState(1);
     const [unit, setUnit] = useState('ชิ้น');
@@ -65,6 +65,7 @@ export default function TicketExpenseManager({
         const file = e.target.files?.[0];
         if (!file) return;
 
+        setShowAddModal(true);
         setOcrLoading(true);
         setOcrWarning('');
         const formData = new FormData();
@@ -79,26 +80,43 @@ export default function TicketExpenseManager({
             if (res.ok && data.success) {
                 const parsed = data.data;
                 setOcrResult(parsed);
+
+                // Auto-fill all fields with extracted values
+                const detectedDesc = parsed.description || parsed.primary_item?.name || parsed.items?.[0]?.name || '';
+                if (detectedDesc) {
+                    setDescription(detectedDesc);
+                } else if (parsed.vendor_name) {
+                    setDescription(`วัสดุและอุปกรณ์ (${parsed.vendor_name})`);
+                }
+
+                const detectedCat = parsed.category || parsed.primary_item?.category || parsed.items?.[0]?.category || 'ค่าวัสดุและอุปกรณ์';
+                setCategory(detectedCat);
+
+                const detectedQty = parsed.quantity || parsed.primary_item?.quantity || 1;
+                setQuantity(detectedQty);
+
+                const detectedUnit = parsed.unit || parsed.primary_item?.unit || 'ชิ้น';
+                setUnit(detectedUnit);
+
+                const detectedUnitPrice = parsed.unit_price || parsed.primary_item?.unit_price || (parsed.net_amount ? (parsed.net_amount / detectedQty) : '');
+                if (detectedUnitPrice) {
+                    setUnitPrice(detectedUnitPrice);
+                }
+
+                if (parsed.discount !== undefined) setDiscount(parsed.discount);
+                setTaxPercent(parsed.tax_amount > 0 ? 7 : 0);
+
                 if (parsed.vendor_name) setVendorName(parsed.vendor_name);
                 if (parsed.receipt_no) setReceiptNo(parsed.receipt_no);
                 if (parsed.receipt_date) setReceiptDate(parsed.receipt_date);
-                if (parsed.net_amount) {
-                    setUnitPrice(parsed.net_amount);
-                    setQuantity(1);
-                    setTaxPercent(parsed.tax_amount > 0 ? 7 : 0);
-                }
                 if (parsed.file_url) setReceiptUrl(parsed.file_url);
-
-                if (!description && parsed.vendor_name) {
-                    setDescription(`ค่าวัสดุ/อุปกรณ์ (${parsed.vendor_name})`);
-                }
 
                 if (parsed.ocr_note) {
                     setOcrWarning(parsed.ocr_note);
                 }
 
                 if (appContext?.toast?.success) {
-                    appContext.toast.success('สแกนและดึงข้อมูลใบเสร็จอัตโนมัติสำเร็จ');
+                    appContext.toast.success('🎉 สแกนใบเสร็จและกรอกข้อมูลอุปกรณ์อัตโนมัติเรียบร้อยแล้ว!');
                 }
 
                 // Validation alert: check duplicate receipt
@@ -118,14 +136,27 @@ export default function TicketExpenseManager({
         }
     };
 
-    const handleCreateExpense = async (e) => {
-        e.preventDefault();
+    const handleCreateExpense = async (e, overrideData = null) => {
+        if (e && e.preventDefault) e.preventDefault();
         setFormError('');
-        if (!description.trim()) {
-            setFormError('กรุณาระบุรายละเอียดรายการ');
+
+        const targetDesc = overrideData?.description ?? description;
+        const targetCategory = overrideData?.category ?? category;
+        const targetQuantity = parseFloat(overrideData?.quantity ?? quantity) || 1;
+        const targetUnit = overrideData?.unit ?? unit;
+        const targetUnitPrice = parseFloat(overrideData?.unit_price ?? unitPrice) || 0;
+        const targetDiscount = parseFloat(overrideData?.discount ?? discount) || 0;
+        const targetTaxPercent = parseFloat(overrideData?.tax_percent ?? taxPercent) || 0;
+        const targetReceiptNo = overrideData?.receipt_no ?? receiptNo;
+        const targetVendorName = overrideData?.vendor_name ?? vendorName;
+        const targetReceiptDate = overrideData?.receipt_date ?? receiptDate;
+        const targetReceiptUrl = overrideData?.receipt_url ?? receiptUrl;
+
+        if (!String(targetDesc || '').trim()) {
+            setFormError('กรุณาระบุรายละเอียดรายการอุปกรณ์');
             return;
         }
-        if (q <= 0 || p <= 0) {
+        if (targetQuantity <= 0 || targetUnitPrice <= 0) {
             setFormError('จำนวนและราคาต่อหน่วยต้องมากกว่า 0');
             return;
         }
@@ -140,17 +171,17 @@ export default function TicketExpenseManager({
                     'Authorization': token ? `Bearer ${token}` : ''
                 },
                 body: JSON.stringify({
-                    category,
-                    description: description.trim(),
-                    quantity: q,
-                    unit: unit.trim() || 'ชิ้น',
-                    unit_price: p,
-                    discount: disc,
-                    tax_percent: parseFloat(taxPercent) || 0,
-                    receipt_no: receiptNo.trim() || null,
-                    vendor_name: vendorName.trim() || null,
-                    receipt_date: receiptDate || null,
-                    receipt_url: receiptUrl || null
+                    category: targetCategory,
+                    description: String(targetDesc).trim(),
+                    quantity: targetQuantity,
+                    unit: String(targetUnit).trim() || 'ชิ้น',
+                    unit_price: targetUnitPrice,
+                    discount: targetDiscount,
+                    tax_percent: targetTaxPercent,
+                    receipt_no: targetReceiptNo ? String(targetReceiptNo).trim() : null,
+                    vendor_name: targetVendorName ? String(targetVendorName).trim() : null,
+                    receipt_date: targetReceiptDate || null,
+                    receipt_url: targetReceiptUrl || null
                 })
             });
 
@@ -158,12 +189,77 @@ export default function TicketExpenseManager({
             if (res.ok) {
                 setShowAddModal(false);
                 resetForm();
+                if (appContext?.toast?.success) {
+                    appContext.toast.success(`🎉 บันทึกรายการ "${targetDesc}" ขึ้นรายการอุปกรณ์เรียบร้อยแล้ว!`);
+                }
                 if (onExpenseUpdated) onExpenseUpdated();
             } else {
                 setFormError(data.error || 'เกิดข้อผิดพลาดในการบันทึกงบประมาณ');
             }
         } catch (err) {
             setFormError('เชื่อมต่อเซิร์ฟเวอร์ล้มเหลว');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleInstantSaveOcrItem = async (customItem = null) => {
+        if (customItem) {
+            await handleCreateExpense(null, {
+                category: customItem.category || category,
+                description: customItem.name || customItem.description || description,
+                quantity: customItem.quantity || quantity,
+                unit: customItem.unit || unit,
+                unit_price: customItem.unit_price || unitPrice,
+                discount,
+                tax_percent: taxPercent,
+                receipt_no: receiptNo,
+                vendor_name: vendorName,
+                receipt_date: receiptDate,
+                receipt_url: receiptUrl
+            });
+        } else {
+            await handleCreateExpense(null);
+        }
+    };
+
+    const handleSaveAllOcrItems = async () => {
+        if (!ocrResult?.items || ocrResult.items.length === 0) return;
+        setSubmitting(true);
+        try {
+            const token = localStorage.getItem('helpdesk_token');
+            for (const it of ocrResult.items) {
+                const itQty = parseFloat(it.quantity) || 1;
+                const itPrice = parseFloat(it.unit_price) || 0;
+                await fetch(`/api/tickets/${ticket.id}/expenses`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({
+                        category: it.category || category,
+                        description: String(it.name || '').trim(),
+                        quantity: itQty,
+                        unit: it.unit || 'ชิ้น',
+                        unit_price: itPrice,
+                        discount: 0,
+                        tax_percent: parseFloat(taxPercent) || 0,
+                        receipt_no: receiptNo ? String(receiptNo).trim() : null,
+                        vendor_name: vendorName ? String(vendorName).trim() : null,
+                        receipt_date: receiptDate || null,
+                        receipt_url: receiptUrl || null
+                    })
+                });
+            }
+            setShowAddModal(false);
+            resetForm();
+            if (appContext?.toast?.success) {
+                appContext.toast.success(`🎉 บันทึกรายการอุปกรณ์ทั้งหมด ${ocrResult.items.length} รายการขึ้นระบบเรียบร้อยแล้ว!`);
+            }
+            if (onExpenseUpdated) onExpenseUpdated();
+        } catch (err) {
+            setFormError('บันทึกรายการทั้งหมดล้มเหลว: ' + err.message);
         } finally {
             setSubmitting(false);
         }
@@ -299,13 +395,41 @@ export default function TicketExpenseManager({
                     <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600 }}>ระบบบริหารงบประมาณและบันทึกค่าใช้จ่าย (Budget & Expenses)</h3>
                 </div>
                 {canManageExpense && (
-                    <button 
-                        className="btn btn-primary btn-sm"
-                        onClick={() => { resetForm(); setShowAddModal(true); }}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                    >
-                        <Plus style={{ width: 15, height: 15 }} /> บันทึกค่าใช้จ่าย / สแกนใบเสร็จ
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <label 
+                            className="btn btn-secondary btn-sm"
+                            style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '6px', 
+                                cursor: 'pointer',
+                                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(34, 197, 94, 0.2) 100%)',
+                                borderColor: 'rgba(59, 130, 246, 0.4)',
+                                color: '#60a5fa',
+                                fontWeight: 600
+                            }}
+                            title="อัปโหลดใบเสร็จเพื่อให้ระบบอ่านและกรอกข้อมูลอุปกรณ์อัตโนมัติ"
+                        >
+                            <Sparkles style={{ width: 15, height: 15, color: '#38bdf8' }} />
+                            ⚡ สแกนใบเสร็จ (กรอกให้อัตโนมัติ)
+                            <input 
+                                type="file" 
+                                accept="image/png, image/jpeg, image/jpg, application/pdf" 
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                    resetForm();
+                                    handleOcrUpload(e);
+                                }}
+                            />
+                        </label>
+                        <button 
+                            className="btn btn-primary btn-sm"
+                            onClick={() => { resetForm(); setShowAddModal(true); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                            <Plus style={{ width: 15, height: 15 }} /> บันทึกค่าใช้จ่าย
+                        </button>
+                    </div>
                 )}
             </div>
 
@@ -532,20 +656,33 @@ export default function TicketExpenseManager({
                             <div style={{
                                 border: '2px dashed rgba(59, 130, 246, 0.4)',
                                 background: 'rgba(59, 130, 246, 0.05)',
-                                borderRadius: '8px',
-                                padding: '1rem',
+                                borderRadius: '12px',
+                                padding: '1.25rem',
                                 textAlign: 'center',
                                 marginBottom: '1.25rem'
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', marginBottom: '6px' }}>
-                                    <Sparkles style={{ width: 18, height: 18, color: '#60a5fa' }} />
-                                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>ระบบ OCR สแกนใบเสร็จอัตโนมัติ (AI Receipt Scanner)</span>
+                                    <Sparkles style={{ width: 20, height: 20, color: '#60a5fa' }} />
+                                    <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>ระบบ AI สแกนใบเสร็จ & กรอกข้อมูลอุปกรณ์อัตโนมัติ</span>
                                 </div>
-                                <p style={{ fontSize: '0.785rem', color: 'var(--text-secondary)', margin: '0 0 10px 0' }}>
-                                    รองรับไฟล์ภาพ JPG, PNG และ PDF — สกัดชื่อร้านค้า วันที่ เลขที่ใบเสร็จ และยอดรวมสุทธิอัตโนมัติ
+                                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 12px 0' }}>
+                                    อัปโหลดภาพใบเสร็จหรือบิลเงินสด (JPG, PNG, PDF) — ระบบจะอ่านชื่ออุปกรณ์ จำนวน ราคา ร้านค้า และกรอกให้อัตโนมัติทันที
                                 </p>
-                                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                    <Upload style={{ width: 14, height: 14 }} />
+                                <label 
+                                    className="btn btn-secondary btn-sm" 
+                                    style={{ 
+                                        cursor: 'pointer', 
+                                        display: 'inline-flex', 
+                                        alignItems: 'center', 
+                                        gap: 6,
+                                        fontWeight: 600,
+                                        padding: '7px 16px',
+                                        background: 'rgba(59, 130, 246, 0.15)',
+                                        border: '1px solid rgba(59, 130, 246, 0.35)',
+                                        color: '#60a5fa'
+                                    }}
+                                >
+                                    <Upload style={{ width: 15, height: 15 }} />
                                     {ocrLoading ? 'กำลังอ่านและประมวลผล OCR...' : 'เลือกไฟล์ใบเสร็จ (JPG / PNG / PDF)'}
                                     <input 
                                         type="file" 
@@ -555,14 +692,111 @@ export default function TicketExpenseManager({
                                         disabled={ocrLoading}
                                     />
                                 </label>
+                                
                                 {ocrWarning && (
-                                    <div style={{ marginTop: '8px', color: '#f59e0b', fontSize: '0.8rem', fontWeight: 500 }}>
+                                    <div style={{ marginTop: '10px', color: '#f59e0b', fontSize: '0.82rem', fontWeight: 500, background: 'rgba(245, 158, 11, 0.1)', padding: '6px 10px', borderRadius: '6px' }}>
                                         {ocrWarning}
                                     </div>
                                 )}
+
                                 {ocrResult && (
-                                    <div style={{ marginTop: '8px', color: '#10b981', fontSize: '0.8rem', fontWeight: 500 }}>
-                                        ✅ ดึงข้อมูลสำเร็จ! กรุณาตรวจสอบความถูกต้องของฟอร์มด้านล่างก่อนบันทึก
+                                    <div style={{
+                                        marginTop: '14px',
+                                        background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(59, 130, 246, 0.15) 100%)',
+                                        border: '1px solid rgba(34, 197, 94, 0.4)',
+                                        borderRadius: '10px',
+                                        padding: '12px 16px',
+                                        textAlign: 'left'
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <CheckCircle2 style={{ width: 20, height: 20, color: '#4ade80' }} />
+                                                <span style={{ fontWeight: 700, fontSize: '0.92rem', color: '#4ade80' }}>
+                                                    สแกนและกรอกข้อมูลอุปกรณ์อัตโนมัติสำเร็จ!
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                                                {ocrResult.items && ocrResult.items.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleSaveAllOcrItems}
+                                                        disabled={submitting}
+                                                        className="btn btn-secondary btn-sm"
+                                                        style={{
+                                                            fontSize: '0.78rem',
+                                                            fontWeight: 600,
+                                                            borderColor: 'rgba(34, 197, 94, 0.4)',
+                                                            color: '#4ade80'
+                                                        }}
+                                                        title="บันทึกทุกรายการที่พบในใบเสร็จขึ้นตารางพร้อมกัน"
+                                                    >
+                                                        ⚡ บันทึกทั้งหมด ({ocrResult.items.length} รายการ)
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleInstantSaveOcrItem()}
+                                                    disabled={submitting}
+                                                    className="btn btn-primary btn-sm"
+                                                    style={{
+                                                        backgroundColor: '#16a34a',
+                                                        borderColor: '#15803d',
+                                                        color: '#fff',
+                                                        fontWeight: 700,
+                                                        padding: '6px 14px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
+                                                        boxShadow: '0 4px 12px rgba(22, 163, 74, 0.4)'
+                                                    }}
+                                                >
+                                                    <Zap style={{ width: 15, height: 15 }} />
+                                                    {submitting ? 'กำลังบันทึก...' : '⚡ บันทึกขึ้นรายการอุปกรณ์ทันที'}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '6px 12px' }}>
+                                            <div>🏷️ <strong>รายการ:</strong> <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{description || '-'}</span></div>
+                                            <div>📦 <strong>จำนวน:</strong> <span style={{ color: 'var(--text-primary)' }}>{quantity} {unit} (@ ฿{Number(unitPrice || 0).toLocaleString()})</span></div>
+                                            <div>💰 <strong>ยอดสุทธิ:</strong> <span style={{ color: '#4ade80', fontWeight: 700 }}>฿{netTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+                                            <div>🧾 <strong>เลขที่ / ร้านค้า:</strong> <span style={{ color: 'var(--text-primary)' }}>{receiptNo || '-'} {vendorName ? `(${vendorName})` : ''}</span></div>
+                                        </div>
+
+                                        {/* Multi-item detection selection list */}
+                                        {ocrResult.items && ocrResult.items.length > 1 && (
+                                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '6px', fontWeight: 600 }}>
+                                                    รายการสินค้าที่พบในใบเสร็จ ({ocrResult.items.length} รายการ - คลิกเพื่อเลือก):
+                                                </div>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                                                    {ocrResult.items.map((it, idx) => (
+                                                        <button
+                                                            key={idx}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setDescription(it.name);
+                                                                setCategory(it.category || 'ค่าวัสดุและอุปกรณ์');
+                                                                setQuantity(it.quantity || 1);
+                                                                setUnit(it.unit || 'ชิ้น');
+                                                                setUnitPrice(it.unit_price || (it.total_price / (it.quantity || 1)));
+                                                            }}
+                                                            className="btn btn-ghost btn-xs"
+                                                            style={{
+                                                                background: description === it.name ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.06)',
+                                                                border: description === it.name ? '1px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                                                                color: 'var(--text-primary)',
+                                                                fontSize: '0.75rem',
+                                                                padding: '4px 8px',
+                                                                borderRadius: '6px'
+                                                            }}
+                                                        >
+                                                            {idx + 1}. {it.name} ({it.quantity} {it.unit} @ ฿{Number(it.unit_price || 0).toLocaleString()})
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

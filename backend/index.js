@@ -2259,8 +2259,13 @@ app.post('/api/ocr/scan-receipt', upload.single('receipt'), async (req, res) => 
 
         let extractedText = '';
 
+        // 1.5 Extract text directly if plain text file
+        if (ext === '.txt' || req.file.mimetype === 'text/plain') {
+            extractedText = req.file.buffer.toString('utf8');
+        }
+
         // 2. Extract text from PDF using pdf-parse
-        if (ext === '.pdf' || req.file.mimetype === 'application/pdf') {
+        if (!extractedText.trim() && (ext === '.pdf' || req.file.mimetype === 'application/pdf')) {
             try {
                 const pdfParse = require('pdf-parse');
                 const pdfData = await pdfParse(req.file.buffer);
@@ -2351,9 +2356,16 @@ function parseReceiptText(text) {
         receipt_no: '',
         receipt_date: null,
         items: [],
-        total_price: 0,
+        primary_item: null,
+        description: '',
+        category: 'ค่าวัสดุและอุปกรณ์',
+        quantity: 1,
+        unit: 'ชิ้น',
+        unit_price: 0,
+        discount: 0,
         tax_amount: 0,
-        net_amount: 0
+        net_amount: 0,
+        total_price: 0
     };
 
     if (!text || typeof text !== 'string') return result;
@@ -2366,7 +2378,7 @@ function parseReceiptText(text) {
     for (let i = 0; i < Math.min(6, lines.length); i++) {
         const line = lines[i];
         if (genericHeaderRegex.test(line)) continue;
-        if (line.match(/(บจก\.|บริษัท|หจก\.|ห้างหุ้นส่วน|ร้าน|สหกรณ์|ศูนย์|ฮาร์ดแวร์|การช่าง|มาร์ท|สโตร์|store|shop|market|hardware|home|advice|jib|office|stationery|mall|mart|supplier)/i)) {
+        if (line.match(/(บจก\.|บริษัท|หจก\.|ห้างหุ้นส่วน|ร้าน|สหกรณ์|ศูนย์|ฮาร์ดแวร์|การช่าง|มาร์ท|สโตร์|store|shop|market|hardware|home|advice|jib|office|stationery|mall|mart|supplier|advice|power\s*buy|homepro|ไทวัสดุ)/i)) {
             result.vendor_name = line.replace(/^(ชื่อร้าน|ผู้ขาย|จำหน่ายโดย|vendor)\s*[:#\-.]?\s*/i, '').trim();
             break;
         }
@@ -2470,10 +2482,159 @@ function parseReceiptText(text) {
             if (val > 0 && val < 5000000) foundAmounts.push(val);
         }
         if (foundAmounts.length > 0) {
-            // Usually the highest value towards the bottom is the total
             result.net_amount = Math.max(...foundAmounts);
             result.total_price = result.net_amount;
         }
+    }
+
+    // 5. Equipment & Items Detection (Auto-Fill & Extract Hardware/Supplies)
+    const EQUIPMENT_DICTIONARY = [
+        // IT / Computer
+        { pattern: /(แรม|ram|ddr[345]|sodimm)/i, name: 'แรม (RAM)', cat: 'ค่าอะไหล่', unit: 'แผง' },
+        { pattern: /(ฮาร์ดดิสก์|harddisk|hdd|ssd|nvme|m\.2)/i, name: 'ฮาร์ดดิสก์ / SSD', cat: 'ค่าอะไหล่', unit: 'ตัว' },
+        { pattern: /(จอภาพ|จอคอม|monitor|lcd|led\s*display)/i, name: 'จอภาพคอมพิวเตอร์ (Monitor)', cat: 'ค่าอะไหล่', unit: 'เครื่อง' },
+        { pattern: /(เมาส์|mouse|optical\s*mouse)/i, name: 'เมาส์คอมพิวเตอร์ (Mouse)', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ตัว' },
+        { pattern: /(คีย์บอร์ด|keyboard)/i, name: 'คีย์บอร์ด (Keyboard)', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ตัว' },
+        { pattern: /(สาย\s*lan|สายแลน|cat5e|cat6|utp)/i, name: 'สายแลน (LAN Cable CAT6)', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'เส้น' },
+        { pattern: /(หัว\s*rj45|rj-45|modular\s*plug)/i, name: 'หัวต่อสายแลน RJ-45', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'กล่อง' },
+        { pattern: /(สวิตช์ฮับ|switch\s*hub|gigabit\s*switch)/i, name: 'สวิตช์ฮับเครือข่าย (Switch Hub)', cat: 'ค่าอะไหล่', unit: 'ตัว' },
+        { pattern: /(เราเตอร์|router|access\s*point|ap)/i, name: 'อุปกรณ์กระจายสัญญาณ Wi-Fi', cat: 'ค่าอะไหล่', unit: 'ตัว' },
+        { pattern: /(เพาเวอร์ซัพพลาย|power\s*supply|psu)/i, name: 'เพาเวอร์ซัพพลาย (Power Supply)', cat: 'ค่าอะไหล่', unit: 'ตัว' },
+        { pattern: /(เมนบอร์ด|mainboard|motherboard)/i, name: 'เมนบอร์ดคอมพิวเตอร์', cat: 'ค่าอะไหล่', unit: 'แผง' },
+        { pattern: /(ตลับหมึก|หมึกพิมพ์|toner|cartridge|หมึกอิงค์)/i, name: 'ตลับหมึกเครื่องพิมพ์', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ตลับ' },
+        { pattern: /(ถ่านไบออส|cr2032|แบตเตอรี่\s*3v|battery)/i, name: 'ถ่านกระดุมไบออส CR2032', cat: 'ค่าอะไหล่', unit: 'ก้อน' },
+        { pattern: /(สาย\s*hdmi|hdmi\s*cable)/i, name: 'สายสัญญาณ HDMI', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'เส้น' },
+        { pattern: /(สาย\s*vga|vga\s*cable)/i, name: 'สายสัญญาณ VGA', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'เส้น' },
+        { pattern: /(ปลั๊กพ่วง|รางปลั๊ก|extension\s*cord)/i, name: 'รางปลั๊กพ่วงกันไฟกระชาก', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ตัว' },
+
+        // Air Conditioning (HVAC)
+        { pattern: /(มอเตอร์พัดลม|คอยล์เย็น|คอยล์ร้อน|fan\s*motor)/i, name: 'มอเตอร์พัดลมคอยล์เย็นเครื่องปรับอากาศ', cat: 'ค่าอะไหล่', unit: 'ชุด' },
+        { pattern: /(คอมเพรสเซอร์|compressor)/i, name: 'คอมเพรสเซอร์เครื่องปรับอากาศ', cat: 'ค่าอะไหล่', unit: 'ตัว' },
+        { pattern: /(แคปรัน|คาปาซิเตอร์|capacitor|run\s*cap)/i, name: 'คาปาซิเตอร์ (Capacitor) แอร์', cat: 'ค่าอะไหล่', unit: 'ตัว' },
+        { pattern: /(น้ำยาแอร์|r32|r410a|r22|refrigerant)/i, name: 'น้ำยาเติมระบบเครื่องปรับอากาศ', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ถัง' },
+        { pattern: /(แมกเนติก|magnetic\s*contactor)/i, name: 'แมกเนติกคอนแทกเตอร์', cat: 'ค่าอะไหล่', unit: 'ตัว' },
+        { pattern: /(ท่อน้ำทิ้ง\s*pvc|ท่อน้ำทิ้งแอร์|ท่อระบายน้ำทิ้ง)/i, name: 'ท่อระบายน้ำทิ้ง PVC พร้อมข้อต่อ', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'เส้น' },
+        { pattern: /(ล้างแอร์|ทำความสะอาดแอร์|บริการล้าง)/i, name: 'ค่าบริการล้างและบำรุงรักษาเครื่องปรับอากาศ', cat: 'ค่าแรง', unit: 'เครื่อง' },
+
+        // Electrical
+        { pattern: /(หลอดไฟ|หลอด\s*led|led\s*t8|หลอดฟลูออเรสเซนต์)/i, name: 'หลอดไฟ LED T8 ประหยัดพลังงาน', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'หลอด' },
+        { pattern: /(สายไฟ|thw|vaf|vct|สายทองแดง)/i, name: 'สายไฟฟ้ามาตรฐาน มอก.', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ม้วน' },
+        { pattern: /(สวิตช์ไฟ|เต้ารับ|ปลั๊กไฟ|switch|socket)/i, name: 'สวิตช์ไฟ / เต้ารับไฟฟ้า', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ชุด' },
+        { pattern: /(เบรกเกอร์|circuit\s*breaker|breaker)/i, name: 'เซอร์กิตเบรกเกอร์ (Circuit Breaker)', cat: 'ค่าอะไหล่', unit: 'ตัว' },
+        { pattern: /(เทปพันสายไฟ|electrical\s*tape)/i, name: 'เทปพันสายไฟ 3M', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ม้วน' },
+
+        // Plumbing & Sanitation
+        { pattern: /(ท่อ\s*pvc|ท่อประปา|pvc\s*pipe)/i, name: 'ท่อ PVC ประปา', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'เส้น' },
+        { pattern: /(ข้อต่อ\s*pvc|ข้องอ|สามทาง|ข้อลด)/i, name: 'ข้อต่อท่อประปา PVC', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ตัว' },
+        { pattern: /(กาวทาท่อ|กาวประสานท่อ)/i, name: 'กาวประสานท่อ PVC', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'กระป๋อง' },
+        { pattern: /(ก๊อกน้ำ|วาล์วน้ำ|บอลวาล์ว|faucet|valve)/i, name: 'ก๊อกน้ำ / บอลวาล์วสแตนเลส', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ตัว' },
+        { pattern: /(สายฉีดชำระ|หัวฉีดชำระ)/i, name: 'ชุดสายฉีดชำระสแตนเลส', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ชุด' },
+        { pattern: /(สะดืออ่าง|ท่อน้ำทิ้งอ่าง)/i, name: 'ชุดสะดือและท่อน้ำทิ้งอ่างล้างมือ', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ชุด' },
+        { pattern: /(ลูกลอย|วาล์วน้ำเข้า|สุขภัณฑ์)/i, name: 'ชุดวาล์วลูกลอยสุขภัณฑ์', cat: 'ค่าอะไหล่', unit: 'ชุด' },
+
+        // General Maintenance
+        { pattern: /(สีน้ำ|สีน้ำมัน|สีทาฝ้า|paint)/i, name: 'สีทาอาคารซ่อมแซมผนัง', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ถัง' },
+        { pattern: /(แปรงทาสี|ลูกกลิ้งทาสี)/i, name: 'แปรงและลูกกลิ้งทาสี', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'อัน' },
+        { pattern: /(ซิลิโคน|silicone|กาวตะปู)/i, name: 'ซิลิโคนยาแนวกันซึม', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'หลอด' },
+        { pattern: /(ลูกบิด|บานพับ|กลอนประตู|door\s*lock)/i, name: 'ชุดลูกบิดและบานพับประตู', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'ชุด' },
+        { pattern: /(น็อต|สกรู|พุก|screw|bolt)/i, name: 'ชุดน็อต สกรู และพุกพลาสติก', cat: 'ค่าวัสดุและอุปกรณ์', unit: 'กล่อง' }
+    ];
+
+    // 5.1 Parse line items
+    const parsedItems = [];
+    const nonItemWords = /(บจก|บริษัท|หจก|ร้าน|โทร|tel|tax|สาขา|ใบเสร็จ|ใบกำกับ|cashier|รวม|total|vat|ภาษี|สุทธิ|เงินทอน|ชำระ|ขอบคุณ|thank|address|วันที่|date|เวลา|time)/i;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (nonItemWords.test(line) || line.length < 3) continue;
+
+        // Check if line contains an item name, quantity, unit, and price
+        const lineMatch = line.match(/^(\d+[\.\)]\s*)?(.+?)\s+(\d+)\s*(ชิ้น|อัน|ตัว|ชุด|เส้น|ม\.|เมตร|กล่อง|แพ็ค|แผง|หลอด|ม้วน|ก้อน|แผ่น|เครื่อง|คู่|ตลับ|กระป๋อง|ถัง|ด้าม)?\s*(?:@|x|\*|ละ)?\s*([0-9,]+(?:\.\d{1,2})?)(?:\s+([0-9,]+(?:\.\d{1,2})?))?\s*$/i);
+        if (lineMatch) {
+            const itemName = lineMatch[2].trim();
+            const qty = parseInt(lineMatch[3], 10) || 1;
+            const unit = lineMatch[4] || 'ชิ้น';
+            const price = parseFloat(lineMatch[5].replace(/,/g, '')) || 0;
+            const total = lineMatch[6] ? parseFloat(lineMatch[6].replace(/,/g, '')) : (qty * price);
+
+            if (itemName.length >= 2 && !nonItemWords.test(itemName)) {
+                // Determine category
+                let cat = 'ค่าวัสดุและอุปกรณ์';
+                for (const eq of EQUIPMENT_DICTIONARY) {
+                    if (eq.pattern.test(itemName)) {
+                        cat = eq.cat;
+                        break;
+                    }
+                }
+                parsedItems.push({
+                    name: itemName,
+                    category: cat,
+                    quantity: qty,
+                    unit: unit,
+                    unit_price: price || (total / qty),
+                    total_price: total
+                });
+            }
+        }
+    }
+
+    // 5.2 If no tabular line matched, check lines against EQUIPMENT_DICTIONARY
+    if (parsedItems.length === 0) {
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (nonItemWords.test(line) || line.length < 3) continue;
+
+            for (const eq of EQUIPMENT_DICTIONARY) {
+                if (eq.pattern.test(line)) {
+                    // Extract line text cleanly
+                    let cleanItemName = line.replace(/^[0-9\.\-\*\#\s]+/, '').replace(/[0-9,]+(\.\d{1,2})?\s*(บาท|฿)?$/, '').trim();
+                    if (!cleanItemName || cleanItemName.length < 3) {
+                        cleanItemName = eq.name;
+                    }
+                    parsedItems.push({
+                        name: cleanItemName,
+                        category: eq.cat,
+                        quantity: 1,
+                        unit: eq.unit,
+                        unit_price: result.net_amount || result.total_price || 0,
+                        total_price: result.net_amount || result.total_price || 0
+                    });
+                    break;
+                }
+            }
+            if (parsedItems.length > 0) break;
+        }
+    }
+
+    // 5.3 If still no item, look for the most meaningful middle line or generate description
+    if (parsedItems.length === 0) {
+        let candidate = '';
+        for (let i = 1; i < lines.length - 2; i++) {
+            const l = lines[i];
+            if (!nonItemWords.test(l) && l.length >= 4 && !l.match(/^[0-9\s\-:\/]+$/)) {
+                candidate = l.replace(/^[0-9\.\-\*\#\s]+/, '').trim();
+                break;
+            }
+        }
+        const defaultName = candidate || (result.vendor_name ? `อุปกรณ์และอะไหล่จาก ${result.vendor_name}` : 'วัสดุและอุปกรณ์สำหรับงานซ่อมบำรุง');
+        parsedItems.push({
+            name: defaultName,
+            category: 'ค่าวัสดุและอุปกรณ์',
+            quantity: 1,
+            unit: 'ชิ้น',
+            unit_price: result.net_amount || result.total_price || 0,
+            total_price: result.net_amount || result.total_price || 0
+        });
+    }
+
+    result.items = parsedItems;
+    result.primary_item = parsedItems[0] || null;
+    if (result.primary_item) {
+        result.description = result.primary_item.name;
+        result.category = result.primary_item.category;
+        result.quantity = result.primary_item.quantity;
+        result.unit = result.primary_item.unit;
+        result.unit_price = result.primary_item.unit_price;
     }
 
     return result;

@@ -27,6 +27,7 @@ export default function TicketEvidenceManager({
     const [selectedFile, setSelectedFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [selectedPreview, setSelectedPreview] = useState(null);
+    const [autoSyncExpense, setAutoSyncExpense] = useState(true);
 
     // Close on Escape key
     useEffect(() => {
@@ -127,6 +128,50 @@ export default function TicketEvidenceManager({
             });
 
             if (eviRes.ok) {
+                // If uploading a receipt and autoSyncExpense is enabled, also create expense record
+                if (stage === 'RECEIPT' && autoSyncExpense && selectedFile) {
+                    try {
+                        const ocrForm = new FormData();
+                        ocrForm.append('receipt', selectedFile);
+                        const ocrRes = await fetch('/api/ocr/scan-receipt', {
+                            method: 'POST',
+                            body: ocrForm
+                        });
+                        if (ocrRes.ok) {
+                            const ocrData = await ocrRes.json();
+                            if (ocrData.success && ocrData.data) {
+                                const p = ocrData.data;
+                                const itemDesc = p.description || p.primary_item?.name || description.trim() || 'วัสดุและอุปกรณ์ตามใบเสร็จ';
+                                const itemQty = p.quantity || p.primary_item?.quantity || 1;
+                                const itemPrice = p.unit_price || p.primary_item?.unit_price || (p.net_amount ? (p.net_amount / itemQty) : 0);
+
+                                await fetch(`/api/tickets/${ticket.id}/expenses`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': token ? `Bearer ${token}` : ''
+                                    },
+                                    body: JSON.stringify({
+                                        category: p.category || p.primary_item?.category || 'ค่าวัสดุและอุปกรณ์',
+                                        description: itemDesc,
+                                        quantity: itemQty,
+                                        unit: p.unit || p.primary_item?.unit || 'ชิ้น',
+                                        unit_price: itemPrice,
+                                        discount: p.discount || 0,
+                                        tax_percent: p.tax_amount > 0 ? 7 : 0,
+                                        receipt_no: p.receipt_no || null,
+                                        vendor_name: p.vendor_name || null,
+                                        receipt_date: p.receipt_date || null,
+                                        receipt_url: fileUrl
+                                    })
+                                });
+                            }
+                        }
+                    } catch (eErr) {
+                        console.warn('Auto sync expense from evidence receipt warning:', eErr);
+                    }
+                }
+
                 closeModal();
                 if (onEvidenceAdded) onEvidenceAdded();
             } else {
@@ -347,6 +392,29 @@ export default function TicketEvidenceManager({
                                         <option value="HANDOVER">📋 เอกสารส่งมอบงาน / ตรวจรับ (Handover & Inspection)</option>
                                     </select>
                                 </div>
+
+                                {stage === 'RECEIPT' && (
+                                    <div style={{
+                                        background: 'rgba(59, 130, 246, 0.1)',
+                                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                                        borderRadius: '8px',
+                                        padding: '10px 14px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px'
+                                    }}>
+                                        <input 
+                                            type="checkbox" 
+                                            id="auto-create-expense-chk" 
+                                            checked={autoSyncExpense} 
+                                            onChange={(e) => setAutoSyncExpense(e.target.checked)}
+                                            style={{ width: 18, height: 18, cursor: 'pointer' }}
+                                        />
+                                        <label htmlFor="auto-create-expense-chk" style={{ fontSize: '0.85rem', cursor: 'pointer', margin: 0, color: 'var(--text-primary)' }}>
+                                            ✨ <strong>สแกนใบเสร็จและบันทึกขึ้นรายการอุปกรณ์อัตโนมัติ</strong> (ระบบจะอ่านชื่ออุปกรณ์ ยอดเงิน และบันทึกเข้าตารางค่าใช้จ่ายทันที)
+                                        </label>
+                                    </div>
+                                )}
 
                                 <div>
                                     <label className="form-label" style={{ fontSize: '0.85rem', fontWeight: 600 }}>คำอธิบายรูปภาพ / รายละเอียด</label>
