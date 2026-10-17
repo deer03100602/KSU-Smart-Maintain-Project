@@ -31,6 +31,7 @@ COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 # Generate Prisma Client
 WORKDIR /app/backend
+ENV DATABASE_URL="postgresql://postgres:postgres@localhost:5432/university_maintenance?schema=public"
 RUN npx prisma generate
 
 ENV NODE_ENV=production
