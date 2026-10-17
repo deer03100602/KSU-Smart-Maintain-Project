@@ -138,7 +138,14 @@ export function AppProvider({ children }) {
         try {
             const existingSaved = JSON.parse(localStorage.getItem('helpdesk_saved_accounts') || '[]');
             const updated = [
-                { email: loggedInUser.email, name: loggedInUser.name, group: loggedInUser.group, role: userRole, password: password },
+                { 
+                    email: loggedInUser.email, 
+                    name: loggedInUser.name, 
+                    group: loggedInUser.group, 
+                    role: userRole, 
+                    password: password,
+                    avatar_url: loggedInUser.avatar_url || ''
+                },
                 ...existingSaved.filter(a => a.email.toLowerCase() !== loggedInUser.email.toLowerCase())
             ].slice(0, 8);
             localStorage.setItem('helpdesk_saved_accounts', JSON.stringify(updated));
@@ -198,7 +205,8 @@ export function AppProvider({ children }) {
                     name: loggedInUser.name, 
                     group: loggedInUser.group, 
                     role: userRole, 
-                    password: acc.password || localStorage.getItem('helpdesk_remembered_password') || '' 
+                    password: acc.password || localStorage.getItem('helpdesk_remembered_password') || '',
+                    avatar_url: loggedInUser.avatar_url || acc.avatar_url || ''
                 },
                 ...existingSaved.filter(a => a.email.toLowerCase() !== loggedInUser.email.toLowerCase())
             ].slice(0, 8);
@@ -248,7 +256,14 @@ export function AppProvider({ children }) {
             try {
                 const existingSaved = JSON.parse(localStorage.getItem('helpdesk_saved_accounts') || '[]');
                 const updated = [
-                    { email: newUser.email, name: newUser.name, group: newUser.group, role: userRole, password: password },
+                    { 
+                        email: newUser.email, 
+                        name: newUser.name, 
+                        group: newUser.group, 
+                        role: userRole, 
+                        password: password,
+                        avatar_url: newUser.avatar_url || ''
+                    },
                     ...existingSaved.filter(a => a.email.toLowerCase() !== newUser.email.toLowerCase())
                 ].slice(0, 8);
                 localStorage.setItem('helpdesk_saved_accounts', JSON.stringify(updated));
@@ -382,6 +397,25 @@ export function AppProvider({ children }) {
             setRoleState(result.user.role);
             localStorage.setItem('helpdesk_current_role', result.user.role);
         }
+
+        // Sync name & avatar to remembered accounts
+        try {
+            const rawAccounts = localStorage.getItem('helpdesk_saved_accounts');
+            if (rawAccounts) {
+                const parsed = JSON.parse(rawAccounts);
+                if (Array.isArray(parsed)) {
+                    const cleanEmail = (result.user.email || '').toLowerCase().trim();
+                    const updated = parsed.map(a => {
+                        if ((a.email || '').toLowerCase().trim() === cleanEmail) {
+                            return { ...a, name: result.user.name, avatar_url: result.user.avatar_url || a.avatar_url };
+                        }
+                        return a;
+                    });
+                    localStorage.setItem('helpdesk_saved_accounts', JSON.stringify(updated));
+                }
+            }
+        } catch (e) {}
+
         return result.user;
     };
 
@@ -432,6 +466,25 @@ export function AppProvider({ children }) {
             localStorage.setItem('helpdesk_current_user', JSON.stringify(updated));
             return updated;
         });
+
+        // Sync new avatar immediately to remembered device accounts so login screen retains it
+        try {
+            const rawAccounts = localStorage.getItem('helpdesk_saved_accounts');
+            if (rawAccounts) {
+                const parsed = JSON.parse(rawAccounts);
+                if (Array.isArray(parsed)) {
+                    const cleanEmail = (user?.email || '').toLowerCase().trim();
+                    const updated = parsed.map(a => {
+                        if ((a.email || '').toLowerCase().trim() === cleanEmail) {
+                            return { ...a, avatar_url: result.avatar_url };
+                        }
+                        return a;
+                    });
+                    localStorage.setItem('helpdesk_saved_accounts', JSON.stringify(updated));
+                }
+            }
+        } catch (e) {}
+
         return result.avatar_url;
     };
 

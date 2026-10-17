@@ -78,7 +78,15 @@ export default function ProfilePage() {
                     if (data.email) setEmail(data.email);
                     if (data.phone) setPhone(data.phone);
                     if (data.group) setGroup(data.group);
-                    if (data.avatar_url) setAvatarUrl(data.avatar_url);
+                    if (data.avatar_url) {
+                        setAvatarUrl(data.avatar_url);
+                        try {
+                            const cur = JSON.parse(localStorage.getItem('helpdesk_current_user') || '{}');
+                            if (!cur.avatar_url || cur.avatar_url !== data.avatar_url) {
+                                localStorage.setItem('helpdesk_current_user', JSON.stringify({ ...cur, avatar_url: data.avatar_url }));
+                            }
+                        } catch (e) {}
+                    }
                 }
             } catch (e) {
                 console.warn('Error loading latest profile:', e);

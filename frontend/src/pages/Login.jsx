@@ -233,8 +233,17 @@ export default function LoginPage() {
                                         }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, overflow: 'hidden' }}>
-                                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-color), var(--primary-hover))', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: 700, flexShrink: 0 }}>
-                                                {(acc.name || acc.email || 'U').charAt(0).toUpperCase()}
+                                            <div style={{ width: 32, height: 32, borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(135deg, var(--primary-color), var(--primary-hover))', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', fontWeight: 700, flexShrink: 0 }}>
+                                                {acc.avatar_url ? (
+                                                    <img 
+                                                        src={acc.avatar_url} 
+                                                        alt={acc.name || 'User'} 
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                    />
+                                                ) : (
+                                                    (acc.name || acc.email || 'U').charAt(0).toUpperCase()
+                                                )}
                                             </div>
                                             <div style={{ textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>

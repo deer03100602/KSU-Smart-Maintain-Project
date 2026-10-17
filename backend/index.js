@@ -33,9 +33,42 @@ if (!fs.existsSync(baseDataDir)) {
 }
 
 const usersFilePath = path.join(baseDataDir, 'users.json');
+const avatarsFilePath = path.join(baseDataDir, 'avatars.json');
 const dbFilePath = path.join(baseDataDir, 'db.json');
 const bundledDbPath = path.join(__dirname, 'data', 'db.json');
 const bundledUsersPath = path.join(__dirname, 'data', 'users.json');
+const bundledAvatarsPath = path.join(__dirname, 'data', 'avatars.json');
+
+function getSavedAvatars() {
+    try {
+        if (fs.existsSync(avatarsFilePath)) {
+            return JSON.parse(fs.readFileSync(avatarsFilePath, 'utf8'));
+        }
+        if (fs.existsSync(bundledAvatarsPath)) {
+            const bundled = JSON.parse(fs.readFileSync(bundledAvatarsPath, 'utf8'));
+            try { fs.writeFileSync(avatarsFilePath, JSON.stringify(bundled, null, 2), 'utf8'); } catch (e) {}
+            return bundled;
+        }
+    } catch (e) {
+        console.error('Error reading avatars.json:', e);
+    }
+    return {};
+}
+
+function saveUserAvatar(email, avatarUrl) {
+    if (!email || !avatarUrl) return;
+    const cleanEmail = String(email).toLowerCase().trim();
+    try {
+        const avatars = getSavedAvatars();
+        avatars[cleanEmail] = avatarUrl;
+        fs.writeFileSync(avatarsFilePath, JSON.stringify(avatars, null, 2), 'utf8');
+        if (bundledAvatarsPath && bundledAvatarsPath !== avatarsFilePath) {
+            try { fs.writeFileSync(bundledAvatarsPath, JSON.stringify(avatars, null, 2), 'utf8'); } catch (e) {}
+        }
+    } catch (e) {
+        console.error('Error writing avatars.json:', e);
+    }
+}
 
 function getLocalDb() {
     try {
@@ -311,11 +344,39 @@ const prisma = {
             return getLocalUsers();
         },
         findUnique: async ({ where }) => {
+            let u = null;
             if (realPrisma) {
-                try { return await realPrisma.user.findUnique({ where }); } catch (e) {}
+                try { u = await realPrisma.user.findUnique({ where }); } catch (e) {}
             }
+            const cleanEmail = (where.email || '').toLowerCase().trim();
+            const cleanId = where.id;
             const users = getLocalUsers();
-            return users.find(u => u.email.toLowerCase() === (where.email || '').toLowerCase()) || null;
+            const localU = users.find(x => 
+                (cleanEmail && (x.email || '').toLowerCase().trim() === cleanEmail) ||
+                (cleanId && x.id === cleanId)
+            );
+            const avatars = getSavedAvatars();
+            const savedAvatar = cleanEmail ? (avatars[cleanEmail] || (localU?.email ? avatars[localU.email.toLowerCase().trim()] : '')) : '';
+
+            if (u) {
+                if (!u.avatar_url && (localU?.avatar_url || savedAvatar)) {
+                    u.avatar_url = localU?.avatar_url || savedAvatar;
+                    if (realPrisma && cleanEmail) {
+                        realPrisma.user.update({
+                            where: { email: cleanEmail },
+                            data: { avatar_url: u.avatar_url }
+                        }).catch(() => {});
+                    }
+                }
+                return u;
+            }
+            if (localU) {
+                if (!localU.avatar_url && savedAvatar) {
+                    localU.avatar_url = savedAvatar;
+                }
+                return localU;
+            }
+            return null;
         },
         create: async ({ data }) => {
             if (realPrisma) {
@@ -324,7 +385,49 @@ const prisma = {
             const users = getLocalUsers();
             users.push(data);
             saveLocalUsers(users);
+            if (data.email && data.avatar_url) {
+                saveUserAvatar(data.email, data.avatar_url);
+            }
             return data;
+        },
+        update: async ({ where, data }) => {
+            let updated = null;
+            if (realPrisma) {
+                try {
+                    updated = await realPrisma.user.update({ where, data });
+                } catch (e) {
+                    console.warn('Real prisma user update note:', e.message);
+                }
+            }
+            const users = getLocalUsers();
+            const cleanEmail = (where.email || '').toLowerCase().trim();
+            const cleanId = where.id;
+            const idx = users.findIndex(u => 
+                (cleanEmail && (u.email || '').toLowerCase().trim() === cleanEmail) ||
+                (cleanId && u.id === cleanId)
+            );
+            if (idx >= 0) {
+                users[idx] = { ...users[idx], ...data, updated_at: new Date().toISOString() };
+                saveLocalUsers(users);
+                if (data.avatar_url) {
+                    saveUserAvatar(users[idx].email || cleanEmail, data.avatar_url);
+                }
+                return updated || users[idx];
+            } else if (cleanEmail) {
+                const newUser = {
+                    id: cleanId || ('usr-' + Date.now().toString(36)),
+                    email: cleanEmail,
+                    ...data,
+                    updated_at: new Date().toISOString()
+                };
+                users.push(newUser);
+                saveLocalUsers(users);
+                if (data.avatar_url) {
+                    saveUserAvatar(cleanEmail, data.avatar_url);
+                }
+                return updated || newUser;
+            }
+            return updated || data;
         },
         count: async () => {
             if (realPrisma) {
@@ -333,19 +436,27 @@ const prisma = {
             return getLocalUsers().length;
         },
         upsert: async ({ where, update, create }) => {
+            let res = null;
             if (realPrisma) {
-                try { return await realPrisma.user.upsert({ where, update, create }); } catch (e) {}
+                try { res = await realPrisma.user.upsert({ where, update, create }); } catch (e) {}
             }
             const users = getLocalUsers();
-            const idx = users.findIndex(u => u.email.toLowerCase() === (where.email || '').toLowerCase());
+            const cleanEmail = (where.email || '').toLowerCase().trim();
+            const idx = users.findIndex(u => (u.email || '').toLowerCase().trim() === cleanEmail);
             if (idx >= 0) {
-                users[idx] = { ...users[idx], ...update };
+                users[idx] = { ...users[idx], ...update, updated_at: new Date().toISOString() };
                 saveLocalUsers(users);
-                return users[idx];
+                if (update.avatar_url) {
+                    saveUserAvatar(cleanEmail, update.avatar_url);
+                }
+                return res || users[idx];
             } else {
                 users.push(create);
                 saveLocalUsers(users);
-                return create;
+                if (create.avatar_url) {
+                    saveUserAvatar(cleanEmail, create.avatar_url);
+                }
+                return res || create;
             }
         }
     },
@@ -2893,6 +3004,10 @@ app.post('/api/auth/login', async (req, res) => {
         }
 
         // Generate JWT token (90-day persistent session)
+        const savedAvatars = getSavedAvatars();
+        const userAvatar = foundUser.avatar_url || savedAvatars[cleanEmail] || '';
+        foundUser.avatar_url = userAvatar;
+
         const token = jwt.sign(
             { 
                 id: foundUser.id, 
@@ -2901,7 +3016,7 @@ app.post('/api/auth/login', async (req, res) => {
                 role: foundUser.role, 
                 group: foundUser.group,
                 phone: foundUser.phone || '',
-                avatar_url: foundUser.avatar_url || ''
+                avatar_url: userAvatar
             },
             JWT_SECRET,
             { expiresIn: '90d' }
@@ -2920,7 +3035,7 @@ app.post('/api/auth/login', async (req, res) => {
                 group: foundUser.group,
                 role: foundUser.role,
                 phone: foundUser.phone || '',
-                avatar_url: foundUser.avatar_url || ''
+                avatar_url: userAvatar
             }
         });
     } catch (err) {
@@ -2992,6 +3107,10 @@ app.post('/api/auth/quick-login', async (req, res) => {
         }
 
         // 4. Issue 90-day JWT token
+        const savedAvatars = getSavedAvatars();
+        const userAvatar = foundUser.avatar_url || savedAvatars[cleanEmail] || '';
+        foundUser.avatar_url = userAvatar;
+
         const token = jwt.sign(
             {
                 id: foundUser.id,
@@ -3000,7 +3119,7 @@ app.post('/api/auth/quick-login', async (req, res) => {
                 role: foundUser.role,
                 group: foundUser.group,
                 phone: foundUser.phone || '',
-                avatar_url: foundUser.avatar_url || ''
+                avatar_url: userAvatar
             },
             JWT_SECRET,
             { expiresIn: '90d' }
@@ -3019,7 +3138,7 @@ app.post('/api/auth/quick-login', async (req, res) => {
                 group: foundUser.group,
                 role: foundUser.role,
                 phone: foundUser.phone || '',
-                avatar_url: foundUser.avatar_url || ''
+                avatar_url: userAvatar
             }
         });
     } catch (err) {
@@ -3047,7 +3166,7 @@ app.get('/api/auth/me', (req, res) => {
 // ─────────────────────────────────────────────────────────────
 app.get('/api/user/profile', requireAuth, async (req, res) => {
     try {
-        const userEmail = req.user.email ? req.user.email.toLowerCase() : '';
+        const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : '';
         let foundUser = null;
         try {
             foundUser = await prisma.user.findUnique({ where: { email: userEmail } });
@@ -3057,12 +3176,15 @@ app.get('/api/user/profile', requireAuth, async (req, res) => {
 
         if (!foundUser) {
             const localUsers = getLocalUsers();
-            foundUser = localUsers.find(u => u.email.toLowerCase() === userEmail || u.id === req.user.id);
+            foundUser = localUsers.find(u => (u.email || '').toLowerCase().trim() === userEmail || u.id === req.user.id);
         }
 
         if (!foundUser) {
             return res.status(404).json({ error: 'ไม่พบข้อมูลผู้ใช้งาน' });
         }
+
+        const savedAvatars = getSavedAvatars();
+        const userAvatar = foundUser.avatar_url || savedAvatars[userEmail] || '';
 
         res.json({
             id: foundUser.id,
@@ -3071,7 +3193,7 @@ app.get('/api/user/profile', requireAuth, async (req, res) => {
             group: foundUser.group || 'นักศึกษา',
             role: foundUser.role || 'user',
             phone: foundUser.phone || '',
-            avatar_url: foundUser.avatar_url || '',
+            avatar_url: userAvatar,
             created_at: foundUser.created_at
         });
     } catch (err) {
@@ -3082,7 +3204,7 @@ app.get('/api/user/profile', requireAuth, async (req, res) => {
 
 app.put('/api/user/profile', requireAuth, async (req, res) => {
     try {
-        const userEmail = req.user.email ? req.user.email.toLowerCase() : '';
+        const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : '';
         const { name, phone, group, avatar_url } = req.body;
 
         if (!name || !name.trim()) {
@@ -3092,6 +3214,10 @@ app.put('/api/user/profile', requireAuth, async (req, res) => {
         const cleanName = name.trim();
         const cleanPhone = phone ? phone.trim() : '';
         const cleanAvatar = avatar_url !== undefined ? avatar_url : null;
+
+        if (cleanAvatar !== null) {
+            saveUserAvatar(userEmail, cleanAvatar);
+        }
 
         // Security: Lock group and role. Users cannot modify or elevate their own role/group.
         const cleanGroup = req.user.group || 'นักศึกษา';
@@ -3116,7 +3242,7 @@ app.put('/api/user/profile', requireAuth, async (req, res) => {
 
         // Always update local users.json for persistence
         const localUsers = getLocalUsers();
-        const idx = localUsers.findIndex(u => u.email.toLowerCase() === userEmail || u.id === req.user.id);
+        const idx = localUsers.findIndex(u => (u.email || '').toLowerCase().trim() === userEmail || u.id === req.user.id);
         if (idx !== -1) {
             localUsers[idx].name = cleanName;
             localUsers[idx].phone = cleanPhone;
@@ -3130,6 +3256,9 @@ app.put('/api/user/profile', requireAuth, async (req, res) => {
             if (!updatedUser) updatedUser = localUsers[idx];
         }
 
+        const savedAvatars = getSavedAvatars();
+        const effectiveAvatar = cleanAvatar || updatedUser?.avatar_url || savedAvatars[userEmail] || '';
+
         // Generate fresh JWT token with updated profile info
         const token = jwt.sign(
             {
@@ -3139,7 +3268,7 @@ app.put('/api/user/profile', requireAuth, async (req, res) => {
                 role: newRole,
                 group: cleanGroup,
                 phone: cleanPhone,
-                avatar_url: cleanAvatar || updatedUser?.avatar_url || ''
+                avatar_url: effectiveAvatar
             },
             JWT_SECRET,
             { expiresIn: '7d' }
@@ -3156,7 +3285,7 @@ app.put('/api/user/profile', requireAuth, async (req, res) => {
                 group: cleanGroup,
                 role: newRole,
                 phone: cleanPhone,
-                avatar_url: cleanAvatar || updatedUser?.avatar_url || ''
+                avatar_url: effectiveAvatar
             }
         });
     } catch (err) {
@@ -3249,7 +3378,7 @@ app.put('/api/user/change-password', requireAuth, async (req, res) => {
 
 app.post('/api/user/avatar', requireAuth, upload.single('avatar'), async (req, res) => {
     try {
-        const userEmail = req.user.email ? req.user.email.toLowerCase() : '';
+        const userEmail = req.user.email ? req.user.email.toLowerCase().trim() : '';
         let avatarUrl = '';
 
         if (req.file) {
@@ -3260,6 +3389,13 @@ app.post('/api/user/avatar', requireAuth, upload.single('avatar'), async (req, r
             try {
                 fs.writeFileSync(targetPath, req.file.buffer);
                 avatarUrl = `/uploads/${filename}`;
+                // Also write to frontend uploads directory if present
+                const frontendUploadsDir = path.join(__dirname, '..', 'frontend', 'public', 'uploads');
+                if (fs.existsSync(frontendUploadsDir)) {
+                    try {
+                        fs.writeFileSync(path.join(frontendUploadsDir, filename), req.file.buffer);
+                    } catch (feErr) {}
+                }
             } catch (fsErr) {
                 avatarUrl = `data:${req.file.mimetype || 'image/jpeg'};base64,${req.file.buffer.toString('base64')}`;
             }
@@ -3269,7 +3405,10 @@ app.post('/api/user/avatar', requireAuth, upload.single('avatar'), async (req, r
             return res.status(400).json({ error: 'กรุณาเลือกไฟล์รูปภาพ' });
         }
 
-        // Update in DB and local store
+        // 1. Permanently save to dedicated avatars database store
+        saveUserAvatar(userEmail, avatarUrl);
+
+        // 2. Permanently update in Prisma (Postgres database)
         try {
             await prisma.user.update({
                 where: { email: userEmail },
@@ -3279,16 +3418,20 @@ app.post('/api/user/avatar', requireAuth, upload.single('avatar'), async (req, r
             console.warn('Prisma avatar update note:', dbErr.message);
         }
 
+        // 3. Update in local users store
         const localUsers = getLocalUsers();
-        const idx = localUsers.findIndex(u => u.email.toLowerCase() === userEmail || u.id === req.user.id);
+        const idx = localUsers.findIndex(u => (u.email || '').toLowerCase().trim() === userEmail || u.id === req.user.id);
         if (idx !== -1) {
             localUsers[idx].avatar_url = avatarUrl;
+            localUsers[idx].updated_at = new Date().toISOString();
             saveLocalUsers(localUsers);
         }
 
+        console.log(`🖼️ Profile picture permanently saved in database for user: ${userEmail}`);
+
         res.json({
             success: true,
-            message: 'อัปโหลดรูปโปรไฟล์เรียบร้อยแล้ว',
+            message: 'อัปโหลดและบันทึกรูปโปรไฟล์ลงฐานข้อมูลเรียบร้อยแล้ว',
             avatar_url: avatarUrl
         });
     } catch (err) {
