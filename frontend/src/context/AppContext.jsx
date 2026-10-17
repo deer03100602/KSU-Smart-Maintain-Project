@@ -62,30 +62,37 @@ export function AppProvider({ children }) {
     const [theme, setTheme] = useState('dark');
 
     const loadSimulatedUser = () => {
-        const storedUser = localStorage.getItem('helpdesk_current_user');
-        if (storedUser) {
-            try {
-                const parsed = JSON.parse(storedUser);
-                if (parsed && parsed.email && parsed.email.trim()) {
-                    setUserState(parsed);
-                    let storedRole = localStorage.getItem('helpdesk_current_role');
-                    if (!storedRole) {
-                        const isGroupAMember = ['นักศึกษา', 'อาจารย์'].includes(parsed.group);
-                        storedRole = isGroupAMember ? 'user' : (parsed.role || 'user');
+        const sessionActive = typeof window !== 'undefined' ? sessionStorage.getItem('helpdesk_session_active') : null;
+        if (sessionActive === 'true') {
+            const storedUser = localStorage.getItem('helpdesk_current_user');
+            if (storedUser) {
+                try {
+                    const parsed = JSON.parse(storedUser);
+                    if (parsed && parsed.email && parsed.email.trim()) {
+                        setUserState(parsed);
+                        let storedRole = localStorage.getItem('helpdesk_current_role');
+                        if (!storedRole) {
+                            const isGroupAMember = ['นักศึกษา', 'อาจารย์'].includes(parsed.group);
+                            storedRole = isGroupAMember ? 'user' : (parsed.role || 'user');
+                        }
+                        setRoleState(storedRole);
+                        return;
                     }
-                    setRoleState(storedRole);
-                    return;
+                } catch (e) {
+                    console.error(e);
                 }
-            } catch (e) {
-                console.error(e);
             }
         }
         
-        // Default strictly to GUEST (ยังไม่ได้เข้าสู่ระบบ)
+        // Strict GUEST default (ยังไม่ได้เข้าสู่ระบบ / ผู้เยี่ยมชม)
         setUserState(null);
         setRoleState('guest');
-        localStorage.removeItem('helpdesk_current_user');
-        localStorage.removeItem('helpdesk_current_role');
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('helpdesk_current_user');
+            localStorage.removeItem('helpdesk_current_role');
+            localStorage.removeItem('helpdesk_token');
+            sessionStorage.removeItem('helpdesk_session_active');
+        }
     };
 
     // Initial auth load from persistent storage
@@ -125,6 +132,9 @@ export function AppProvider({ children }) {
         const loggedInUser = result.user;
         setUserState(loggedInUser);
         localStorage.setItem('helpdesk_current_user', JSON.stringify(loggedInUser));
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('helpdesk_session_active', 'true');
+        }
 
         const isGroupAMember = ['นักศึกษา', 'อาจารย์'].includes(loggedInUser.group);
         const userRole = isGroupAMember ? 'user' : (loggedInUser.role || (
@@ -186,6 +196,9 @@ export function AppProvider({ children }) {
         const loggedInUser = result.user;
         setUserState(loggedInUser);
         localStorage.setItem('helpdesk_current_user', JSON.stringify(loggedInUser));
+        if (typeof window !== 'undefined') {
+            sessionStorage.setItem('helpdesk_session_active', 'true');
+        }
 
         const isGroupAMember = ['นักศึกษา', 'อาจารย์'].includes(loggedInUser.group);
         const userRole = isGroupAMember ? 'user' : (loggedInUser.role || (
@@ -245,6 +258,9 @@ export function AppProvider({ children }) {
         if (newUser) {
             setUserState(newUser);
             localStorage.setItem('helpdesk_current_user', JSON.stringify(newUser));
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem('helpdesk_session_active', 'true');
+            }
             const userRole = newUser.role || (
                 newUser.email.toLowerCase().includes('admin') ||
                 newUser.group === 'ผู้ดูแลระบบ' ||
@@ -285,6 +301,9 @@ export function AppProvider({ children }) {
         localStorage.removeItem('helpdesk_current_user');
         localStorage.removeItem('helpdesk_current_role');
         localStorage.removeItem('helpdesk_token');
+        if (typeof window !== 'undefined') {
+            sessionStorage.removeItem('helpdesk_session_active');
+        }
         setUserState(null);
         setRoleState('guest');
         showToast('ออกจากระบบเรียบร้อยแล้ว (สถานะ: ผู้เยี่ยมชม)', 'info');

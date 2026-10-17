@@ -8,15 +8,22 @@ const EXPENSES_KEY = 'ksu_expenses_store_v1';
 const TIMELINES_KEY = 'ksu_timelines_store_v1';
 const EVIDENCES_KEY = 'ksu_evidences_store_v1';
 const DELETED_KEY = 'ksu_deleted_tickets_v1';
+const DEFAULT_MOCK_DELETED_IDS = [
+    'tkt-ksu-001', 'tkt-ksu-002', 'tkt-ksu-003',
+    'tkt-001', 'tkt-002', 'tkt-003',
+    'TKT-001', 'TKT-002', 'TKT-003',
+    'id-mv5j19jv-3b0qtw8', 'id-tkt-sample-002'
+].map(s => s.toLowerCase());
 
 export function getDeletedTicketIds() {
-    if (typeof window === 'undefined') return [];
+    if (typeof window === 'undefined') return DEFAULT_MOCK_DELETED_IDS;
     try {
         const raw = localStorage.getItem(DELETED_KEY);
         const parsed = raw ? JSON.parse(raw) : [];
-        return Array.isArray(parsed) ? parsed : [];
+        const merged = new Set([...DEFAULT_MOCK_DELETED_IDS, ...(Array.isArray(parsed) ? parsed.map(s => String(s).toLowerCase()) : [])]);
+        return Array.from(merged);
     } catch (e) {
-        return [];
+        return DEFAULT_MOCK_DELETED_IDS;
     }
 }
 
