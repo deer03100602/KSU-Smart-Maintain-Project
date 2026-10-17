@@ -482,8 +482,18 @@ const prisma = {
             }
             const db = getLocalDb();
             let list = [...(db.expenses || [])];
-            if (where?.ticket_id) list = list.filter(e => e.ticket_id === where.ticket_id || e.ticket_no === where.ticket_id);
-            if (where?.ticket_no) list = list.filter(e => e.ticket_no === where.ticket_no);
+            if (where?.OR && Array.isArray(where.OR)) {
+                list = list.filter(e => {
+                    return where.OR.some(cond => {
+                        if (cond.ticket_id && (e.ticket_id === cond.ticket_id || e.ticket_no === cond.ticket_id)) return true;
+                        if (cond.ticket_no && (e.ticket_no === cond.ticket_no || e.ticket_id === cond.ticket_no)) return true;
+                        return false;
+                    });
+                });
+            } else {
+                if (where?.ticket_id) list = list.filter(e => e.ticket_id === where.ticket_id || e.ticket_no === where.ticket_id);
+                if (where?.ticket_no) list = list.filter(e => e.ticket_no === where.ticket_no || e.ticket_id === where.ticket_no);
+            }
             if (where?.status) list = list.filter(e => e.status === where.status);
             list.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
             return list;
@@ -496,7 +506,12 @@ const prisma = {
                 } catch (e) {}
             }
             const db = getLocalDb();
-            return (db.expenses || []).find(e => (!where?.id || e.id === where.id)) || null;
+            return (db.expenses || []).find(e => {
+                if (where?.id && e.id !== where.id) return false;
+                if (where?.receipt_no && String(e.receipt_no || '').trim() !== String(where.receipt_no).trim()) return false;
+                if (where?.ticket_id && e.ticket_id !== where.ticket_id && e.ticket_no !== where.ticket_id) return false;
+                return true;
+            }) || null;
         },
         create: async ({ data }) => {
             if (realPrisma) {
@@ -2030,7 +2045,14 @@ app.get('/api/tickets/:id/expenses', async (req, res) => {
         if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
 
         const expenses = await prisma.expense.findMany({
-            where: { ticket_id: ticket.id }
+            where: {
+                OR: [
+                    { ticket_id: ticket.id },
+                    { ticket_no: ticket.ticket_no },
+                    { ticket_id: ticket.ticket_no },
+                    { ticket_no: ticket.id }
+                ]
+            }
         });
 
         // Summary calculations matching university financial rules
@@ -2129,24 +2151,29 @@ app.post('/api/tickets/:id/expenses', requireAuth, async (req, res) => {
 
         const expenseId = 'exp-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
 
-        // Check duplicate receipt number if provided
+        // Check duplicate receipt number ONLY across DIFFERENT tickets
         if (body.receipt_no && String(body.receipt_no).trim()) {
+            const trimmedNo = String(body.receipt_no).trim();
             const existingReceipt = await prisma.expense.findFirst({
-                where: { receipt_no: String(body.receipt_no).trim() }
+                where: { receipt_no: trimmedNo }
             });
-            if (existingReceipt) {
+            if (existingReceipt && existingReceipt.ticket_id !== ticket.id && existingReceipt.ticket_no !== ticket.ticket_no) {
                 return res.status(400).json({ 
                     error: `เลขที่ใบเสร็จ "${body.receipt_no}" มีอยู่ในระบบแล้ว (Ticket: ${existingReceipt.ticket_no}) กรุณาตรวจสอบ` 
                 });
             }
         }
 
+        const expenseStatus = body.status || (body.receipt_no ? 'APPROVED' : 'PENDING');
+        const approvedBy = (expenseStatus === 'APPROVED') ? actor.name : null;
+        const approvedAt = (expenseStatus === 'APPROVED') ? new Date() : null;
+
         const newExpense = await prisma.expense.create({
             data: {
                 id: expenseId,
                 ticket_id: ticket.id,
                 ticket_no: ticket.ticket_no,
-                category: body.category || 'อุปกรณ์',
+                category: body.category || 'ค่าวัสดุและอุปกรณ์',
                 description: body.description || '-',
                 quantity,
                 unit: body.unit || 'ชิ้น',
@@ -2160,7 +2187,9 @@ app.post('/api/tickets/:id/expenses', requireAuth, async (req, res) => {
                 vendor_name: body.vendor_name ? String(body.vendor_name).trim() : null,
                 receipt_date: body.receipt_date ? new Date(body.receipt_date) : null,
                 receipt_url: body.receipt_url || null,
-                status: 'PENDING',
+                status: expenseStatus,
+                approved_by: approvedBy,
+                approved_at: approvedAt,
                 created_by: actor.id,
                 created_by_name: actor.name,
                 created_at: new Date(),
@@ -2651,56 +2680,6 @@ app.post('/api/ocr/scan-receipt', upload.single('receipt'), async (req, res) => 
             parsedData.items = [defaultItem];
             parsedData.primary_item = defaultItem;
             parsedData.description = defaultItem.name;
-        }
-
-        // If ticket_id or ticket_no is provided in query or body, automatically save the expense to database!
-        const targetTicketId = req.body.ticket_id || req.query.ticket_id;
-        const targetTicketNo = req.body.ticket_no || req.query.ticket_no;
-
-        if (targetTicketId || targetTicketNo) {
-            try {
-                const targetId = targetTicketId || targetTicketNo;
-                let linkedTicket = await prisma.ticket.findFirst({
-                    where: { OR: [{ id: targetId }, { ticket_no: targetId }] }
-                });
-                if (!linkedTicket) {
-                    linkedTicket = await resolveOrHealTicket(req, targetId);
-                }
-
-                if (linkedTicket) {
-                    const actor = req.user || { name: 'เจ้าหน้าที่', id: 'usr-auto' };
-                    const autoExpense = {
-                        id: 'exp-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6),
-                        ticket_id: linkedTicket.id,
-                        ticket_no: linkedTicket.ticket_no,
-                        category: parsedData.category || 'ค่าวัสดุและอุปกรณ์',
-                        description: parsedData.description || 'รายการอุปกรณ์ตามใบเสร็จ',
-                        quantity: Number(parsedData.quantity) || 1,
-                        unit: parsedData.unit || 'ชิ้น',
-                        unit_price: Number(parsedData.unit_price) || Number(parsedData.net_amount) || 0,
-                        total_price: Number(parsedData.total_price) || Number(parsedData.net_amount) || 0,
-                        discount: Number(parsedData.discount) || 0,
-                        tax_percent: parsedData.tax_amount > 0 ? 7 : 0,
-                        tax_amount: Number(parsedData.tax_amount) || 0,
-                        net_amount: Number(parsedData.net_amount) || 0,
-                        receipt_no: parsedData.receipt_no ? String(parsedData.receipt_no).trim() : null,
-                        vendor_name: parsedData.vendor_name ? String(parsedData.vendor_name).trim() : null,
-                        receipt_date: parsedData.receipt_date ? new Date(parsedData.receipt_date) : new Date(),
-                        receipt_url: parsedData.file_url,
-                        status: 'PENDING',
-                        created_by: actor.id || 'usr-auto',
-                        created_by_name: actor.name || 'เจ้าหน้าที่',
-                        created_at: new Date(),
-                        updated_at: new Date()
-                    };
-
-                    await prisma.expense.create({ data: autoExpense });
-                    parsedData.saved_expense = autoExpense;
-                    console.log(`💾 Auto-saved expense to database for ticket ${linkedTicket.ticket_no}`);
-                }
-            } catch (autoSaveErr) {
-                console.warn('Auto-save OCR expense warning:', autoSaveErr.message);
-            }
         }
 
         console.log(`🧾 OCR processed: ${filename} | Vendor: "${parsedData.vendor_name}" | No: "${parsedData.receipt_no}" | Amount: ฿${parsedData.net_amount}`);

@@ -38,6 +38,7 @@ export default function TicketExpenseManager({
     const [vendorName, setVendorName] = useState('');
     const [receiptDate, setReceiptDate] = useState('');
     const [receiptUrl, setReceiptUrl] = useState('');
+    const [status, setStatus] = useState('APPROVED');
     const [submitting, setSubmitting] = useState(false);
     const [formError, setFormError] = useState('');
 
@@ -125,16 +126,9 @@ export default function TicketExpenseManager({
                     setOcrWarning(parsed.ocr_note);
                 }
 
-                // If backend automatically saved the expense to database, trigger immediate list refresh!
-                if (parsed.saved_expense) {
-                    if (onExpenseUpdated) onExpenseUpdated();
-                    if (appContext?.toast?.success) {
-                        appContext.toast.success(`🎉 สแกนใบเสร็จและบันทึกลงฐานข้อมูลขึ้นรายการอุปกรณ์เรียบร้อยแล้ว!`);
-                    }
-                } else {
-                    if (appContext?.toast?.success) {
-                        appContext.toast.success('🎉 สแกนใบเสร็จและกรอกข้อมูลอุปกรณ์อัตโนมัติเรียบร้อยแล้ว!');
-                    }
+                setStatus('APPROVED');
+                if (appContext?.toast?.success) {
+                    appContext.toast.success('🎉 สแกนใบเสร็จและกรอกข้อมูลอุปกรณ์ลงช่องฟอร์มเรียบร้อยแล้ว! กรุณาตรวจสอบแล้วกดยืนยันบันทึก');
                 }
 
                 // Validation alert: check duplicate receipt
@@ -215,16 +209,45 @@ export default function TicketExpenseManager({
                     vendor_name: targetVendorName ? String(targetVendorName).trim() : null,
                     receipt_date: targetReceiptDate || null,
                     receipt_url: targetReceiptUrl || null,
+                    status: overrideData?.status ?? status,
                     client_ticket: ticket
                 })
             });
 
             const data = await res.json();
             if (res.ok) {
+                // Immediately update local cache with the newly saved expense and update summary boxes
+                const newExpItem = data;
+                const existing = Array.isArray(expenses) ? expenses : [];
+                const updatedList = [newExpItem, ...existing.filter(e => e.id !== newExpItem.id)];
+                
+                let totalProp = 0, totalAppr = 0, totalDisb = 0, totalPend = 0;
+                updatedList.forEach(e => {
+                    const amt = Number(e.net_amount || e.total_price || 0);
+                    totalProp += amt;
+                    if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
+                        totalAppr += amt;
+                        if (e.receipt_no || e.receipt_url) totalDisb += amt;
+                    } else if (e.status === 'PENDING') {
+                        totalPend += amt;
+                    }
+                });
+                const updatedSummary = {
+                    ...summary,
+                    totalProposed: totalProp,
+                    totalApproved: totalAppr,
+                    totalDisbursed: totalDisb,
+                    totalPending: totalPend,
+                    remainingBudget: Math.max(0, totalAppr - totalDisb)
+                };
+                
+                const ticketKey = ticket.id || ticket.ticket_no;
+                saveStoredExpenses(ticketKey, updatedList, updatedSummary);
+
                 setShowAddModal(false);
                 resetForm();
                 if (appContext?.toast?.success) {
-                    appContext.toast.success(`🎉 บันทึกรายการ "${targetDesc}" ขึ้นรายการอุปกรณ์เรียบร้อยแล้ว!`);
+                    appContext.toast.success(`🎉 บันทึกรายการ "${targetDesc}" ลงฐานข้อมูลและขึ้นในช่องงบประมาณเรียบร้อยแล้ว!`);
                 }
                 if (onExpenseUpdated) onExpenseUpdated();
             } else {
@@ -250,10 +273,11 @@ export default function TicketExpenseManager({
                 receipt_no: receiptNo,
                 vendor_name: vendorName,
                 receipt_date: receiptDate,
-                receipt_url: receiptUrl
+                receipt_url: receiptUrl,
+                status: status || 'APPROVED'
             });
         } else {
-            await handleCreateExpense(null);
+            await handleCreateExpense(null, { status: status || 'APPROVED' });
         }
     };
 
@@ -262,10 +286,11 @@ export default function TicketExpenseManager({
         setSubmitting(true);
         try {
             const token = localStorage.getItem('helpdesk_token');
+            const savedItems = [];
             for (const it of ocrResult.items) {
                 const itQty = parseFloat(it.quantity) || 1;
                 const itPrice = parseFloat(it.unit_price) || 0;
-                await fetch(`/api/tickets/${ticket.id}/expenses`, {
+                const res = await fetch(`/api/tickets/${ticket.id}/expenses`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -282,14 +307,44 @@ export default function TicketExpenseManager({
                         receipt_no: receiptNo ? String(receiptNo).trim() : null,
                         vendor_name: vendorName ? String(vendorName).trim() : null,
                         receipt_date: receiptDate || null,
-                        receipt_url: receiptUrl || null
+                        receipt_url: receiptUrl || null,
+                        status: status || 'APPROVED'
                     })
                 });
+                if (res.ok) {
+                    const saved = await res.json();
+                    savedItems.push(saved);
+                }
+            }
+            if (savedItems.length > 0) {
+                const existing = Array.isArray(expenses) ? expenses : [];
+                const updatedList = [...savedItems, ...existing];
+                let totalProp = 0, totalAppr = 0, totalDisb = 0, totalPend = 0;
+                updatedList.forEach(e => {
+                    const amt = Number(e.net_amount || e.total_price || 0);
+                    totalProp += amt;
+                    if (e.status === 'APPROVED' || e.status === 'PARTIALLY_APPROVED') {
+                        totalAppr += amt;
+                        if (e.receipt_no || e.receipt_url) totalDisb += amt;
+                    } else if (e.status === 'PENDING') {
+                        totalPend += amt;
+                    }
+                });
+                const updatedSummary = {
+                    ...summary,
+                    totalProposed: totalProp,
+                    totalApproved: totalAppr,
+                    totalDisbursed: totalDisb,
+                    totalPending: totalPend,
+                    remainingBudget: Math.max(0, totalAppr - totalDisb)
+                };
+                const ticketKey = ticket.id || ticket.ticket_no;
+                saveStoredExpenses(ticketKey, updatedList, updatedSummary);
             }
             setShowAddModal(false);
             resetForm();
             if (appContext?.toast?.success) {
-                appContext.toast.success(`🎉 บันทึกรายการอุปกรณ์ทั้งหมด ${ocrResult.items.length} รายการขึ้นระบบเรียบร้อยแล้ว!`);
+                appContext.toast.success(`🎉 บันทึกรายการอุปกรณ์ทั้งหมด ${savedItems.length} รายการลงฐานข้อมูลเรียบร้อยแล้ว!`);
             }
             if (onExpenseUpdated) onExpenseUpdated();
         } catch (err) {
@@ -310,6 +365,7 @@ export default function TicketExpenseManager({
         setVendorName('');
         setReceiptDate('');
         setReceiptUrl('');
+        setStatus('APPROVED');
         setOcrResult(null);
         setOcrWarning('');
         setFormError('');
@@ -1020,6 +1076,19 @@ export default function TicketExpenseManager({
                                             />
                                         </div>
                                     </div>
+
+                                    <div style={{ marginTop: '0.75rem' }}>
+                                        <label className="form-label" style={{ fontSize: '0.8rem', fontWeight: 600 }}>สถานะการอนุมัติงบประมาณ *</label>
+                                        <select 
+                                            className="form-input" 
+                                            value={status} 
+                                            onChange={(e) => setStatus(e.target.value)}
+                                            style={{ width: '100%', fontSize: '0.85rem', fontWeight: 600, color: status === 'APPROVED' ? '#4ade80' : '#fbbf24' }}
+                                        >
+                                            <option value="APPROVED">✅ อนุมัติแล้ว (บันทึกยอดเบิกจ่ายเข้าช่องงบประมาณทันที)</option>
+                                            <option value="PENDING">⏳ รอดำเนินการอนุมัติ (บันทึกเป็นรายการเสนองบ)</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -1048,9 +1117,9 @@ export default function TicketExpenseManager({
                                 form="expense-modal-form" 
                                 className="btn btn-primary" 
                                 disabled={submitting}
-                                style={{ minWidth: '150px', fontWeight: 600 }}
+                                style={{ minWidth: '180px', fontWeight: 700, backgroundColor: '#16a34a', borderColor: '#15803d' }}
                             >
-                                {submitting ? 'กำลังบันทึก...' : 'บันทึกรายการงบประมาณ'}
+                                {submitting ? 'กำลังบันทึกลงฐานข้อมูล...' : '⚡ ยืนยันและบันทึกลงฐานข้อมูล'}
                             </button>
                         </div>
                     </div>
