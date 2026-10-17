@@ -130,7 +130,7 @@ export default function TicketDetailPage(props) {
     };
 
     const isActuallyGroupA = isGroupA || ['นักศึกษา', 'อาจารย์'].includes(currentUser?.group);
-    const isActuallyGroupB = !isActuallyGroupA && (isGroupB || role === 'admin' || currentUser?.role === 'admin');
+    const isActuallyGroupB = !isActuallyGroupA && (isGroupB || role === 'admin' || currentUser?.role === 'admin' || currentUser?.group === 'ผู้ดูแลระบบ' || currentUser?.group === 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์' || (currentUser?.email || '').toLowerCase().includes('admin'));
     const isAdmin = isActuallyGroupB;
 
     const handleDirectFileUpload = async (files) => {
@@ -902,7 +902,7 @@ export default function TicketDetailPage(props) {
                         <p style={{ whiteSpace: 'pre-wrap' }}>{cleanDescription || 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
                     </div>
 
-                    <div className="detail-attachments" style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+                    <div className="detail-attachments" style={{ marginTop: '1.5rem', marginBottom: '2.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                             <h3 className="detail-label" style={{ display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
                                 <Paperclip style={{ width: 16, height: 16 }} />
@@ -1031,7 +1031,7 @@ export default function TicketDetailPage(props) {
                     </div>
 
                     {ticket.resolution_note && (
-                        <div className="detail-resolution">
+                        <div className="detail-resolution" style={{ marginTop: '2rem', marginBottom: '2rem' }}>
                             <h3 className="detail-label">
                                 <ClipboardCheck style={{ width: 16, height: 16 }} />
                                 บันทึกการดำเนินงาน
@@ -1042,7 +1042,7 @@ export default function TicketDetailPage(props) {
 
                     {/* Admin management area & Assignment Schedule */}
                     {isAdmin && (
-                        <div className="detail-admin-actions" style={{ background: 'var(--bg-card, rgba(255, 255, 255, 0.04))', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-card, rgba(0,0,0,0.08))', marginBottom: '1.5rem' }}>
+                        <div className="detail-admin-actions" style={{ marginTop: '2.5rem', background: 'var(--bg-card, rgba(255, 255, 255, 0.04))', padding: '1.5rem', borderRadius: '14px', border: '1px solid var(--border-card, rgba(0,0,0,0.08))', marginBottom: '2rem' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                                 <h3 className="detail-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: '1rem' }}>
                                     <Settings style={{ width: 16, height: 16, color: '#3b82f6' }} />

@@ -63,8 +63,8 @@ const parseRequester = (fullName) => {
 
 export default function AdminManagementPage() {
     const navigate = useNavigate();
-    const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
-    const { role, toast, confirm } = useApp();
+    const { role, user, isGuest, isGroupB, isAdmin: contextIsAdmin, signOutUser, toast, confirm } = useApp();
+    const isAdmin = contextIsAdmin || role === 'admin' || isGroupB || user?.group === 'ผู้ดูแลระบบ' || user?.role === 'admin' || (user?.email || '').toLowerCase().includes('admin');
 
     const [tickets, setTickets] = useState(() => getStoredTickets());
     const [issueTypes, setIssueTypes] = useState([]);
@@ -694,7 +694,46 @@ export default function AdminManagementPage() {
         );
     };
 
-    if (role !== 'admin') return null;
+    if (!isAdmin) {
+        return (
+            <div className="page-admin fade-in" style={{ maxWidth: 560, margin: '4rem auto', padding: '1rem', textAlign: 'center' }}>
+                <div className="glass-card" style={{ padding: '2.5rem 2rem' }}>
+                    <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1.25rem auto' }}>
+                        <Shield style={{ width: 32, height: 32, color: '#ef4444' }} />
+                    </div>
+                    <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '0.75rem', color: 'var(--text-primary)' }}>
+                        สงวนสิทธิ์เฉพาะผู้ดูแลระบบ (Admin)
+                    </h2>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: 1.6, marginBottom: '1.75rem' }}>
+                        {isGuest 
+                            ? 'เมนู "จัดการ Ticket" ต้องสมัครสมาชิกหรือเข้าสู่ระบบด้วยบัญชี "ผู้ดูแลระบบ" ถึงจะสามารถเข้าดูและจัดการข้อมูลได้'
+                            : `บัญชีของคุณ (${user?.name || user?.email}) อยู่ในกลุ่ม "${user?.group || 'ผู้ใช้งานทั่วไป'}" ซึ่งไม่มีสิทธิ์เข้าถึงหน้านี้ กรุณาเข้าสู่ระบบด้วยบัญชีผู้ดูแลระบบ`
+                        }
+                    </p>
+                    <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+                        {isGuest ? (
+                            <>
+                                <Link to="/login" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+                                    <UserCheck style={{ width: 16, height: 16 }} />
+                                    เข้าสู่ระบบผู้ดูแลระบบ
+                                </Link>
+                                <Link to="/signup" className="btn btn-ghost" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}>
+                                    สมัครสมาชิก (เลือกกลุ่มผู้ดูแลระบบ)
+                                </Link>
+                            </>
+                        ) : (
+                            <button onClick={signOutUser} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                ออกจากระบบเพื่อสลับบัญชี
+                            </button>
+                        )}
+                        <Link to="/" className="btn btn-ghost" style={{ textDecoration: 'none' }}>
+                            กลับหน้าหลัก
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="page-admin fade-in">

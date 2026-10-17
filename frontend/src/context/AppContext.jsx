@@ -62,37 +62,28 @@ export function AppProvider({ children }) {
     const [theme, setTheme] = useState('dark');
 
     const loadSimulatedUser = () => {
-        const sessionActive = typeof window !== 'undefined' ? sessionStorage.getItem('helpdesk_session_active') : null;
-        if (sessionActive === 'true') {
-            const storedUser = localStorage.getItem('helpdesk_current_user');
+        try {
+            const storedUser = typeof window !== 'undefined' ? localStorage.getItem('helpdesk_current_user') : null;
             if (storedUser) {
-                try {
-                    const parsed = JSON.parse(storedUser);
-                    if (parsed && parsed.email && parsed.email.trim()) {
-                        setUserState(parsed);
-                        let storedRole = localStorage.getItem('helpdesk_current_role');
-                        if (!storedRole) {
-                            const isGroupAMember = ['นักศึกษา', 'อาจารย์'].includes(parsed.group);
-                            storedRole = isGroupAMember ? 'user' : (parsed.role || 'user');
-                        }
-                        setRoleState(storedRole);
-                        return;
+                const parsed = JSON.parse(storedUser);
+                if (parsed && parsed.email && parsed.email.trim()) {
+                    setUserState(parsed);
+                    let storedRole = localStorage.getItem('helpdesk_current_role');
+                    if (!storedRole) {
+                        const isGroupBMember = ['ผู้ดูแลระบบ', 'เจ้าหน้าที่', 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์', 'ฝ่ายซ่อมบำรุง'].includes(parsed.group) || parsed.role === 'admin' || (parsed.email || '').toLowerCase().includes('admin');
+                        storedRole = isGroupBMember ? 'admin' : 'user';
                     }
-                } catch (e) {
-                    console.error(e);
+                    setRoleState(storedRole);
+                    return;
                 }
             }
+        } catch (e) {
+            console.error('Error loading stored user:', e);
         }
         
         // Strict GUEST default (ยังไม่ได้เข้าสู่ระบบ / ผู้เยี่ยมชม)
         setUserState(null);
         setRoleState('guest');
-        if (typeof window !== 'undefined') {
-            localStorage.removeItem('helpdesk_current_user');
-            localStorage.removeItem('helpdesk_current_role');
-            localStorage.removeItem('helpdesk_token');
-            sessionStorage.removeItem('helpdesk_session_active');
-        }
     };
 
     // Initial auth load from persistent storage
@@ -396,7 +387,17 @@ export function AppProvider({ children }) {
         user?.role === 'admin' ||
         user?.role === 'staff' ||
         user?.role === 'technician' ||
-        role === 'admin'
+        role === 'admin' ||
+        (user?.email || '').toLowerCase().includes('admin')
+    );
+
+    const isAdmin = !isGuest && (
+        user?.group === 'ผู้ดูแลระบบ' ||
+        user?.group === 'เจ้าหน้าที่ผู้รับผิดชอบงาน IT หรือผู้ดูแลอุปกรณ์' ||
+        user?.role === 'admin' ||
+        role === 'admin' ||
+        (user?.email || '').toLowerCase().includes('admin') ||
+        isGroupB
     );
 
     const updateUserProfile = async ({ name, phone, group, avatar_url }) => {
@@ -533,6 +534,7 @@ export function AppProvider({ children }) {
             isGuest,
             isGroupA,
             isGroupB,
+            isAdmin,
             updateUserProfile,
             changeUserPassword,
             uploadUserAvatar,

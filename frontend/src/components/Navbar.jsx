@@ -16,10 +16,10 @@ import {
 
 export default function Navbar() {
     const { pathname } = useLocation();
-    const { role, setRole, user, signOutUser, isRealAuth, isGuest, isGroupA, isGroupB, MOCK_PROFILES, switchMockProfile, theme, toggleTheme } = useApp();
+    const { role, setRole, user, signOutUser, isRealAuth, isGuest, isGroupA, isGroupB, isAdmin: contextIsAdmin, MOCK_PROFILES, switchMockProfile, theme, toggleTheme } = useApp();
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
-    const isAdmin = role === 'admin' || isGroupB;
+    const isAdmin = contextIsAdmin || role === 'admin' || isGroupB || user?.group === 'ผู้ดูแลระบบ' || user?.role === 'admin' || (user?.email || '').toLowerCase().includes('admin');
 
     const guestMenuItems = [
         { href: '/', icon: <Home style={{ width: 17, height: 17 }} />, label: 'หน้าหลัก', id: 'home' },
@@ -47,7 +47,7 @@ export default function Navbar() {
         { href: '/profile', icon: <UserCircle style={{ width: 17, height: 17 }} />, label: 'จัดการโปรไฟล์', id: 'profile' }
     ];
 
-    const menuItems = isGuest ? guestMenuItems : (isGroupB ? groupBMenuItems : groupAMenuItems);
+    const menuItems = isGuest ? guestMenuItems : (isAdmin ? groupBMenuItems : groupAMenuItems);
 
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
@@ -111,7 +111,7 @@ export default function Navbar() {
                                 <div className="user-avatar" style={{ width: 28, height: 28, fontSize: '0.8rem', overflow: 'hidden', borderRadius: '50%' }}>
                                     {user?.avatar_url ? (
                                         <img src={user.avatar_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    ) : isGroupB ? (
+                                    ) : isAdmin ? (
                                         <ShieldCheck style={{ width: 16, height: 16, color: 'var(--primary-color)' }} />
                                     ) : (
                                         <UserCircle style={{ width: 16, height: 16 }} />
@@ -120,8 +120,8 @@ export default function Navbar() {
                                 <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                     {user?.name || 'ผู้ใช้งาน'}
                                 </span>
-                                <span className={`user-role-badge ${isGroupB ? 'admin-badge' : 'user-badge'}`} style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
-                                    {isGroupB ? 'Group B' : 'Group A'}
+                                <span className={`user-role-badge ${isAdmin ? 'admin-badge' : 'user-badge'}`} style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+                                    {isAdmin ? 'Group B (เจ้าหน้าที่/ผู้ดูแล)' : 'Group A (ผู้ใช้งาน)'}
                                 </span>
                             </Link>
                         ) : (
@@ -301,7 +301,7 @@ export default function Navbar() {
                                 <div className="user-avatar" style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden' }}>
                                     {user?.avatar_url ? (
                                         <img src={user.avatar_url} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    ) : isGroupB ? (
+                                    ) : isAdmin ? (
                                         <ShieldCheck style={{ width: 20, height: 20, color: 'var(--primary-color)' }} />
                                     ) : (
                                         <UserCircle style={{ width: 20, height: 20 }} />
@@ -312,8 +312,8 @@ export default function Navbar() {
                                         {user?.name || 'ผู้ใช้งาน'}
                                     </span>
                                     <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                        <span className={`user-role-badge ${isGroupB ? 'admin-badge' : 'user-badge'}`} style={{ fontSize: '0.65rem', padding: '1px 4px' }}>
-                                            {isGroupB ? 'Group B' : 'Group A'}
+                                        <span className={`user-role-badge ${isAdmin ? 'admin-badge' : 'user-badge'}`} style={{ fontSize: '0.65rem', padding: '1px 4px' }}>
+                                            {isAdmin ? 'Group B (เจ้าหน้าที่/ผู้ดูแล)' : 'Group A (ผู้ใช้งาน)'}
                                         </span>
                                         <span className="user-role-badge" style={{
                                             fontSize: '0.65rem',
