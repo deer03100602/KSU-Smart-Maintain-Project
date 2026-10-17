@@ -70,10 +70,20 @@ export default function TicketExpenseManager({
         setOcrWarning('');
         const formData = new FormData();
         formData.append('receipt', file);
+        if (ticket?.id) formData.append('ticket_id', ticket.id);
+        if (ticket?.ticket_no) formData.append('ticket_no', ticket.ticket_no);
 
         try {
-            const res = await fetch('/api/ocr/scan-receipt', {
+            const token = localStorage.getItem('helpdesk_token');
+            const currentUser = localStorage.getItem('helpdesk_current_user');
+            const clientUserHeader = currentUser ? encodeURIComponent(currentUser) : '';
+
+            const res = await fetch(`/api/ocr/scan-receipt?ticket_id=${encodeURIComponent(ticket.id || '')}`, {
                 method: 'POST',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : '',
+                    'x-client-user': clientUserHeader
+                },
                 body: formData
             });
             const data = await res.json();
@@ -115,8 +125,16 @@ export default function TicketExpenseManager({
                     setOcrWarning(parsed.ocr_note);
                 }
 
-                if (appContext?.toast?.success) {
-                    appContext.toast.success('🎉 สแกนใบเสร็จและกรอกข้อมูลอุปกรณ์อัตโนมัติเรียบร้อยแล้ว!');
+                // If backend automatically saved the expense to database, trigger immediate list refresh!
+                if (parsed.saved_expense) {
+                    if (onExpenseUpdated) onExpenseUpdated();
+                    if (appContext?.toast?.success) {
+                        appContext.toast.success(`🎉 สแกนใบเสร็จและบันทึกลงฐานข้อมูลขึ้นรายการอุปกรณ์เรียบร้อยแล้ว!`);
+                    }
+                } else {
+                    if (appContext?.toast?.success) {
+                        appContext.toast.success('🎉 สแกนใบเสร็จและกรอกข้อมูลอุปกรณ์อัตโนมัติเรียบร้อยแล้ว!');
+                    }
                 }
 
                 // Validation alert: check duplicate receipt

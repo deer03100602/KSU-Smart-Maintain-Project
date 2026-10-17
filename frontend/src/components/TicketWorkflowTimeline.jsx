@@ -81,12 +81,18 @@ export default function TicketWorkflowTimeline({
                 assigned_to: ticket.assigned_to
             })) : '';
 
+            const currentUserData = localStorage.getItem('helpdesk_current_user');
+            const clientUserHeader = currentUserData ? encodeURIComponent(currentUserData) : (
+                currentUser?.email ? encodeURIComponent(JSON.stringify(currentUser)) : ''
+            );
+
             const res = await fetch(`/api/tickets/${ticket.id}/action`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': token ? `Bearer ${token}` : '',
-                    'x-client-ticket': clientTicketHeader
+                    'x-client-ticket': clientTicketHeader,
+                    'x-client-user': clientUserHeader
                 },
                 body: JSON.stringify(reqBody)
             });
