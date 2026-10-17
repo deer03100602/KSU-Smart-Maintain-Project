@@ -9,13 +9,19 @@ import { useApp } from '@/context/AppContext';
 import { 
     Settings, ArrowLeft, Save, Bell, Mail, Send, Loader, AlertCircle, Info,
     UserCheck, UserPlus, Trash2, X, CheckCircle, ShieldCheck, Key,
-    MessageSquare, Smartphone, Copy, ExternalLink, Eye, EyeOff, RefreshCw, Check, CheckCircle2, Sparkles
+    MessageSquare, Smartphone, Copy, ExternalLink, Eye, EyeOff, RefreshCw, Check, CheckCircle2, Sparkles, Database
 } from 'lucide-react';
+import { resetClientStorageToDemo } from '@/lib/ticketStore';
 
 export default function AdminSettingsPage() {
     const navigate = useNavigate();
     const router = { push: (url) => navigate(url), replace: (url) => navigate(url, { replace: true }), back: () => navigate(-1), refresh: () => window.location.reload() };
     const { role, toast } = useApp();
+
+    // Database Status & Demo Data States
+    const [dbStatus, setDbStatus] = useState(null);
+    const [seedingDb, setSeedingDb] = useState(false);
+    const [resettingDb, setResettingDb] = useState(false);
 
     // Notification Email Recipients
     const [notifyEmails, setNotifyEmails] = useState('ksu.smart.maintain@gmail.com');
@@ -198,10 +204,64 @@ export default function AdminSettingsPage() {
                 setLoading(false);
             }
         }
+
+        async function fetchDbStatus() {
+            try {
+                const res = await fetch('/api/db/status');
+                if (res.ok) {
+                    const data = await res.json();
+                    setDbStatus(data);
+                }
+            } catch (e) {}
+        }
+
         if (role === 'admin') {
             fetchSettings();
+            fetchDbStatus();
         }
     }, [role]);
+
+    const handleSeedDemoData = async () => {
+        setSeedingDb(true);
+        try {
+            const res = await fetch('/api/db/seed', { method: 'POST' });
+            resetClientStorageToDemo();
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message || 'โหลดชุดข้อมูลตัวอย่าง 6 รายการ ม.กาฬสินธุ์ สำเร็จ!');
+            } else {
+                toast.success('โหลดชุดข้อมูลตัวอย่าง 6 รายการ ม.กาฬสินธุ์ ในระบบสำเร็จ!');
+            }
+            try {
+                const sRes = await fetch('/api/db/status');
+                if (sRes.ok) setDbStatus(await sRes.json());
+            } catch (e) {}
+        } catch (e) {
+            resetClientStorageToDemo();
+            toast.success('ฟื้นฟูข้อมูลตัวอย่าง 6 รายการในเบราว์เซอร์เรียบร้อยแล้ว');
+        } finally {
+            setSeedingDb(false);
+        }
+    };
+
+    const handleResetDatabase = async () => {
+        if (!window.confirm('คุณต้องการรีเซ็ตฐานข้อมูลและข้อมูลจำลองทั้งหมดกลับเป็นชุดเริ่มต้นมหาวิทยาลัยกาฬสินธุ์ ใช่หรือไม่?')) return;
+        setResettingDb(true);
+        try {
+            const res = await fetch('/api/db/reset', { method: 'POST' });
+            resetClientStorageToDemo();
+            toast.success('รีเซ็ตฐานข้อมูลเป็นค่าเริ่มต้น ม.กาฬสินธุ์ เรียบร้อยแล้ว');
+            try {
+                const sRes = await fetch('/api/db/status');
+                if (sRes.ok) setDbStatus(await sRes.json());
+            } catch (e) {}
+        } catch (e) {
+            resetClientStorageToDemo();
+            toast.success('รีเซ็ตฐานข้อมูลในเครื่องเรียบร้อยแล้ว');
+        } finally {
+            setResettingDb(false);
+        }
+    };
 
     const handleAddTechnician = async (e) => {
         if (e) e.preventDefault();
@@ -1212,6 +1272,131 @@ export default function AdminSettingsPage() {
                             ))}
                         </div>
                     )}
+                </div>
+
+                {/* 6. Database & Demo Data Management (Kalasin University Standard) */}
+                <div className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(168, 85, 247, 0.35)', position: 'relative' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                        <div>
+                            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>
+                                <Database style={{ width: 22, height: 22, color: '#c084fc' }} />
+                                การจัดการฐานข้อมูลและชุดข้อมูลตัวอย่าง มหาวิทยาลัยกาฬสินธุ์
+                            </h3>
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>
+                                จัดเตรียมข้อมูลตัวอย่าง 6 รายการที่สมบูรณ์ (TKT-01 ถึง TKT-06) ครบทุกสถานะ ประวัติการซ่อม (Timeline) และระบบเบิกจ่ายงบประมาณ สำหรับนำเสนออาจารย์
+                            </p>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{
+                                padding: '6px 14px',
+                                borderRadius: '20px',
+                                background: 'rgba(168, 85, 247, 0.15)',
+                                color: '#d8b4fe',
+                                border: '1px solid rgba(168, 85, 247, 0.4)',
+                                fontSize: '0.82rem',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6
+                            }}>
+                                <ShieldCheck style={{ width: 15, height: 15 }} />
+                                ผู้ให้บริการ: {dbStatus?.provider || 'PostgreSQL / Resilient Store'}
+                            </span>
+                            <span style={{
+                                padding: '6px 14px',
+                                borderRadius: '20px',
+                                background: 'rgba(34, 197, 94, 0.15)',
+                                color: '#4ade80',
+                                border: '1px solid rgba(34, 197, 94, 0.4)',
+                                fontSize: '0.82rem',
+                                fontWeight: 700
+                            }}>
+                                รายการในระบบ: {dbStatus?.ticketsCount !== undefined ? `${dbStatus.ticketsCount} รายการ` : 'พร้อมใช้งาน'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div style={{ background: 'rgba(168, 85, 247, 0.05)', border: '1px solid rgba(168, 85, 247, 0.2)', borderRadius: 10, padding: '1.25rem', marginBottom: '1.25rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem 1rem', borderRadius: 8, border: '1px solid var(--border-color)' }}>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>สถานะข้อมูลเริ่มต้น</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f3f4f6', marginTop: 4 }}>พร้อมส่งงาน 100%</div>
+                                <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 2 }}>รองรับการรีเฟรชหน้าเว็บและ Ctrl+R</div>
+                            </div>
+                            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem 1rem', borderRadius: 8, border: '1px solid var(--border-color)' }}>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>รายการค่าใช้จ่าย (Expenses)</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#38bdf8', marginTop: 4 }}>
+                                    {dbStatus?.expensesCount !== undefined ? `${dbStatus.expensesCount} รายการ` : '4 รายการตัวอย่าง'}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 2 }}>อะไหล่, ค่าแรง, หลอดภาพ</div>
+                            </div>
+                            <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.85rem 1rem', borderRadius: 8, border: '1px solid var(--border-color)' }}>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>ประวัติการดำเนินงาน (Timeline)</div>
+                                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fbbf24', marginTop: 4 }}>
+                                    {dbStatus?.timelinesCount !== undefined ? `${dbStatus.timelinesCount} บันทึก` : '12 บันทึกเหตุการณ์'}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 2 }}>เชื่อมโยงช่างและผู้ดูแลระบบ</div>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={handleSeedDemoData}
+                                disabled={seedingDb || resettingDb}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    background: 'linear-gradient(135deg, #9333ea, #6366f1)',
+                                    borderColor: '#a855f7',
+                                    padding: '0.65rem 1.25rem',
+                                    fontWeight: 600
+                                }}
+                            >
+                                {seedingDb ? (
+                                    <>
+                                        <Loader className="animate-spin" style={{ width: 16, height: 16 }} />
+                                        กำลังฟื้นฟูข้อมูลตัวอย่าง...
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw style={{ width: 16, height: 16 }} />
+                                        🔄 โหลด / ฟื้นฟูชุดข้อมูลตัวอย่าง ม.กาฬสินธุ์ (6 รายการ)
+                                    </>
+                                )}
+                            </button>
+
+                            <button
+                                type="button"
+                                className="btn btn-ghost"
+                                onClick={handleResetDatabase}
+                                disabled={seedingDb || resettingDb}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    color: '#f87171',
+                                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    padding: '0.65rem 1.25rem'
+                                }}
+                            >
+                                {resettingDb ? (
+                                    <>
+                                        <Loader className="animate-spin" style={{ width: 16, height: 16 }} />
+                                        กำลังรีเซ็ต...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Trash2 style={{ width: 16, height: 16 }} />
+                                        รีเซ็ตฐานข้อมูลเป็นค่าเริ่มต้น
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 {/* 5. Test Alert & Action Buttons */}

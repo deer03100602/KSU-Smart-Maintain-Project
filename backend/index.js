@@ -24,6 +24,7 @@ const {
     processWebhookEvents,
     updateStoredSettings
 } = require('./lineService');
+const { SEED_TICKETS, SEED_EXPENSES, SEED_TIMELINES, SEED_STAFF } = require('./seedData');
 
 const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 const baseDataDir = isServerless ? '/tmp' : path.join(__dirname, 'data');
@@ -88,26 +89,28 @@ function getLocalDb() {
             db.deletedTicketIds = db.deletedTicketIds || [];
             const deletedSet = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
 
-            // Only seed on initial launch when db has never been marked initialized
-            if (!db.initialized && fs.existsSync(bundledDbPath)) {
+            // Auto-seed with master university dataset if tickets list is empty
+            if (db.tickets.length === 0 && Array.isArray(SEED_TICKETS) && SEED_TICKETS.length > 0) {
+                const seedIds = new Set(SEED_TICKETS.map(t => String(t.id).toLowerCase()));
+                const seedNos = new Set(SEED_TICKETS.map(t => String(t.ticket_no).toLowerCase()));
+                // Clean deletedTicketIds from seed IDs
+                db.deletedTicketIds = (db.deletedTicketIds || []).filter(d => !seedIds.has(String(d).toLowerCase()) && !seedNos.has(String(d).toLowerCase()));
+                db.tickets = JSON.parse(JSON.stringify(SEED_TICKETS));
+                if (!db.expenses || db.expenses.length === 0) db.expenses = JSON.parse(JSON.stringify(SEED_EXPENSES || []));
+                if (!db.timelines || db.timelines.length === 0) db.timelines = JSON.parse(JSON.stringify(SEED_TIMELINES || []));
+                db.counter = Math.max(db.counter || 0, SEED_TICKETS.length);
+                db.initialized = true;
                 try {
-                    const bundled = JSON.parse(fs.readFileSync(bundledDbPath, 'utf8'));
-                    if (db.tickets.length === 0) {
-                        db.tickets = (bundled.tickets || []).filter(t => {
-                            const id = String(t.id || '').trim().toLowerCase();
-                            const no = String(t.ticket_no || '').trim().toLowerCase();
-                            return !deletedSet.has(id) && !deletedSet.has(no);
-                        });
-                    }
-                    db.initialized = true;
+                    fs.writeFileSync(dbFilePath, JSON.stringify(db, null, 2), 'utf8');
                 } catch (e) {}
             }
 
             // Always ensure deleted tickets are filtered out
+            const activeDeleted = new Set((db.deletedTicketIds || []).map(d => String(d).trim().toLowerCase()));
             db.tickets = (db.tickets || []).filter(t => {
                 const id = String(t.id || '').trim().toLowerCase();
                 const no = String(t.ticket_no || '').trim().toLowerCase();
-                return !deletedSet.has(id) && !deletedSet.has(no);
+                return !activeDeleted.has(id) && !activeDeleted.has(no);
             });
 
             return db;
@@ -901,10 +904,264 @@ async function initDatabase() {
                 console.warn('Prisma mock ticket purge note:', pErr.message);
             }
         }
+
+        // Auto-seed demo dataset if database has 0 tickets
+        await ensureDatabaseSeeded();
     } catch (err) {
         console.warn('ℹ️ PostgreSQL not immediately ready, running in resilient mode:', err.message);
+        // Seed JSON store anyway
+        await ensureDatabaseSeeded();
     }
 }
+
+// ─────────────────────────────────────────────────────────────
+// Master Database Seeding Routine
+// ─────────────────────────────────────────────────────────────
+async function ensureDatabaseSeeded(force = false) {
+    try {
+        const db = getLocalDb();
+        const activeTickets = Array.isArray(db.tickets) ? db.tickets : [];
+        const needsSeed = force || activeTickets.length === 0;
+
+        if (needsSeed) {
+            console.log('🌱 Seeding JSON store with master KSU demo dataset (6 tickets)...');
+            db.tickets = JSON.parse(JSON.stringify(SEED_TICKETS));
+            db.expenses = JSON.parse(JSON.stringify(SEED_EXPENSES));
+            db.timelines = JSON.parse(JSON.stringify(SEED_TIMELINES));
+            db.counter = Math.max(db.counter || 0, SEED_TICKETS.length);
+            db.deletedTicketIds = [];
+            db.initialized = true;
+            saveLocalDb(db);
+            try {
+                if (bundledDbPath && bundledDbPath !== dbFilePath) {
+                    fs.writeFileSync(bundledDbPath, JSON.stringify(db, null, 2), 'utf8');
+                }
+            } catch (e) {}
+            console.log('✅ JSON store seeded successfully with 6 master tickets.');
+        }
+
+        if (realPrisma) {
+            try {
+                const count = await realPrisma.ticket.count().catch(() => 0);
+                if (count === 0 || force) {
+                    console.log('🌱 Upserting 6 master tickets into PostgreSQL database...');
+                    for (const t of SEED_TICKETS) {
+                        await realPrisma.ticket.upsert({
+                            where: { id: t.id },
+                            update: {
+                                ticket_no: t.ticket_no,
+                                title: t.title,
+                                description: t.description,
+                                issue_type: t.issue_type,
+                                location: t.location,
+                                priority: t.priority,
+                                status: t.status,
+                                requester_name: t.requester_name,
+                                requester_email: t.requester_email,
+                                assigned_to: t.assigned_to,
+                                co_workers: t.co_workers || '',
+                                start_date: t.start_date ? new Date(t.start_date) : null,
+                                due_date: t.due_date ? new Date(t.due_date) : null,
+                                budget_status: t.budget_status || 'ยังไม่เสนอ',
+                                approved_budget: t.approved_budget || 0,
+                                disbursed_amount: t.disbursed_amount || 0,
+                                completion_summary: t.completion_summary || '',
+                                accepted_by: t.accepted_by || null,
+                                accepted_at: t.accepted_at ? new Date(t.accepted_at) : null,
+                                resolution_note: t.resolution_note || '',
+                                created_at: new Date(t.created_at),
+                                updated_at: new Date(t.updated_at),
+                                closed_at: t.closed_at ? new Date(t.closed_at) : null
+                            },
+                            create: {
+                                id: t.id,
+                                ticket_no: t.ticket_no,
+                                title: t.title,
+                                description: t.description,
+                                issue_type: t.issue_type,
+                                location: t.location,
+                                priority: t.priority,
+                                status: t.status,
+                                requester_name: t.requester_name,
+                                requester_email: t.requester_email,
+                                assigned_to: t.assigned_to,
+                                co_workers: t.co_workers || '',
+                                start_date: t.start_date ? new Date(t.start_date) : null,
+                                due_date: t.due_date ? new Date(t.due_date) : null,
+                                budget_status: t.budget_status || 'ยังไม่เสนอ',
+                                approved_budget: t.approved_budget || 0,
+                                disbursed_amount: t.disbursed_amount || 0,
+                                completion_summary: t.completion_summary || '',
+                                accepted_by: t.accepted_by || null,
+                                accepted_at: t.accepted_at ? new Date(t.accepted_at) : null,
+                                resolution_note: t.resolution_note || '',
+                                created_at: new Date(t.created_at),
+                                updated_at: new Date(t.updated_at),
+                                closed_at: t.closed_at ? new Date(t.closed_at) : null
+                            }
+                        }).catch(e => console.warn('Prisma seed ticket err:', e.message));
+                    }
+
+                    for (const exp of SEED_EXPENSES) {
+                        await realPrisma.expense.upsert({
+                            where: { id: exp.id },
+                            update: {
+                                ticket_id: exp.ticket_id,
+                                ticket_no: exp.ticket_no,
+                                category: exp.category,
+                                description: exp.description,
+                                quantity: exp.quantity,
+                                unit: exp.unit,
+                                unit_price: exp.unit_price,
+                                total_price: exp.total_price,
+                                tax_percent: exp.tax_percent,
+                                tax_amount: exp.tax_amount,
+                                discount: exp.discount,
+                                net_amount: exp.net_amount,
+                                receipt_no: exp.receipt_no,
+                                vendor_name: exp.vendor_name,
+                                receipt_date: exp.receipt_date ? new Date(exp.receipt_date) : null,
+                                receipt_url: exp.receipt_url || '',
+                                status: exp.status,
+                                created_by: exp.created_by,
+                                created_by_name: exp.created_by_name,
+                                reviewed_by: exp.reviewed_by,
+                                reviewed_at: exp.reviewed_at ? new Date(exp.reviewed_at) : null,
+                                approved_by: exp.approved_by,
+                                approved_at: exp.approved_at ? new Date(exp.approved_at) : null,
+                                created_at: new Date(exp.created_at),
+                                updated_at: new Date(exp.updated_at)
+                            },
+                            create: {
+                                id: exp.id,
+                                ticket_id: exp.ticket_id,
+                                ticket_no: exp.ticket_no,
+                                category: exp.category,
+                                description: exp.description,
+                                quantity: exp.quantity,
+                                unit: exp.unit,
+                                unit_price: exp.unit_price,
+                                total_price: exp.total_price,
+                                tax_percent: exp.tax_percent,
+                                tax_amount: exp.tax_amount,
+                                discount: exp.discount,
+                                net_amount: exp.net_amount,
+                                receipt_no: exp.receipt_no,
+                                vendor_name: exp.vendor_name,
+                                receipt_date: exp.receipt_date ? new Date(exp.receipt_date) : null,
+                                receipt_url: exp.receipt_url || '',
+                                status: exp.status,
+                                created_by: exp.created_by,
+                                created_by_name: exp.created_by_name,
+                                reviewed_by: exp.reviewed_by,
+                                reviewed_at: exp.reviewed_at ? new Date(exp.reviewed_at) : null,
+                                approved_by: exp.approved_by,
+                                approved_at: exp.approved_at ? new Date(exp.approved_at) : null,
+                                created_at: new Date(exp.created_at),
+                                updated_at: new Date(exp.updated_at)
+                            }
+                        }).catch(e => console.warn('Prisma seed expense err:', e.message));
+                    }
+
+                    for (const tml of SEED_TIMELINES) {
+                        await realPrisma.ticketTimeline.upsert({
+                            where: { id: tml.id },
+                            update: {
+                                ticket_id: tml.ticket_id,
+                                ticket_no: tml.ticket_no,
+                                action: tml.action,
+                                title: tml.title,
+                                description: tml.description,
+                                actor_name: tml.actor_name,
+                                actor_email: tml.actor_email,
+                                actor_role: tml.actor_role,
+                                created_at: new Date(tml.created_at)
+                            },
+                            create: {
+                                id: tml.id,
+                                ticket_id: tml.ticket_id,
+                                ticket_no: tml.ticket_no,
+                                action: tml.action,
+                                title: tml.title,
+                                description: tml.description,
+                                actor_name: tml.actor_name,
+                                actor_email: tml.actor_email,
+                                actor_role: tml.actor_role,
+                                created_at: new Date(tml.created_at)
+                            }
+                        }).catch(e => console.warn('Prisma seed timeline err:', e.message));
+                    }
+                    console.log('✅ PostgreSQL seeded with master KSU demo tickets!');
+                }
+            } catch (pErr) {
+                console.warn('Prisma master seed note:', pErr.message);
+            }
+        }
+    } catch (e) {
+        console.error('Error in ensureDatabaseSeeded:', e);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Database Management Endpoints
+// ─────────────────────────────────────────────────────────────
+app.get('/api/db/status', async (req, res) => {
+    try {
+        const db = getLocalDb();
+        const tickets = await prisma.ticket.findMany();
+        const expensesCount = (db.expenses || []).length;
+        const timelinesCount = (db.timelines || []).length;
+        res.json({
+            status: 'ok',
+            provider: realPrisma ? 'PostgreSQL (Prisma)' : 'Resilient JSON Store',
+            ticketsCount: tickets.length,
+            expensesCount,
+            timelinesCount,
+            serverTime: new Date().toISOString()
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/db/seed', async (req, res) => {
+    try {
+        await ensureDatabaseSeeded(true);
+        const db = getLocalDb();
+        res.json({
+            success: true,
+            message: 'ฟื้นฟูและโหลดชุดข้อมูลตัวอย่าง 6 รายการ มหาวิทยาลัยกาฬสินธุ์ เรียบร้อยแล้ว',
+            ticketsCount: (db.tickets || []).length,
+            tickets: db.tickets
+        });
+    } catch (e) {
+        console.error('API db seed error:', e);
+        res.status(500).json({ error: 'ไม่สามารถโหลดชุดข้อมูลตัวอย่างได้: ' + e.message });
+    }
+});
+
+app.post('/api/db/reset', async (req, res) => {
+    try {
+        const db = getLocalDb();
+        db.deletedTicketIds = [];
+        db.tickets = JSON.parse(JSON.stringify(SEED_TICKETS));
+        db.expenses = JSON.parse(JSON.stringify(SEED_EXPENSES));
+        db.timelines = JSON.parse(JSON.stringify(SEED_TIMELINES));
+        db.evidences = [];
+        db.counter = 6;
+        saveLocalDb(db);
+        if (realPrisma) {
+            await ensureDatabaseSeeded(true);
+        }
+        res.json({
+            success: true,
+            message: 'รีเซ็ตฐานข้อมูลเป็นค่าเริ่มต้นมหาวิทยาลัยกาฬสินธุ์สำเร็จ',
+            ticketsCount: db.tickets.length
+        });
+    } catch (e) {
+        res.status(500).json({ error: 'Reset failed: ' + e.message });
+    }
+});
 
 // ─────────────────────────────────────────────────────────────
 // Health Check API

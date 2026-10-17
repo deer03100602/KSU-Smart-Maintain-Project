@@ -385,126 +385,268 @@ export default function TicketDetailPage(props) {
     }, [ticket]);
 
     const handlePrintSingleTicket = (t) => {
-        const { cleanDescription: cleanDesc, attachments: attList } = parseDescriptionAndAttachments(t.description);
+        const { cleanDescription: cleanDesc } = parseDescriptionAndAttachments(t.description);
+        const reqInfo = parseRequester(t.requester_name);
+        const activeExpenses = Array.isArray(expenses) ? expenses : [];
+        const totalExpensesAmount = activeExpenses.reduce((sum, item) => sum + (Number(item.net_amount || item.total_price) || 0), 0);
         const printWindow = window.open('', '_blank');
         const html = `
-            <html>
+            <!DOCTYPE html>
+            <html lang="th">
                 <head>
-                    <title>รายงานตั๋วปัญหา - ${t.ticket_no}</title>
+                    <meta charset="utf-8">
+                    <title>ใบสั่งงานซ่อมบำรุง - ${t.ticket_no} - มหาวิทยาลัยกาฬสินธุ์</title>
                     <style>
-                        body { font-family: 'Sarabun', 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; line-height: 1.6; }
-                        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 30px; }
-                        .title { font-size: 24px; font-weight: bold; }
-                        .ticket-no { font-size: 18px; font-weight: bold; color: #3b82f6; font-family: monospace; }
-                        .section { margin-bottom: 20px; }
-                        .section-title { font-size: 16px; font-weight: bold; background: #f5f5f5; padding: 6px 12px; margin-bottom: 10px; border-left: 4px solid #3b82f6; }
-                        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
-                        .label { font-weight: bold; color: #666; font-size: 13px; }
-                        .value { font-size: 14px; }
-                        .description { border: 1px solid #ddd; padding: 15px; border-radius: 6px; background: #fafafa; white-space: pre-wrap; font-size: 14px; }
+                        @page { size: A4; margin: 15mm; }
+                        * { box-sizing: border-box; }
+                        body { 
+                            font-family: 'Sarabun', 'TH Sarabun New', 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif; 
+                            padding: 24px; 
+                            color: #1e293b; 
+                            max-width: 860px; 
+                            margin: 0 auto; 
+                            line-height: 1.5; 
+                            background: #fff;
+                        }
+                        .header { 
+                            display: flex; 
+                            justify-content: space-between; 
+                            align-items: flex-start; 
+                            border-bottom: 2px solid #0f172a; 
+                            padding-bottom: 12px; 
+                            margin-bottom: 18px; 
+                        }
+                        .inst-title { font-size: 19px; font-weight: 800; color: #0f172a; margin-bottom: 2px; }
+                        .inst-sub { font-size: 13px; color: #475569; font-weight: 600; }
+                        .doc-title { font-size: 15px; font-weight: 700; color: #2563eb; margin-top: 6px; letter-spacing: 0.5px; }
+                        .ticket-badge { 
+                            border: 2px solid #2563eb; 
+                            border-radius: 8px; 
+                            padding: 8px 14px; 
+                            text-align: right; 
+                            background: #eff6ff; 
+                        }
+                        .ticket-no { font-size: 20px; font-weight: 800; color: #1d4ed8; font-family: monospace; }
+                        .print-meta { font-size: 11px; color: #64748b; margin-top: 3px; }
+                        .info-table { 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                            margin-bottom: 14px; 
+                            font-size: 13px; 
+                        }
+                        .info-table td { 
+                            padding: 6px 10px; 
+                            border: 1px solid #cbd5e1; 
+                            vertical-align: top; 
+                        }
+                        .info-table .label-col { 
+                            width: 18%; 
+                            background: #f8fafc; 
+                            font-weight: 700; 
+                            color: #334155; 
+                        }
+                        .info-table .val-col { width: 32%; }
+                        .section-title { 
+                            font-size: 13px; 
+                            font-weight: 700; 
+                            color: #0f172a; 
+                            background: #e2e8f0; 
+                            padding: 5px 10px; 
+                            border-left: 4px solid #2563eb; 
+                            margin: 14px 0 8px 0; 
+                        }
+                        .desc-box { 
+                            border: 1px solid #cbd5e1; 
+                            padding: 10px 12px; 
+                            border-radius: 4px; 
+                            background: #f8fafc; 
+                            font-size: 13px; 
+                            white-space: pre-wrap; 
+                            min-height: 50px; 
+                        }
+                        .expense-table { 
+                            width: 100%; 
+                            border-collapse: collapse; 
+                            margin-top: 8px; 
+                            font-size: 12px; 
+                        }
+                        .expense-table th { 
+                            background: #f1f5f9; 
+                            border: 1px solid #cbd5e1; 
+                            padding: 6px 8px; 
+                            text-align: left; 
+                            font-weight: 700; 
+                        }
+                        .expense-table td { 
+                            border: 1px solid #cbd5e1; 
+                            padding: 6px 8px; 
+                        }
+                        .signatures-grid { 
+                            display: grid; 
+                            grid-template-columns: repeat(4, 1fr); 
+                            gap: 12px; 
+                            margin-top: 24px; 
+                            page-break-inside: avoid; 
+                        }
+                        .sig-box { 
+                            border: 1px solid #cbd5e1; 
+                            border-radius: 6px; 
+                            padding: 10px 8px; 
+                            text-align: center; 
+                            font-size: 11px; 
+                            background: #ffffff; 
+                        }
+                        .sig-role { font-weight: 700; color: #1e293b; margin-bottom: 28px; }
+                        .sig-line { border-bottom: 1px dotted #64748b; margin-bottom: 6px; }
+                        .sig-name { color: #475569; margin-bottom: 4px; }
+                        .sig-date { color: #64748b; font-size: 10px; }
+                        .print-actions { text-align: center; margin-top: 25px; }
+                        .btn-print { 
+                            background: #2563eb; 
+                            color: white; 
+                            border: none; 
+                            padding: 8px 20px; 
+                            border-radius: 6px; 
+                            font-size: 14px; 
+                            font-weight: 600; 
+                            cursor: pointer; 
+                        }
                         @media print {
-                            .print-btn { display: none; }
+                            .print-actions { display: none !important; }
+                            body { padding: 0; }
                         }
                     </style>
                 </head>
                 <body>
                     <div class="header">
                         <div>
-                            <div class="title">ใบรายงานสถานะตั๋วปัญหา (Ticket Report)</div>
-                            <div style="font-size: 12px; color: #666;">พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}</div>
+                            <div class="inst-title">มหาวิทยาลัยกาฬสินธุ์ (KALASIN UNIVERSITY)</div>
+                            <div class="inst-sub">ระบบบริหารจัดการและติดตามงานซ่อมบำรุงอัจฉริยะ (KSU Smart Maintain)</div>
+                            <div class="doc-title">ใบสั่งงานซ่อมบำรุงและบริการ (MAINTENANCE WORK ORDER)</div>
                         </div>
-                        <div class="ticket-no">${t.ticket_no}</div>
-                    </div>
-
-                    <div class="section">
-                        <div class="section-title">ข้อมูลปัญหา</div>
-                        <div style="margin-bottom: 10px;">
-                            <span class="label">หัวข้อปัญหา: </span>
-                            <span class="value" style="font-weight: bold; font-size: 16px;">${t.title}</span>
-                        </div>
-                        <div class="grid">
-                             <div>
-                                 <span class="label">ประเภทปัญหา: </span>
-                                 <span class="value">${t.issue_type}</span>
-                             </div>
-                             <div>
-                                 <span class="label">ระดับความเร่งด่วน: </span>
-                                 <span class="value">${t.priority}</span>
-                             </div>
-                             <div>
-                                 <span class="label">สถานที่เกิดเหตุ: </span>
-                                 <span class="value">${t.location || '-'}</span>
-                             </div>
-                             <div>
-                                 <span class="label">สถานะปัจจุบัน: </span>
-                                 <span class="value" style="font-weight: bold;">${t.status}</span>
-                             </div>
-                        </div>
-                        <div>
-                             <span class="label">รายละเอียดเพิ่มเติม:</span>
-                             <div class="description">${cleanDesc || 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
-                        </div>
-
-                        ${attList.length > 0 ? `
-                        <div style="margin-top: 15px;">
-                            <span class="label">รูปภาพและหลักฐานแนบ (${attList.length} รายการ):</span>
-                            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px;">
-                                ${attList.map(a => {
-                                    if (a.isImage) {
-                                        return `
-                                            <div style="border: 1px solid #ddd; padding: 4px; border-radius: 6px; text-align: center; background: #fff; max-width: 220px;">
-                                                <img src="${a.url}" alt="${a.name}" style="max-width: 100%; max-height: 160px; object-fit: contain; border-radius: 4px; display: block;" onerror="this.style.display='none'" />
-                                                <div style="font-size: 11px; color: #555; margin-top: 4px; word-break: break-all;">${a.name}</div>
-                                            </div>
-                                        `;
-                                    } else {
-                                        return `
-                                            <div style="border: 1px solid #ddd; padding: 8px 12px; border-radius: 6px; font-size: 12px; background: #f8fafc;">
-                                                📎 ${a.name}
-                                            </div>
-                                        `;
-                                    }
-                                }).join('')}
-                            </div>
-                        </div>
-                        ` : ''}
-                    </div>
-
-                    <div class="section">
-                        <div class="section-title">ข้อมูลผู้แจ้งและผู้รับผิดชอบ</div>
-                        <div class="grid">
-                             <div>
-                                 <span class="label">ชื่อผู้แจ้ง: </span>
-                                 <span class="value">${parseRequester(t.requester_name).name}</span>
-                             </div>
-                             <div>
-                                 <span class="label">กลุ่มผู้ใช้งาน: </span>
-                                 <span class="value">${parseRequester(t.requester_name).group || 'นักศึกษา'}</span>
-                             </div>
-                             <div>
-                                 <span class="label">อีเมลผู้แจ้ง: </span>
-                                 <span class="value">${t.requester_email || '-'}</span>
-                             </div>
-                             <div>
-                                 <span class="label">ผู้รับผิดชอบ: </span>
-                                 <span class="value">${t.assigned_to || 'ยังไม่ได้มอบหมาย'}</span>
-                             </div>
-                             <div>
-                                 <span class="label">วันที่สร้างรายการ: </span>
-                                 <span class="value">${new Date(t.created_at).toLocaleString('th-TH')}</span>
-                             </div>
+                        <div class="ticket-badge">
+                            <div style="font-size: 11px; font-weight: 700; color: #1e3a8a;">เลขที่คำขอ / WORK ORDER NO.</div>
+                            <div class="ticket-no">${t.ticket_no}</div>
+                            <div class="print-meta">พิมพ์เมื่อ: ${new Date().toLocaleString('th-TH')}</div>
                         </div>
                     </div>
 
-                    ${t.resolution_note ? `
-                    <div class="section">
-                        <div class="section-title">บันทึกการดำเนินงาน / วิธีแก้ไข</div>
-                        <div class="description" style="border-left: 4px solid #22c55e;">${t.resolution_note}</div>
-                    </div>
+                    <table class="info-table">
+                        <tr>
+                            <td class="label-col">หัวข้อปัญหา</td>
+                            <td class="val-col" colspan="3" style="font-weight: 700; font-size: 14px; color: #0f172a;">${t.title}</td>
+                        </tr>
+                        <tr>
+                            <td class="label-col">ประเภทงานซ่อม</td>
+                            <td class="val-col">${t.issue_type}</td>
+                            <td class="label-col">ระดับความสำคัญ</td>
+                            <td class="val-col" style="font-weight: 700; color: ${t.priority === 'Urgent' ? '#dc2626' : t.priority === 'High' ? '#ea580c' : '#2563eb'};">${t.priority}</td>
+                        </tr>
+                        <tr>
+                            <td class="label-col">สถานที่เกิดเหตุ</td>
+                            <td class="val-col">${t.location || 'ไม่ระบุ'}</td>
+                            <td class="label-col">สถานะปัจจุบัน</td>
+                            <td class="val-col" style="font-weight: 700;">${t.status}</td>
+                        </tr>
+                        <tr>
+                            <td class="label-col">ผู้แจ้งซ่อม</td>
+                            <td class="val-col">${reqInfo.name || t.requester_name} (${reqInfo.group || 'ผู้ใช้งาน'})</td>
+                            <td class="label-col">อีเมล / ติดต่อ</td>
+                            <td class="val-col">${t.requester_email || '-'}</td>
+                        </tr>
+                        <tr>
+                            <td class="label-col">ช่างผู้รับผิดชอบ</td>
+                            <td class="val-col" style="font-weight: 600;">${t.assigned_to || 'ยังไม่ได้มอบหมาย'}</td>
+                            <td class="label-col">ช่างผู้ร่วมปฏิบัติงาน</td>
+                            <td class="val-col">${t.co_workers || '-'}</td>
+                        </tr>
+                        <tr>
+                            <td class="label-col">วันที่รับแจ้ง</td>
+                            <td class="val-col">${new Date(t.created_at).toLocaleString('th-TH')}</td>
+                            <td class="label-col">กำหนดส่งมอบงาน</td>
+                            <td class="val-col">${t.due_date ? new Date(t.due_date).toLocaleDateString('th-TH') : 'ตามมาตรฐานบริการ'}</td>
+                        </tr>
+                        <tr>
+                            <td class="label-col">สถานะงบประมาณ</td>
+                            <td class="val-col">${t.budget_status || 'ยังไม่เสนอ'} (อนุมัติ: ${(t.approved_budget || 0).toLocaleString()} บาท)</td>
+                            <td class="label-col">ยอดใช้จ่ายจริง</td>
+                            <td class="val-col" style="font-weight: 700; color: #16a34a;">${(t.disbursed_amount || totalExpensesAmount).toLocaleString()} บาท</td>
+                        </tr>
+                    </table>
+
+                    <div class="section-title">รายละเอียดปัญหาและความต้องการ</div>
+                    <div class="desc-box">${cleanDesc || 'ไม่มีรายละเอียดเพิ่มเติม'}</div>
+
+                    ${(t.resolution_note || t.completion_summary) ? `
+                        <div class="section-title">สรุปผลการดำเนินงาน / วิธีการซ่อมแซม</div>
+                        <div class="desc-box" style="background: #f0fdf4; border-color: #86efac; color: #14532d;">
+                            ${t.completion_summary ? `<strong>สรุปงาน:</strong> ${t.completion_summary}<br/>` : ''}
+                            ${t.resolution_note ? `<strong>บันทึกช่าง:</strong> ${t.resolution_note}` : ''}
+                        </div>
                     ` : ''}
 
-                    <div style="text-align: center; margin-top: 50px;">
-                        <button class="print-btn" onclick="window.print()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px;">พิมพ์รายงาน PDF</button>
+                    ${activeExpenses.length > 0 ? `
+                        <div class="section-title">รายการเบิกจ่ายวัสดุ / อะไหล่ / ค่าแรงช่าง</div>
+                        <table class="expense-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 15%;">หมวดหมู่</th>
+                                    <th>รายละเอียดวัสดุ / อุปกรณ์</th>
+                                    <th style="width: 10%; text-align: center;">จำนวน</th>
+                                    <th style="width: 12%; text-align: right;">ราคา/หน่วย</th>
+                                    <th style="width: 14%; text-align: right;">รวมเงิน (บาท)</th>
+                                    <th style="width: 14%; text-align: center;">สถานะ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${activeExpenses.map(exp => `
+                                    <tr>
+                                        <td>${exp.category}</td>
+                                        <td>${exp.description}</td>
+                                        <td style="text-align: center;">${exp.quantity} ${exp.unit || ''}</td>
+                                        <td style="text-align: right;">${Number(exp.unit_price || 0).toLocaleString()}</td>
+                                        <td style="text-align: right; font-weight: 700;">${Number(exp.net_amount || exp.total_price || 0).toLocaleString()}</td>
+                                        <td style="text-align: center;">${exp.status === 'APPROVED' ? 'อนุมัติแล้ว' : exp.status}</td>
+                                    </tr>
+                                `).join('')}
+                                <tr style="background: #f8fafc; font-weight: 700;">
+                                    <td colspan="4" style="text-align: right;">รวมยอดเบิกจ่ายทั้งสิ้น:</td>
+                                    <td style="text-align: right; color: #15803d;">${totalExpensesAmount.toLocaleString()} บาท</td>
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    ` : ''}
+
+                    <div class="signatures-grid">
+                        <div class="sig-box">
+                            <div class="sig-role">ผู้แจ้งซ่อม / เจ้าหน้าที่</div>
+                            <div class="sig-line"></div>
+                            <div class="sig-name">(${reqInfo.name || t.requester_name})</div>
+                            <div class="sig-date">วันที่ ......./......./...........</div>
+                        </div>
+                        <div class="sig-box">
+                            <div class="sig-role">ช่างผู้รับผิดชอบงาน</div>
+                            <div class="sig-line"></div>
+                            <div class="sig-name">(${t.assigned_to || '.....................................'})</div>
+                            <div class="sig-date">วันที่ ......./......./...........</div>
+                        </div>
+                        <div class="sig-box">
+                            <div class="sig-role">ผู้ควบคุมงาน / แอดมิน</div>
+                            <div class="sig-line"></div>
+                            <div class="sig-name">(ผู้ดูแลระบบ KSU Smart Maintain)</div>
+                            <div class="sig-date">วันที่ ......./......./...........</div>
+                        </div>
+                        <div class="sig-box">
+                            <div class="sig-role">ผู้ตรวจรับมอบงาน</div>
+                            <div class="sig-line"></div>
+                            <div class="sig-name">(.....................................)</div>
+                            <div class="sig-date">วันที่ ......./......./...........</div>
+                        </div>
+                    </div>
+
+                    <div class="print-actions">
+                        <button class="btn-print" onclick="window.print()">🖨️ สั่งพิมพ์ใบสั่งงานซ่อม (Print A4)</button>
                     </div>
                 </body>
             </html>
@@ -852,9 +994,14 @@ export default function TicketDetailPage(props) {
                         <FileText style={{ width: 16, height: 16 }} />
                         รายงาน A4 & PDF ทางการ
                     </button>
-                    <button className="btn btn-ghost" onClick={() => handlePrintSingleTicket(ticket)}>
+                    <button 
+                        className="btn btn-ghost" 
+                        onClick={() => handlePrintSingleTicket(ticket)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                        title="พิมพ์ใบสั่งงานซ่อมบำรุงและบริการ มหาวิทยาลัยกาฬสินธุ์ รูปแบบ A4"
+                    >
                         <Printer style={{ width: 16, height: 16 }} />
-                        พิมพ์แบบย่อ
+                        พิมพ์ใบสั่งงานซ่อม (Work Order)
                     </button>
                     {canEdit && (
                         <button className="btn btn-ghost" onClick={showEditModal}>
