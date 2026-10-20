@@ -156,12 +156,29 @@ function saveLocalUsers(users) {
 let realPrisma = null;
 try {
     const { PrismaClient } = require('@prisma/client');
-    const p = new PrismaClient();
+    const p = new PrismaClient({ log: ['error'] });
     if (p && typeof p.$connect === 'function') {
         realPrisma = p;
     }
 } catch (e) {
     // Falls back seamlessly to resilient JSON-based storage
+}
+
+async function verifyPrismaConnection() {
+    if (!realPrisma) return false;
+    try {
+        await Promise.race([
+            realPrisma.$connect(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout connecting to PostgreSQL')), 1200))
+        ]);
+        console.log('✅ PostgreSQL connection verified.');
+        return true;
+    } catch (e) {
+        console.log('ℹ️ PostgreSQL not active at localhost:5432, running ultra-fast resilient JSON mode.');
+        try { await realPrisma.$disconnect().catch(() => {}); } catch (_) {}
+        realPrisma = null;
+        return false;
+    }
 }
 
 const prisma = {
@@ -787,6 +804,8 @@ function requireAdmin(req, res, next) {
 
 // Helper: Auto-initialize Database with Schema Sync & Seed Data if Empty
 async function initDatabase() {
+    await verifyPrismaConnection();
+    await ensureDatabaseSeeded(false);
     const { exec } = require('child_process');
     console.log('🔄 Initializing database and syncing schema...');
     
@@ -924,7 +943,8 @@ async function initDatabase() {
 async function ensureDatabaseSeeded(force = false) {
     try {
         const db = getLocalDb();
-        const needsSeed = force;
+        const hasTickets = Array.isArray(db.tickets) && db.tickets.length > 0;
+        const needsSeed = force || !hasTickets;
 
         if (needsSeed) {
             console.log('🌱 Seeding JSON store with master KSU demo dataset (6 tickets)...');
@@ -3992,11 +4012,18 @@ app.get('/api/stats', async (req, res) => {
         res.json({
             total: filteredTickets.length,
             allTimeStats,
+            allTime: allTimeStats,
             byStatus: periodStats.byStatus,
+            by_status: periodStats.byStatus,
             byPriority: periodStats.byPriority,
+            by_priority: periodStats.byPriority,
             byIssueType: periodStats.byIssueType,
+            by_type: periodStats.byIssueType,
+            by_issue_type: periodStats.byIssueType,
             recentTickets: filteredTickets.slice(0, 5),
+            recent_tickets: filteredTickets.slice(0, 5),
             ticketsForPeriod: filteredTickets,
+            tickets: filteredTickets,
             workloads,
             budget: {
                 proposed: totalProposedBudget,

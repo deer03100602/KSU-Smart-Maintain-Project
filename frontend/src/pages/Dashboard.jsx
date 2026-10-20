@@ -10,6 +10,7 @@ import { useApp } from '@/context/AppContext';
 import { BarChart3, Ticket, Loader, CheckCircle, AlertTriangle, Users, UserPlus, Plus, Trash2, X, Settings } from 'lucide-react';
 import TicketCard from '@/components/TicketCard';
 import Chart from 'chart.js/auto';
+import { getStoredTickets, syncTicketsWithServer } from '@/lib/ticketStore';
 
 const STATUS_COLORS = {
     'Open': '#3b82f6',
@@ -188,7 +189,21 @@ export default function DashboardPage() {
             }
             const res = await fetch(url);
             if (res.ok) {
-                const data = await res.json();
+                let data = await res.json();
+                if ((!data.total || data.total === 0) && selectedPeriod === 'all') {
+                    try {
+                        const stored = getStoredTickets();
+                        if (stored && stored.length > 0) {
+                            await syncTicketsWithServer(stored);
+                            const retry = await fetch(url);
+                            if (retry.ok) data = await retry.json();
+                        } else {
+                            await fetch('/api/db/seed', { method: 'POST' });
+                            const retry = await fetch(url);
+                            if (retry.ok) data = await retry.json();
+                        }
+                    } catch (e) {}
+                }
                 setStats(data);
             } else {
                 toast.error('ไม่สามารถโหลดข้อมูลสถิติได้');
@@ -290,21 +305,26 @@ export default function DashboardPage() {
     ]);
 
     useEffect(() => {
-        if (!stats) return;
+        if (!stats || loading) return;
 
         const isDark = theme === 'dark';
         const fontColor = isDark ? '#9ca3af' : '#64748b';
         const gridColor = isDark ? '#334155' : '#e2e8f0';
 
-        // Destroy previous instances
-        if (statusChartInst.current) statusChartInst.current.destroy();
-        if (priorityChartInst.current) priorityChartInst.current.destroy();
-        if (typeChartInst.current) typeChartInst.current.destroy();
+        // Destroy previous instances safely
+        if (statusChartInst.current) { statusChartInst.current.destroy(); statusChartInst.current = null; }
+        if (priorityChartInst.current) { priorityChartInst.current.destroy(); priorityChartInst.current = null; }
+        if (typeChartInst.current) { typeChartInst.current.destroy(); typeChartInst.current = null; }
+        if (workloadChartInst.current) { workloadChartInst.current.destroy(); workloadChartInst.current = null; }
+
+        const byStatus = stats.byStatus || stats.by_status || {};
+        const byPriority = stats.byPriority || stats.by_priority || {};
+        const byIssueType = stats.byIssueType || stats.by_type || stats.by_issue_type || {};
 
         // 1. Status Doughnut Chart
         if (statusChartRef.current) {
-            const labels = Object.keys(stats.byStatus);
-            const data = Object.values(stats.byStatus);
+            const labels = Object.keys(byStatus);
+            const data = Object.values(byStatus);
             const backgroundColors = labels.map(label => STATUS_COLORS[label] || '#6366f1');
 
             statusChartInst.current = new Chart(statusChartRef.current, {
@@ -337,8 +357,8 @@ export default function DashboardPage() {
 
         // 2. Priority Bar Chart
         if (priorityChartRef.current) {
-            const labels = Object.keys(stats.byPriority);
-            const data = Object.values(stats.byPriority);
+            const labels = Object.keys(byPriority);
+            const data = Object.values(byPriority);
             const backgroundColors = labels.map(label => PRIORITY_COLORS[label] || '#6366f1');
 
             priorityChartInst.current = new Chart(priorityChartRef.current, {
@@ -375,8 +395,8 @@ export default function DashboardPage() {
 
         // 3. Issue Type Horizontal Bar Chart
         if (typeChartRef.current) {
-            const labels = Object.keys(stats.byIssueType);
-            const data = Object.values(stats.byIssueType);
+            const labels = Object.keys(byIssueType);
+            const data = Object.values(byIssueType);
 
             typeChartInst.current = new Chart(typeChartRef.current, {
                 type: 'bar',
@@ -472,12 +492,12 @@ export default function DashboardPage() {
         }
 
         return () => {
-            if (statusChartInst.current) statusChartInst.current.destroy();
-            if (priorityChartInst.current) priorityChartInst.current.destroy();
-            if (typeChartInst.current) typeChartInst.current.destroy();
-            if (workloadChartInst.current) workloadChartInst.current.destroy();
+            if (statusChartInst.current) { statusChartInst.current.destroy(); statusChartInst.current = null; }
+            if (priorityChartInst.current) { priorityChartInst.current.destroy(); priorityChartInst.current = null; }
+            if (typeChartInst.current) { typeChartInst.current.destroy(); typeChartInst.current = null; }
+            if (workloadChartInst.current) { workloadChartInst.current.destroy(); workloadChartInst.current = null; }
         };
-    }, [stats, theme]);
+    }, [stats, theme, loading]);
 
     // Use allTimeStats for summary cards so they always show real totals
     const allTime = stats?.allTimeStats || stats?.allTime || {};
@@ -771,10 +791,10 @@ export default function DashboardPage() {
                     <div>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block' }}>ตั๋วที่ค้นพบ</span>
                         <span style={{ fontWeight: 700, fontSize: '1.15rem' }}>
-                            {loading ? '...' : stats.total}
+                            {loading ? '...' : (stats?.total ?? 0)}
                         </span>
                     </div>
-                    {stats.total === 0 && (
+                    {(stats?.total ?? 0) === 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-secondary)' }}>
                             <AlertTriangle style={{ width: 16, height: 16 }} />
                             <span>ไม่มีตั๋วในช่วงเวลาที่เลือก</span>
