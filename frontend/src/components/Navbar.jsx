@@ -48,6 +48,7 @@ export default function Navbar() {
     ];
 
     const menuItems = isGuest ? guestMenuItems : (isAdmin ? groupBMenuItems : groupAMenuItems);
+    const desktopMenuItems = menuItems.filter(item => item.id !== 'profile');
 
     const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
@@ -70,13 +71,13 @@ export default function Navbar() {
                         </div>
                         <div className="logo-text">
                             <h1 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, lineHeight: 1.15 }}>KSU SMART MAINTAIN</h1>
-                            <span className="logo-subtitle" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>ระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI</span>
+                            <span className="logo-subtitle" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>ระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI</span>
                         </div>
                     </Link>
 
                     {/* Desktop Navigation Links */}
                     <nav className="top-nav">
-                        {menuItems.map((item) => (
+                        {desktopMenuItems.map((item) => (
                             <Link
                                 key={item.href}
                                 to={item.href}
@@ -121,7 +122,7 @@ export default function Navbar() {
                                     {user?.name || 'ผู้ใช้งาน'}
                                 </span>
                                 <span className={`user-role-badge ${isAdmin ? 'admin-badge' : 'user-badge'}`} style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
-                                    {isAdmin ? 'Group B (เจ้าหน้าที่/ผู้ดูแล)' : 'Group A (ผู้ใช้งาน)'}
+                                    {isAdmin ? 'Group B (เจ้าหน้าที่)' : 'Group A (ผู้ใช้)'}
                                 </span>
                             </Link>
                         ) : (
@@ -143,10 +144,25 @@ export default function Navbar() {
                                 onClick={signOutUser}
                                 className="btn btn-ghost btn-sm"
                                 title="ออกจากระบบ"
-                                style={{ padding: '0.4rem 0.7rem', fontSize: '0.8rem', color: '#f87171', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}
+                                style={{
+                                    padding: '0.35rem 0.65rem',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 600,
+                                    color: '#f87171',
+                                    background: 'rgba(239, 68, 68, 0.12)',
+                                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                                    borderRadius: '8px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    flexShrink: 0,
+                                    cursor: 'pointer',
+                                    whiteSpace: 'nowrap',
+                                    transition: 'all 0.2s ease'
+                                }}
                             >
-                                <LogOut style={{ width: 15, height: 15 }} />
-                                <span>ออก</span>
+                                <LogOut style={{ width: 14, height: 14 }} />
+                                <span>ออกจากระบบ</span>
                             </button>
                         ) : (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
