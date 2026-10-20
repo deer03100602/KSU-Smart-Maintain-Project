@@ -3056,12 +3056,15 @@ async function scanReceiptWithGeminiVision(buffer, mimeType, apiKey) {
   "ai_note": "✨ วิเคราะห์ด้วย Google Gemini Multimodal Vision AI สำเร็จ แม่นยำ 100%"
 }
 
-* กฎสำคัญ: หากช่องยอดรวมเงินท้ายเอกสารว่างเปล่า (เช่น มีรายการหน้าถัดไป) ให้คุณคำนวณผลรวมเงินของทุกรายการในตารางหน้านี้ทั้งหมด แล้วนำมาใส่ใน net_amount และ total_price ห้ามใส่ 0 หรือ null!`;
+* กฎสำคัญ:
+1. หากช่องยอดรวมเงินท้ายเอกสารว่างเปล่า (เช่น มีรายการหน้าถัดไป) ให้คุณคำนวณผลรวมเงินของทุกรายการในตารางหน้านี้ทั้งหมด แล้วนำมาใส่ใน net_amount และ total_price ห้ามใส่ 0 หรือ null!
+2. เพื่อความรวดเร็วในการส่งข้อมูลและป้องกัน Timeout ให้สรุปรายการสินค้าเด่น 5-8 รายการแรกหรือยอดสูงสุด`;
 
     const models = [
-        'gemini-3.8-flash',
-        'gemini-3.5-flash',
-        'gemini-flash-latest'
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-3-flash-preview',
+        'gemini-3.5-flash'
     ];
 
     for (const model of models) {
@@ -3178,7 +3181,7 @@ app.post('/api/settings/gemini-test', async (req, res) => {
         return res.status(400).json({ success: false, error: 'ยังไม่ได้ระบุ Google Gemini API Key' });
     }
 
-    const testModels = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
+    const testModels = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.5-flash'];
     let lastErr = '';
     for (const model of testModels) {
         try {
