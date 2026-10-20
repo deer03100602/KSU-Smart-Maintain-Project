@@ -80,9 +80,36 @@ export default function TicketEvidenceManager({
         }
     });
 
+    const STAGE_ORDER = {
+        'BEFORE': 1,
+        'DURING': 2,
+        'PARTS': 3,
+        'RECEIPT': 4,
+        'AFTER': 5,
+        'TESTING': 6,
+        'HANDOVER': 7
+    };
+
+    const STAGE_SECTIONS = [
+        { key: 'BEFORE', title: '📷 รูปภาพก่อนซ่อม (Before Maintenance)', badgeColor: '#3b82f6', badgeBg: 'rgba(59, 130, 246, 0.12)', borderColor: 'rgba(59, 130, 246, 0.35)' },
+        { key: 'DURING', title: '⚙️ รูปภาพระหว่างซ่อม / ขั้นตอนการทำงาน (During Maintenance)', badgeColor: '#f59e0b', badgeBg: 'rgba(245, 158, 11, 0.12)', borderColor: 'rgba(245, 158, 11, 0.35)' },
+        { key: 'PARTS', title: '📦 รูปภาพวัสดุและอุปกรณ์ / อะไหล่ที่ใช้ (Parts & Materials)', badgeColor: '#06b6d4', badgeBg: 'rgba(6, 182, 212, 0.12)', borderColor: 'rgba(6, 182, 212, 0.35)' },
+        { key: 'RECEIPT', title: '🧾 รูปภาพใบเสร็จรับเงิน / หลักฐานค่าใช้จ่าย (Receipts & Expenses)', badgeColor: '#a855f7', badgeBg: 'rgba(168, 85, 247, 0.12)', borderColor: 'rgba(168, 85, 247, 0.35)' },
+        { key: 'AFTER', title: '🎉 รูปภาพหลังดำเนินการซ่อมเสร็จสิ้น (After Maintenance)', badgeColor: '#22c55e', badgeBg: 'rgba(34, 197, 94, 0.12)', borderColor: 'rgba(34, 197, 94, 0.35)' },
+        { key: 'TESTING', title: '🔬 รูปภาพผลการทดสอบการใช้งาน (Testing & Verification)', badgeColor: '#ec4899', badgeBg: 'rgba(236, 72, 153, 0.12)', borderColor: 'rgba(236, 72, 153, 0.35)' },
+        { key: 'HANDOVER', title: '📋 รูปภาพการส่งมอบงานและการตรวจรับ (Handover & Inspection)', badgeColor: '#10b981', badgeBg: 'rgba(16, 185, 129, 0.12)', borderColor: 'rgba(16, 185, 129, 0.35)' }
+    ];
+
+    const sortedEvidences = [...allEvidences].sort((a, b) => {
+        const orderA = STAGE_ORDER[normalizeStage(a.stage)] || 99;
+        const orderB = STAGE_ORDER[normalizeStage(b.stage)] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        return (new Date(b.created_at || 0)) - (new Date(a.created_at || 0));
+    });
+
     const filteredEvidences = selectedTab === 'ALL' 
-        ? allEvidences 
-        : allEvidences.filter(e => normalizeStage(e.stage) === selectedTab);
+        ? sortedEvidences 
+        : sortedEvidences.filter(e => normalizeStage(e.stage) === selectedTab);
 
     const handleDeleteEvidence = async (evidenceId) => {
         if (!window.confirm('คุณต้องการลบ / ยกเลิกรูปภาพหลักฐานนี้ใช่หรือไม่?')) return;
@@ -376,130 +403,180 @@ export default function TicketEvidenceManager({
                 ))}
             </div>
 
-            {/* Gallery Grid */}
-            {filteredEvidences.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                    ยังไม่มีรูปภาพหลักฐานในหมวดหมู่นี้
-                </div>
-            ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
-                    {filteredEvidences.map((evi) => {
-                        const isImg = isImgUrl(evi.url);
-                        return (
+            {/* Gallery Card Render Helper */}
+            {(() => {
+                const renderEvidenceCard = (evi) => {
+                    const isImg = isImgUrl(evi.url);
+                    return (
+                        <div 
+                            key={evi.id}
+                            style={{
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '12px',
+                                overflow: 'hidden',
+                                background: 'var(--bg-card, rgba(255, 255, 255, 0.03))',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                position: 'relative'
+                            }}
+                        >
                             <div 
-                                key={evi.id}
                                 style={{
-                                    border: '1px solid var(--border-color)',
-                                    borderRadius: '12px',
-                                    overflow: 'hidden',
-                                    background: 'var(--bg-card, rgba(255, 255, 255, 0.03))',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                    height: '160px',
+                                    background: '#0f172a',
+                                    position: 'relative',
                                     display: 'flex',
-                                    flexDirection: 'column',
-                                    position: 'relative'
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: isImg ? 'pointer' : 'default',
+                                    overflow: 'hidden'
                                 }}
+                                onClick={() => isImg && setSelectedPreview(evi.url)}
                             >
-                                <div 
-                                    style={{
-                                        height: '160px',
-                                        background: '#0f172a',
-                                        position: 'relative',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        cursor: isImg ? 'pointer' : 'default',
-                                        overflow: 'hidden'
-                                    }}
-                                    onClick={() => isImg && setSelectedPreview(evi.url)}
-                                >
-                                    {isImg ? (
-                                        <img 
-                                            src={evi.url} 
-                                            alt={evi.description || evi.name || 'หลักฐานงานซ่อม'} 
-                                            loading="lazy"
-                                            style={{ 
-                                                width: '100%', 
-                                                height: '100%', 
-                                                objectFit: 'cover',
-                                                transition: 'transform 0.25s ease'
-                                            }}
-                                            onError={(e) => {
-                                                e.target.style.display = 'none';
-                                                if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
-                                            }}
-                                        />
-                                    ) : null}
-                                    <div style={{ display: isImg ? 'none' : 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', color: '#60a5fa' }}>
-                                        <FileText style={{ width: 44, height: 44 }} />
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>เอกสารแนบ</span>
-                                    </div>
-
-                                    {/* Stage Badge on Top Left */}
-                                    <div style={{ position: 'absolute', top: 6, left: 6, zIndex: 4 }}>
-                                        {getStageBadge(evi.stage)}
-                                    </div>
-
-                                    {/* Delete / Cancel button on Top Right */}
-                                    {canManageEvidence && (
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteEvidence(evi.id);
-                                            }}
-                                            disabled={deletingId === evi.id}
-                                            style={{
-                                                position: 'absolute',
-                                                top: 6,
-                                                right: 6,
-                                                background: 'rgba(239, 68, 68, 0.9)',
-                                                border: '1px solid rgba(255, 255, 255, 0.2)',
-                                                borderRadius: '6px',
-                                                padding: '3px 7px',
-                                                color: '#fff',
-                                                fontSize: '0.72rem',
-                                                fontWeight: 600,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                zIndex: 5,
-                                                boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
-                                            }}
-                                            title="ลบ / ยกเลิกรูปภาพนี้ เผื่อส่งผิด"
-                                        >
-                                            <Trash2 style={{ width: 12, height: 12 }} />
-                                            {deletingId === evi.id ? '...' : 'ยกเลิก/ลบ'}
-                                        </button>
-                                    )}
-
-                                    {/* View Zoom Badge */}
-                                    {isImg && (
-                                        <div style={{
-                                            position: 'absolute', bottom: 6, right: 6,
-                                            background: 'rgba(0,0,0,0.75)', padding: '3px 8px',
-                                            borderRadius: 6, color: '#fff', fontSize: '0.7rem',
-                                            display: 'flex', alignItems: 'center', gap: 4,
-                                            zIndex: 4, backdropFilter: 'blur(4px)'
-                                        }}>
-                                            <Maximize2 style={{ width: 11, height: 11 }} /> ดูรูปชัดๆ
-                                        </div>
-                                    )}
+                                {isImg ? (
+                                    <img 
+                                        src={evi.url} 
+                                        alt={evi.description || evi.name || 'หลักฐานงานซ่อม'} 
+                                        loading="lazy"
+                                        style={{ 
+                                            width: '100%', 
+                                            height: '100%', 
+                                            objectFit: 'cover',
+                                            transition: 'transform 0.25s ease'
+                                        }}
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                                        }}
+                                    />
+                                ) : null}
+                                <div style={{ display: isImg ? 'none' : 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', color: '#60a5fa' }}>
+                                    <FileText style={{ width: 44, height: 44 }} />
+                                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>เอกสารแนบ</span>
                                 </div>
-                                <div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: 'var(--bg-secondary, rgba(0,0,0,0.2))' }}>
-                                    <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)', wordBreak: 'break-word' }}>
-                                        {evi.description || evi.name || 'หลักฐานงานซ่อม'}
+
+                                {/* Stage Badge on Top Left */}
+                                <div style={{ position: 'absolute', top: 6, left: 6, zIndex: 4 }}>
+                                    {getStageBadge(evi.stage)}
+                                </div>
+
+                                {/* Delete / Cancel button on Top Right */}
+                                {canManageEvidence && (
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteEvidence(evi.id);
+                                        }}
+                                        disabled={deletingId === evi.id}
+                                        style={{
+                                            position: 'absolute',
+                                            top: 6,
+                                            right: 6,
+                                            background: 'rgba(239, 68, 68, 0.9)',
+                                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                                            borderRadius: '6px',
+                                            padding: '3px 7px',
+                                            color: '#fff',
+                                            fontSize: '0.72rem',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            zIndex: 5,
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.5)'
+                                        }}
+                                        title="ลบ / ยกเลิกรูปภาพนี้ เผื่อส่งผิด"
+                                    >
+                                        <Trash2 style={{ width: 12, height: 12 }} />
+                                        {deletingId === evi.id ? '...' : 'ยกเลิก/ลบ'}
+                                    </button>
+                                )}
+
+                                {/* View Zoom Badge */}
+                                {isImg && (
+                                    <div style={{
+                                        position: 'absolute', bottom: 6, right: 6,
+                                        background: 'rgba(0,0,0,0.75)', padding: '3px 8px',
+                                        borderRadius: 6, color: '#fff', fontSize: '0.7rem',
+                                        display: 'flex', alignItems: 'center', gap: 4,
+                                        zIndex: 4, backdropFilter: 'blur(4px)'
+                                    }}>
+                                        <Maximize2 style={{ width: 11, height: 11 }} /> ดูรูปชัดๆ
                                     </div>
-                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <div>👤 {evi.created_by || 'เจ้าหน้าที่'}</div>
-                                        <div>{new Date(evi.created_at).toLocaleDateString('th-TH')}</div>
-                                    </div>
+                                )}
+                            </div>
+                            <div style={{ padding: '12px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: 'var(--bg-secondary, rgba(0,0,0,0.2))' }}>
+                                <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px', color: 'var(--text-primary)', wordBreak: 'break-word' }}>
+                                    {evi.description || evi.name || 'หลักฐานงานซ่อม'}
+                                </div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>👤 {evi.created_by || 'เจ้าหน้าที่'}</div>
+                                    <div>{new Date(evi.created_at).toLocaleDateString('th-TH')}</div>
                                 </div>
                             </div>
-                        );
-                    })}
-                </div>
-            )}
+                        </div>
+                    );
+                };
+
+                if (filteredEvidences.length === 0) {
+                    return (
+                        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                            ยังไม่มีรูปภาพหลักฐานในหมวดหมู่นี้
+                        </div>
+                    );
+                }
+
+                if (selectedTab === 'ALL') {
+                    return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+                            {STAGE_SECTIONS.map((stSec) => {
+                                const stageItems = sortedEvidences.filter(e => normalizeStage(e.stage) === stSec.key);
+                                if (stageItems.length === 0) return null;
+                                return (
+                                    <div key={stSec.key} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '8px 14px',
+                                            borderRadius: '8px',
+                                            background: stSec.badgeBg,
+                                            borderLeft: `4px solid ${stSec.badgeColor}`,
+                                            border: `1px solid ${stSec.borderColor}`
+                                        }}>
+                                            <span style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)' }}>
+                                                {stSec.title}
+                                            </span>
+                                            <span style={{
+                                                fontSize: '0.75rem',
+                                                fontWeight: 700,
+                                                padding: '2px 10px',
+                                                borderRadius: '12px',
+                                                background: 'rgba(0,0,0,0.25)',
+                                                color: stSec.badgeColor
+                                            }}>
+                                                {stageItems.length} รายการ
+                                            </span>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+                                            {stageItems.map(evi => renderEvidenceCard(evi))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    );
+                }
+
+                return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+                        {filteredEvidences.map(evi => renderEvidenceCard(evi))}
+                    </div>
+                );
+            })()}
 
             {/* Upload Modal Window */}
             {showUploadModal && typeof document !== 'undefined' && createPortal(

@@ -385,10 +385,48 @@ export default function TicketDetailPage(props) {
     }, [ticket]);
 
     const handlePrintSingleTicket = (t) => {
-        const { cleanDescription: cleanDesc } = parseDescriptionAndAttachments(t.description);
+        const { cleanDescription: cleanDesc, attachments } = parseDescriptionAndAttachments(t.description);
         const reqInfo = parseRequester(t.requester_name);
         const activeExpenses = Array.isArray(expenses) ? expenses : [];
         const totalExpensesAmount = activeExpenses.reduce((sum, item) => sum + (Number(item.net_amount || item.total_price) || 0), 0);
+
+        const allPrintImages = [...evidences];
+        (attachments || []).forEach(att => {
+            if ((att.isImage || isImageFile(att.name, att.url)) && !allPrintImages.some(img => img.url === att.url)) {
+                allPrintImages.push({
+                    url: att.url,
+                    description: att.name,
+                    stage: 'BEFORE'
+                });
+            }
+        });
+
+        const STAGE_ORDER_LIST = [
+            { key: 'BEFORE', title: '📷 รูปภาพก่อนดำเนินการซ่อม (Before Maintenance)', short: 'ก่อนซ่อม' },
+            { key: 'DURING', title: '⚙️ รูปภาพระหว่างดำเนินการซ่อม (During Maintenance)', short: 'ระหว่างซ่อม' },
+            { key: 'PARTS', title: '📦 รูปภาพวัสดุและอุปกรณ์ / อะไหล่ที่ใช้ (Parts & Materials)', short: 'วัสดุ/อะไหล่' },
+            { key: 'RECEIPT', title: '🧾 รูปภาพใบเสร็จรับเงินและหลักฐานการเงิน (Receipts & Expenses)', short: 'ใบเสร็จ/ค่าใช้จ่าย' },
+            { key: 'AFTER', title: '🎉 รูปภาพหลังดำเนินการซ่อมเสร็จสิ้น (After Maintenance)', short: 'หลังซ่อมเสร็จ' },
+            { key: 'TESTING', title: '🔬 รูปภาพผลการทดสอบการใช้งาน (Testing & Verification)', short: 'ผลทดสอบ' },
+            { key: 'HANDOVER', title: '📋 รูปภาพการส่งมอบงานและการตรวจรับ (Handover & Inspection)', short: 'ส่งมอบงาน' }
+        ];
+
+        const normalizePdfStage = (st) => {
+            const u = String(st || '').toUpperCase();
+            if (u.includes('BEFORE') || u.includes('ก่อน')) return 'BEFORE';
+            if (u.includes('DURING') || u.includes('ระหว่าง')) return 'DURING';
+            if (u.includes('PART') || u.includes('MATERIAL') || u.includes('วัสดุ') || u.includes('อะไหล่')) return 'PARTS';
+            if (u.includes('RECEIPT') || u.includes('EXPENSE') || u.includes('ใบเสร็จ')) return 'RECEIPT';
+            if (u.includes('AFTER') || u.includes('หลัง')) return 'AFTER';
+            if (u.includes('TEST') || u.includes('ทดสอบ')) return 'TESTING';
+            if (u.includes('HANDOVER') || u.includes('INSPECT') || u.includes('ส่งมอบ') || u.includes('ตรวจรับ')) return 'HANDOVER';
+            return 'BEFORE';
+        };
+
+        const printGroups = STAGE_ORDER_LIST.map(st => {
+            const items = allPrintImages.filter(img => normalizePdfStage(img.stage) === st.key);
+            return { ...st, items };
+        }).filter(g => g.items.length > 0);
         const printWindow = window.open('', '_blank');
         const html = `
             <!DOCTYPE html>
@@ -481,6 +519,15 @@ export default function TicketDetailPage(props) {
                             border: 1px solid #cbd5e1; 
                             padding: 6px 8px; 
                         }
+                        /* Evidence Photos Grid & Stage Grouping */
+                        .evidence-stage-group { margin-bottom: 14px; page-break-inside: avoid; }
+                        .evidence-stage-header { font-size: 13px; font-weight: 700; color: #1e3a8a; background: #f0f7ff; border-left: 4px solid #2563eb; padding: 6px 10px; border-radius: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+                        .evidence-stage-badge { font-size: 11px; font-weight: 600; color: #475569; background: #ffffff; padding: 2px 8px; border-radius: 12px; border: 1px solid #cbd5e1; }
+                        .evidence-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-top: 6px; margin-bottom: 8px; }
+                        .evidence-item { border: 1px solid #cbd5e1; border-radius: 6px; padding: 5px; background: #ffffff; text-align: center; }
+                        .evidence-item img { width: 100%; height: 90px; object-fit: cover; border-radius: 4px; border: 1px solid #e2e8f0; display: block; }
+                        .evidence-label { font-weight: 600; color: #0f2b5c; margin-top: 4px; font-size: 11px; }
+                        .evidence-desc { color: #64748b; font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
                         .signatures-grid { 
                             display: grid; 
                             grid-template-columns: repeat(4, 1fr); 
@@ -616,6 +663,28 @@ export default function TicketDetailPage(props) {
                                 </tr>
                             </tbody>
                         </table>
+                    ` : ''}
+
+                    ${printGroups.length > 0 ? `
+                        <div class="section-title">รูปภาพและหลักฐานการดำเนินงานซ่อมบำรุง (จำแนกตามขั้นตอนงาน)</div>
+                        ${printGroups.map((grp, gIdx) => `
+                            <div class="evidence-stage-group">
+                                <div class="evidence-stage-header">
+                                    <span>${gIdx + 1}. ${grp.title}</span>
+                                    <span class="evidence-stage-badge">${grp.items.length} รายการ</span>
+                                </div>
+                                <div class="evidence-grid">
+                                    ${grp.items.map(evi => `
+                                        <div class="evidence-item">
+                                            <img src="${evi.url}" alt="${evi.description || 'หลักฐานงานซ่อม'}" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';" />
+                                            <div style="display: none; height: 90px; align-items: center; justify-content: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; color: #64748b; font-size: 26px;">📄</div>
+                                            <div class="evidence-label">${grp.short}</div>
+                                            <div class="evidence-desc" title="${evi.description || evi.name || ''}">${evi.description || evi.name || '-'}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
                     ` : ''}
 
                     <div class="signatures-grid">
