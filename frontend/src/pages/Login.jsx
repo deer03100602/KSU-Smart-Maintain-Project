@@ -171,7 +171,7 @@ export default function LoginPage() {
                     </div>
                     <h2 style={{ fontSize: '1.75rem', fontWeight: 700, margin: '0 0 0.5rem 0' }}>เข้าสู่ระบบ</h2>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
-                        ลงชื่อเข้าใช้งานระบบแจ้งซ่อมบำรุง มหาวิทยาลัยกาฬสินธุ์
+                        ลงชื่อเข้าใช้งานระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI
                     </p>
                 </div>
 

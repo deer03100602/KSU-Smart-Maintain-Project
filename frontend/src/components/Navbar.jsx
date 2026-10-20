@@ -70,7 +70,7 @@ export default function Navbar() {
                         </div>
                         <div className="logo-text">
                             <h1 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, lineHeight: 1.15 }}>KSU SMART MAINTAIN</h1>
-                            <span className="logo-subtitle" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>ระบบแจ้งซ่อมสิ่งพาณิชย์และอุปกรณ์อัจฉริยะ ม.กาฬสินธุ์</span>
+                            <span className="logo-subtitle" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>ระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI</span>
                         </div>
                     </Link>
 
@@ -201,7 +201,7 @@ export default function Navbar() {
                         </div>
                         <div className="logo-text">
                             <h1 style={{ fontSize: '1.05rem' }}>KSU SMART MAINTAIN</h1>
-                            <span>ระบบแจ้งซ่อมสิ่งพาณิชย์และอุปกรณ์อัจฉริยะ</span>
+                            <span>ระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI</span>
                         </div>
                     </div>
                     <button className="sidebar-close-btn" onClick={toggleSidebar}>

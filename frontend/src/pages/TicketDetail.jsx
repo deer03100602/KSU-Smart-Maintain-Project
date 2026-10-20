@@ -521,7 +521,7 @@ export default function TicketDetailPage(props) {
                     <div class="header">
                         <div>
                             <div class="inst-title">มหาวิทยาลัยกาฬสินธุ์ (KALASIN UNIVERSITY)</div>
-                            <div class="inst-sub">ระบบบริหารจัดการและติดตามงานซ่อมบำรุงอัจฉริยะ (KSU Smart Maintain)</div>
+                            <div class="inst-sub">ระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI (AI-Powered University Maintenance & Ticket Management Web Application)</div>
                             <div class="doc-title">ใบสั่งงานซ่อมบำรุงและบริการ (MAINTENANCE WORK ORDER)</div>
                         </div>
                         <div class="ticket-badge">

@@ -77,7 +77,7 @@ export const NotificationService = {
                     ],
                     description: cleanDesc ? `**รายละเอียด:**\n${cleanDesc.substring(0, 500)}` : '',
                     timestamp: new Date().toISOString(),
-                    footer: { text: 'AI-Powered University Maintenance & Ticket Management System' }
+                    footer: { text: 'ระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI (AI-Powered University Maintenance & Ticket Management Web Application)' }
                 }
             ]
         };
@@ -125,7 +125,7 @@ export const NotificationService = {
                           `ประเภท: ${ticket.issue_type}\n` +
                           `สถานที่: ${ticket.location}\n` +
                           `ความเร่งด่วน: ${ticket.priority}\n\n` +
-                          `คุณสามารถติดตามสถานะการดำเนินงานของตั๋วปัญหานี้ผ่านระบบ AI-Powered University Maintenance & Ticket Management ได้ตลอดเวลาครับ/ค่ะ`;
+                          `คุณสามารถติดตามสถานะการดำเนินงานของตั๋วปัญหานี้ผ่านระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI (AI-Powered University Maintenance & Ticket Management Web Application) ได้ตลอดเวลาครับ/ค่ะ`;
         } else {
             subject = `อัปเดตสถานะปัญหา Ticket No: ${ticket.ticket_no}`;
             messageText = `สวัสดีครับ/ค่ะ คุณ ${ticket.requester_name},\n\nตั๋วปัญหาของคุณได้รับการอัปเดตสถานะแล้ว:\n\n` +

@@ -451,7 +451,7 @@ export function generateOfficialReportPdf({ ticket, expenses = [], summary = {},
         <div class="doc-header">
             <h1 class="doc-title-main">มหาวิทยาลัยกาฬสินธุ์ (Kalasin University)</h1>
             <h2 class="doc-title-sub">รายงานผลการดำเนินงานซ่อมบำรุงและสรุปค่าใช้จ่าย</h2>
-            <p class="doc-title-org">ระบบบริหารจัดการงานแจ้งซ่อม KSU Smart Maintain</p>
+            <p class="doc-title-org">ระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI (AI-Powered University Maintenance & Ticket Management Web Application)</p>
         </div>
 
         <!-- Meta Information Bar -->

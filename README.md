@@ -1,5 +1,5 @@
-# AI-Powered University Maintenance & Ticket Management Web Application
-**ระบบแจ้งปัญหาและติดตามสถานะการซ่อมบำรุงภายในมหาวิทยาลัยด้วย AI**
+# ระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI
+**ระบบแจ้งซ่อมสิ่งพานิชย์และอุปกรณ์อัจฉริยะภายในมหาวิทยาลัยด้วย AI (AI-Powered University Maintenance & Ticket Management Web Application)**
 
 เว็บแอปพลิเคชันเวอร์ชันปรับปรุงใหม่ พัฒนาบนเฟรมเวิร์ก **Next.js** และ **React.js** ด้วย App Router สำหรับงาน Front-end และ **Next.js API Routes** สำหรับงาน Back-end โดยมีระบบบันทึกข้อมูลแบบคงอยู่ถาวร (Persisted Database) ฝั่งเซิร์ฟเวอร์ด้วยไฟล์จำลอง `data/db.json`
 
