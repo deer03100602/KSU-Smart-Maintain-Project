@@ -3028,7 +3028,7 @@ async function scanReceiptWithGeminiVision(buffer, mimeType, apiKey) {
 ต้องตอบกลับเป็น JSON เท่านั้น (ห้ามมีคำนำ ข้อความอื่น หรือเครื่องหมาย markdown codeblock ใดๆ):
 
 {
-  "vendor_name": "ชื่อบริษัท ร้านค้า หรือผู้ขายอย่างเป็นทางการ (เช่น บริษัท โฟลว์แอคเคาท์ ทดสอบ จำกัด, บริษัท ผู้ขายทดสอบ จำกัด, บริษัท อุปกรณ์ จำกัด, คอม คลินิก แอนด์ แคร์)",
+  "vendor_name": "ชื่อบริษัท ร้านค้า อู่ซ่อม หรือผู้ขายอย่างเป็นทางการ (หากมีแถบคาดทับหรืออ่านไม่ชัด ให้ระบุตามที่พออ่านได้ เช่น 'บริษัท จำกัด' หรือ 'อู่/ร้านค้าตามใบเสนอราคา')",
   "receipt_no": "เลขที่ใบเสร็จ หรือเลขที่ใบกำกับภาษี หรือเลขที่เอกสาร (เช่น CA2025020012, TIV2021050001, 02-001)",
   "receipt_date": "วันที่ในเอกสาร รูปแบบ YYYY-MM-DD (เช่น ถ้าเป็น 22/12/2564 ให้แปลงปี พ.ศ. 2564 เป็น ค.ศ. 2021 -> 2021-12-22, ถ้าเป็น 5/4/64 ให้แปลงเป็น 2021-04-05, ถ้าเป็น 27/02/2025 ให้ตอบ 2025-02-27)",
   "category": "หมวดหมู่หลัก เช่น ค่าวัสดุและอุปกรณ์, ค่าอะไหล่, ค่าแรง, ค่าจ้างเหมาบริการ, ค่าใช้จ่ายอื่นๆ",
@@ -3054,13 +3054,14 @@ async function scanReceiptWithGeminiVision(buffer, mimeType, apiKey) {
   ],
   "ai_confidence": "HIGH",
   "ai_note": "✨ วิเคราะห์ด้วย Google Gemini Multimodal Vision AI สำเร็จ แม่นยำ 100%"
-}`;
+}
+
+* กฎสำคัญ: หากช่องยอดรวมเงินท้ายเอกสารว่างเปล่า (เช่น มีรายการหน้าถัดไป) ให้คุณคำนวณผลรวมเงินของทุกรายการในตารางหน้านี้ทั้งหมด แล้วนำมาใส่ใน net_amount และ total_price ห้ามใส่ 0 หรือ null!`;
 
     const models = [
-        'gemini-2.5-flash',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
-        'gemini-1.5-pro'
+        'gemini-3.8-flash',
+        'gemini-3.5-flash',
+        'gemini-flash-latest'
     ];
 
     for (const model of models) {
@@ -3115,6 +3116,18 @@ async function scanReceiptWithGeminiVision(buffer, mimeType, apiKey) {
                         category: parsed.category || 'ค่าวัสดุและอุปกรณ์'
                     }];
                 }
+                // Safety fallback: if net_amount is 0 or null, calculate sum from items
+                const itemSum = parsed.items.reduce((sum, it) => sum + (Number(it.total_price || (it.unit_price * it.quantity)) || 0), 0);
+                if ((!parsed.net_amount || Number(parsed.net_amount) === 0) && itemSum > 0) {
+                    parsed.net_amount = itemSum;
+                    parsed.total_price = itemSum;
+                }
+                if (!parsed.vendor_name || parsed.vendor_name === 'null') {
+                    parsed.vendor_name = 'ร้านค้า/ผู้ให้บริการ (ตามเอกสาร)';
+                }
+                if (!parsed.description || parsed.description === 'null') {
+                    parsed.description = parsed.items[0]?.name || 'ค่าใช้จ่ายซ่อมแซมและบำรุงรักษา';
+                }
                 parsed.primary_item = parsed.items[0];
                 return parsed;
             }
@@ -3165,7 +3178,7 @@ app.post('/api/settings/gemini-test', async (req, res) => {
         return res.status(400).json({ success: false, error: 'ยังไม่ได้ระบุ Google Gemini API Key' });
     }
 
-    const testModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    const testModels = ['gemini-3.8-flash', 'gemini-3.5-flash', 'gemini-flash-latest'];
     let lastErr = '';
     for (const model of testModels) {
         try {
@@ -3221,7 +3234,8 @@ app.post('/api/ocr/scan-receipt', upload.single('receipt'), async (req, res) => 
                              req.body?.gemini_key ||
                              req.query?.gemini_key ||
                              process.env.GEMINI_API_KEY ||
-                             db.settings?.gemini_api_key;
+                             db.settings?.gemini_api_key ||
+                             getFallbackGeminiKey();
 
         if (geminiApiKey) {
             console.log('🤖 Analyzing receipt with Google Gemini Vision AI...');

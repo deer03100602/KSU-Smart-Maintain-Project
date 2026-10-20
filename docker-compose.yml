@@ -27,6 +27,7 @@ services:
       - LINE_GROUP_ID=${LINE_GROUP_ID:-}
       - LINE_TARGET_ID=${LINE_TARGET_ID:-}
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost:5000}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     depends_on:
       - db
     restart: unless-stopped
