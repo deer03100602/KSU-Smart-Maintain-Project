@@ -3021,7 +3021,10 @@ async function scanReceiptWithGeminiVision(buffer, mimeType, apiKey) {
     if (!apiKey || !buffer) return null;
 
     const base64Data = buffer.toString('base64');
-    const validMime = mimeType === 'application/pdf' ? 'application/pdf' : (mimeType || 'image/jpeg');
+    let validMime = mimeType || 'image/jpeg';
+    if (validMime === 'application/octet-stream' || !validMime.includes('/')) {
+        validMime = 'image/jpeg';
+    }
 
     const promptText = `คุณคือผู้เชี่ยวชาญ AI ระดับสูงในการตรวจสอบและวิเคราะห์เอกสารทางการเงิน ใบเสร็จรับเงิน (Receipt), ใบกำกับภาษี (Tax Invoice), และบิลส่งของ (Delivery Bill) ในประเทศไทย
 โปรดตรวจดูรูปภาพเอกสารนี้อย่างละเอียดถี่ถ้วนและดึงข้อมูลออกมาเป็น JSON อย่างแม่นยำ 100%
@@ -3058,7 +3061,7 @@ async function scanReceiptWithGeminiVision(buffer, mimeType, apiKey) {
 
 * กฎสำคัญ:
 1. หากช่องยอดรวมเงินท้ายเอกสารว่างเปล่า (เช่น มีรายการหน้าถัดไป) ให้คุณคำนวณผลรวมเงินของทุกรายการในตารางหน้านี้ทั้งหมด แล้วนำมาใส่ใน net_amount และ total_price ห้ามใส่ 0 หรือ null!
-2. เพื่อความรวดเร็วในการส่งข้อมูลและป้องกัน Timeout ให้สรุปรายการสินค้าเด่น 5-8 รายการแรกหรือยอดสูงสุด`;
+2. สำหรับรายการสินค้า (items): หากเอกสารมีไม่เกิน 10 รายการ ให้ดึงข้อมูลให้ครบทุกรายการอย่างแม่นยำ 100% ตรงตามรูปภาพทุกตัวอักษรและตัวเลข แต่หากมีหลายสิบรายการ ให้สรุปเฉพาะรายการหลัก 5-8 รายการแรกที่มีมูลค่าสูงสุดเพื่อป้องกันความล่าช้า`;
 
     const models = [
         'gemini-3.5-flash-lite',
