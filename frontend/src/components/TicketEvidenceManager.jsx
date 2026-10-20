@@ -351,7 +351,7 @@ export default function TicketEvidenceManager({
     ];
 
     return (
-        <div className="glass-card" style={{ marginTop: 0, padding: '1.25rem', borderRadius: '12px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ marginTop: 0, padding: '1.25rem', borderRadius: '12px', width: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Camera style={{ width: 20, height: 20, color: '#3b82f6' }} />

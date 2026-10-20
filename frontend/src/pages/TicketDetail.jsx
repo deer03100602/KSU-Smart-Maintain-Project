@@ -1543,16 +1543,16 @@ export default function TicketDetailPage(props) {
                                 onActionCompleted={fetchTicketData} 
                             />
 
-                            {/* Side-by-side Split Grid for Evidence Gallery & Budget/Expenses */}
-                            <div className="ticket-split-grid" style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-                                gap: '1.25rem',
-                                marginTop: '1.5rem',
-                                alignItems: 'start'
+                            {/* Full-width Stacked Horizontal Sections for Evidence Gallery & Budget/Expenses */}
+                            <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '1.75rem',
+                                marginTop: '1.75rem',
+                                width: '100%'
                             }}>
-                                {/* Integrated Evidence & Photo Manager (Left Column) */}
-                                <div style={{ minWidth: 0 }}>
+                                {/* 1. Integrated Evidence & Photo Manager (Full Width Horizontal) */}
+                                <div style={{ width: '100%', minWidth: 0 }}>
                                     <TicketEvidenceManager 
                                         ticket={ticket} 
                                         evidences={evidences} 
@@ -1562,8 +1562,8 @@ export default function TicketDetailPage(props) {
                                     />
                                 </div>
 
-                                {/* Integrated Budget & Expenses with OCR (Right Column) */}
-                                <div style={{ minWidth: 0 }}>
+                                {/* 2. Integrated Budget & Expenses with OCR (Full Width Horizontal) */}
+                                <div style={{ width: '100%', minWidth: 0 }}>
                                     <TicketExpenseManager 
                                         ticket={ticket} 
                                         expenses={expenses} 
