@@ -279,6 +279,11 @@ export function removeStoredTicket(idOrNo) {
         const target = String(idOrNo).trim().toLowerCase();
         markTicketAsDeleted(target);
 
+        // Permanently delete on backend server so other devices/machines stay in sync
+        try {
+            fetch(`/api/tickets/${encodeURIComponent(idOrNo)}`, { method: 'DELETE' }).catch(() => {});
+        } catch (_) {}
+
         // Remove from stored tickets
         const currentList = [];
         try {

@@ -621,13 +621,18 @@ a:hover {
     font-size: 0.72rem;
     color: var(--text-muted);
     display: block;
-    max-width: 320px;
+    max-width: 380px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-@media (max-width: 1480px) {
+.desktop-only-subtitle {
+    display: block;
+}
+
+@media (max-width: 1024px) {
+    .desktop-only-subtitle,
     .logo-subtitle {
         display: none !important;
     }
@@ -2641,11 +2646,21 @@ a:hover {
     }
 
     /* Mobile adjustments */
+    .top-navbar-container {
+        padding: 0 0.75rem;
+    }
+
+    .top-navbar-logo {
+        max-width: calc(100vw - 110px);
+        overflow: hidden;
+    }
+
     .hero-section {
         grid-template-columns: 1fr;
         text-align: center;
         min-height: 0;
-        padding-top: 1.5rem;
+        padding-top: 2rem !important;
+        padding-bottom: 1.5rem;
     }
 
     .hero-visual {
@@ -2653,7 +2668,17 @@ a:hover {
     }
 
     .hero-title {
-        font-size: 2.25rem;
+        font-size: 1.7rem !important;
+        line-height: 1.35 !important;
+        margin-top: 0.5rem;
+        margin-bottom: 0.75rem;
+        word-break: break-word;
+    }
+
+    .hero-description {
+        font-size: 0.95rem;
+        line-height: 1.5;
+        margin-bottom: 1.25rem;
     }
 
     .hero-actions {

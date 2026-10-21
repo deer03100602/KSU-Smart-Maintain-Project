@@ -67,14 +67,12 @@ export default function HomePage() {
                     const allStored = getStoredTickets();
                     const localStats = buildInitialStats(allStored);
 
+                    const isCompletelyEmpty = allStored.length === 0 && mergedRecent.length === 0;
+
                     setStats({
                         ...data,
-                        total: (allStored.length === 0 && (!data.total || data.total === 0)) 
-                            ? 0 
-                            : (allStored.length > 0 ? allStored.length : (data.total || 0)),
-                        byStatus: (allStored.length === 0 && (!data.total || data.total === 0))
-                            ? localStats.byStatus
-                            : { ...(data.byStatus || {}), ...localStats.byStatus },
+                        total: isCompletelyEmpty ? 0 : (allStored.length > 0 ? allStored.length : (data.total || 0)),
+                        byStatus: isCompletelyEmpty ? localStats.byStatus : { ...(data.byStatus || {}), ...localStats.byStatus },
                         recentTickets: mergedRecent.slice(0, 5)
                     });
                     if (allStored.length > 0) {

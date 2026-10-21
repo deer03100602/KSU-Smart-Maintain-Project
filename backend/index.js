@@ -332,10 +332,8 @@ const prisma = {
             return { id: where.id || where.ticket_no };
         },
         count: async () => {
-            if (realPrisma) {
-                try { return await realPrisma.ticket.count(); } catch (e) {}
-            }
-            return (getLocalDb().tickets || []).length;
+            const list = await prisma.ticket.findMany();
+            return (list || []).length;
         },
         upsert: async ({ where, update, create }) => {
             if (realPrisma) {
@@ -805,7 +803,6 @@ function requireAdmin(req, res, next) {
 // Helper: Auto-initialize Database with Schema Sync & Seed Data if Empty
 async function initDatabase() {
     await verifyPrismaConnection();
-    await ensureDatabaseSeeded(false);
     const { exec } = require('child_process');
     console.log('🔄 Initializing database and syncing schema...');
     
@@ -944,7 +941,9 @@ async function ensureDatabaseSeeded(force = false) {
     try {
         const db = getLocalDb();
         const hasTickets = Array.isArray(db.tickets) && db.tickets.length > 0;
-        const needsSeed = force || !hasTickets;
+        // Never automatically re-seed if db is already initialized, even if tickets count is 0!
+        // Only seed if explicitly forced (force === true) or if completely uninitialized fresh system.
+        const needsSeed = force;
 
         if (needsSeed) {
             console.log('🌱 Seeding JSON store with master KSU demo dataset (6 tickets)...');
@@ -966,7 +965,7 @@ async function ensureDatabaseSeeded(force = false) {
         if (realPrisma) {
             try {
                 const count = await realPrisma.ticket.count().catch(() => 0);
-                if ((count === 0 && !db.initialized) || force) {
+                if (force || (!db.initialized && count === 0)) {
                     console.log('🌱 Upserting 6 master tickets into PostgreSQL database...');
                     for (const t of SEED_TICKETS) {
                         await realPrisma.ticket.upsert({
@@ -1911,6 +1910,9 @@ app.delete('/api/tickets/:id', async (req, res) => {
 
         if ((db.tickets || []).length === 0) {
             db.counter = 0;
+            db.expenses = [];
+            db.timelines = [];
+            db.evidences = [];
             if (realPrisma) {
                 try {
                     await realPrisma.expense.deleteMany({});
@@ -2011,6 +2013,17 @@ app.delete('/api/tickets', async (req, res) => {
 
         if ((db.tickets || []).length === 0) {
             db.counter = 0;
+            db.expenses = [];
+            db.timelines = [];
+            db.evidences = [];
+            if (realPrisma) {
+                try {
+                    await realPrisma.expense.deleteMany({});
+                    await realPrisma.ticketTimeline.deleteMany({});
+                    if (realPrisma.evidence) await realPrisma.evidence.deleteMany({});
+                    await realPrisma.ticket.deleteMany({});
+                } catch (e) {}
+            }
         }
         saveLocalDb(db);
 

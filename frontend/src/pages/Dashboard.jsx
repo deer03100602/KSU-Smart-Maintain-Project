@@ -197,10 +197,6 @@ export default function DashboardPage() {
                             await syncTicketsWithServer(stored);
                             const retry = await fetch(url);
                             if (retry.ok) data = await retry.json();
-                        } else {
-                            await fetch('/api/db/seed', { method: 'POST' });
-                            const retry = await fetch(url);
-                            if (retry.ok) data = await retry.json();
                         }
                     } catch (e) {}
                 }
